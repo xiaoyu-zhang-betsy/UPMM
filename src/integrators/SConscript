@@ -39,4 +39,8 @@ plugins += bidirEnv.SharedLibrary('erpt',
 	['erpt/erpt.cpp', 'erpt/erpt_proc.cpp']
 )
 
+plugins += bidirEnv.SharedLibrary('cmlt',
+	['cmlt/cmlt.cpp', 'cmlt/cmlt_sampler.cpp',
+    'cmlt/cmlt_proc.cpp']);
+
 Export('plugins')
