@@ -36,6 +36,68 @@ StatsCounter acceptanceRate("Primary sample space MLT",
 StatsCounter forcedAcceptance("Primary sample space MLT",
 	"Number of forced acceptances");
 
+class CMLTWorkResult : public WorkResult {
+public:
+	CMLTWorkResult(ref<Film> film):m_film(film){		
+		m_block = new ImageBlock(Bitmap::ESpectrum, film->getCropSize(), film->getReconstructionFilter());
+		m_blockImp = new ImageBlock(Bitmap::ESpectrum, film->getCropSize(), film->getReconstructionFilter());
+		//m_avgImportance = 0.0f;
+	}
+
+	void clear(){
+		m_block->clear();
+		m_blockImp->clear();
+	}
+
+// 	inline void accumImportance(Float imp) {
+// 		Vector2i fsize = m_film->getCropSize();
+// 		m_avgImportance += (double)imp / (double)(fsize.x * fsize.y);
+// 	}
+
+	bool put(const Point2 &_pos, const Float *value, const Float *imp){
+		//accumImportance(imp);
+		m_blockImp->put(_pos, imp);
+		return m_block->put(_pos, value);
+	}
+
+	inline const ImageBlock *getImageBlock() const {
+		return m_block.get();
+	}
+
+	inline const ImageBlock *getImportanceBlock() const {
+		return m_blockImp.get();
+	}
+
+// 	inline const Float getImportance() const {
+// 		return m_avgImportance;
+// 	}
+
+	/// Fill the work result with content acquired from a binary data stream
+	void load(Stream *stream){
+		m_block->load(stream);
+		m_blockImp->load(stream);
+		//m_avgImportance = stream->readDouble();
+	}
+
+	/// Serialize a work result to a binary data stream
+	void save(Stream *stream) const{
+		m_block->save(stream);
+		m_blockImp->save(stream);
+		//stream->writeDouble(m_avgImportance);
+	}
+
+	std::string toString() const{
+		return m_block->toString();
+	}
+	MTS_DECLARE_CLASS()
+
+protected:
+	ref<Film> m_film;
+	//double m_avgImportance;
+	ref<ImageBlock> m_block;
+	ref<ImageBlock> m_blockImp;
+};
+
 class CMLTRenderer : public WorkProcessor {
 public:
 	CMLTRenderer(const CMLTConfiguration &conf)
@@ -56,8 +118,7 @@ public:
 	}
 
 	ref<WorkResult> createWorkResult() const {
-		return new ImageBlock(Bitmap::ESpectrum,
-			m_film->getCropSize(), m_film->getReconstructionFilter());
+		return new CMLTWorkResult(m_film);
 	}
 
 	void prepare() {
@@ -86,10 +147,13 @@ public:
 	}
 
 	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {
-		ImageBlock *result = static_cast<ImageBlock *>(workResult);
+		CMLTWorkResult* wr = static_cast<CMLTWorkResult *>(workResult);
 		const SeedWorkUnit *wu = static_cast<const SeedWorkUnit *>(workUnit);
 		const PathSeed &seed = wu->getSeed();
-		SplatList *current = new SplatList(), *proposed = new SplatList();
+		SplatListImp *current = new SplatListImp(), *proposed = new SplatListImp();
+
+		int connectionFlag = m_pathSampler->getConnectionFlag(m_config.connectionImportance, m_config.connectionRadiance, m_config.connectionVisibility,
+			m_config.connectionMIS, m_config.connectionBSDFs, m_config.connectionGeometry, m_config.connectionFull);
 
 		m_emitterSampler->reset();
 		m_sensorSampler->reset();
@@ -103,8 +167,8 @@ public:
 		   back to this worker's own source of random numbers */
 		m_rplSampler->setSampleIndex(seed.sampleIndex);
 
-		m_pathSampler->sampleSplats(Point2i(-1), *current);
-		result->clear();
+		m_pathSampler->sampleSplatsConnection(Point2i(-1), *current, connectionFlag);
+		wr->clear();
 
 		ref<Random> random = m_origSampler->getRandom();
 		m_sensorSampler->setRandom(random);
@@ -122,10 +186,10 @@ public:
 		/* Sanity check -- the luminance should match the one from
 		   the warmup phase - an error here would indicate inconsistencies
 		   regarding the use of random numbers during sample generation */
-		if (std::abs((current->luminance - seed.luminance)
+		if (std::abs((current->importance - seed.luminance)
 				/ seed.luminance) > Epsilon)
 			Log(EError, "Error when reconstructing a seed path: luminance "
-				"= %f, but expected luminance = %f", current->luminance, seed.luminance);
+				"= %f, but expected luminance = %f", current->importance, seed.luminance);
 
 		ref<Timer> timer = new Timer();
 
@@ -142,14 +206,37 @@ public:
 			m_emitterSampler->setLargeStep(largeStep);
 			m_directSampler->setLargeStep(largeStep);
 
-			m_pathSampler->sampleSplats(Point2i(-1), *proposed);
+			m_pathSampler->sampleSplatsConnection(Point2i(-1), *proposed, connectionFlag);
 			proposed->normalize(m_config.importanceMap);
+			Float a = std::min((Float) 1.0f, proposed->importance / current->importance);
 
-			Float a = std::min((Float) 1.0f, proposed->luminance / current->luminance);
+			/*photon path visibility style - large step*/
+// 			bool largeStep = true;
+// 			m_sensorSampler->setLargeStep(largeStep);
+// 			m_emitterSampler->setLargeStep(largeStep);
+// 			m_directSampler->setLargeStep(largeStep);
+// 			m_pathSampler->sampleSplatsConnection(Point2i(-1), *proposed);
+// 			proposed->normalize(m_config.importanceMap);
+// 			Float a = std::min((Float) 1.0f, proposed->luminance / current->luminance);
+// 			bool accept = (a == 1) || (random->nextFloat() < a);
+// 			if (!accept){
+// 				/*mutation - small step*/
+// 				largeStepRatio.incrementBase(1);
+// 				m_sensorSampler->reject();
+// 				m_emitterSampler->reject();
+// 				m_directSampler->reject();
+// 				largeStep = false;
+// 				m_sensorSampler->setLargeStep(largeStep);
+// 				m_emitterSampler->setLargeStep(largeStep);
+// 				m_directSampler->setLargeStep(largeStep);
+// 				m_pathSampler->sampleSplatsConnection(Point2i(-1), *proposed);
+// 				proposed->normalize(m_config.importanceMap);
+// 				a = std::min((Float) 1.0f, proposed->luminance / current->luminance);
+// 			}
 
-			if (std::isnan(proposed->luminance) || proposed->luminance < 0) {
+			if (std::isnan(proposed->importance) || proposed->importance < 0) {
 				Log(EWarn, "Encountered a sample with luminance = %f, ignoring!",
-						proposed->luminance);
+						proposed->importance);
 				a = 0;
 			}
 
@@ -159,20 +246,22 @@ public:
 			if (a > 0) {
 				if (m_config.kelemenStyleWeights && !m_config.importanceMap) {
 					/* Kelemen-style MLT weights (these don't work for 2-stage MLT) */
-					currentWeight = (1 - a) * current->luminance
-						/ (current->luminance/m_config.luminance + m_config.pLarge);
-					proposedWeight = (a + (largeStep ? 1 : 0)) * proposed->luminance
-						/ (proposed->luminance/m_config.luminance + m_config.pLarge);
+					currentWeight = (1 - a) * current->importance
+						/ (current->importance / m_config.luminance + m_config.pLarge);
+					proposedWeight = (a + (largeStep ? 1 : 0)) * proposed->importance
+						/ (proposed->importance / m_config.luminance + m_config.pLarge);
 				} else {
 					/* Veach-style use of expectations */
 					currentWeight = 1-a;
 					proposedWeight = a;
 				}
+
 				accept = (a == 1) || (random->nextFloat() < a);
+
 			} else {
 				if (m_config.kelemenStyleWeights)
-					currentWeight = current->luminance
-						/ (current->luminance/m_config.luminance + m_config.pLarge);
+					currentWeight = current->importance
+					/ (current->importance / m_config.luminance + m_config.pLarge);
 				else
 					currentWeight = 1;
 				proposedWeight = 0;
@@ -183,8 +272,9 @@ public:
 			if (accept) {
 				for (size_t k=0; k<current->size(); ++k) {
 					Spectrum value = current->getValue(k) * cumulativeWeight;
+					Spectrum imp = current->getImportance(k) * cumulativeWeight;
 					if (!value.isZero())
-						result->put(current->getPosition(k), &value[0]);
+						wr->put(current->getPosition(k), &value[0], &imp[0]);
 				}
 
 				cumulativeWeight = proposedWeight;
@@ -205,8 +295,9 @@ public:
 			} else {
 				for (size_t k=0; k<proposed->size(); ++k) {
 					Spectrum value = proposed->getValue(k) * proposedWeight;
+					Spectrum imp = proposed->getImportance(k) * proposedWeight;
 					if (!value.isZero())
-						result->put(proposed->getPosition(k), &value[0]);
+						wr->put(proposed->getPosition(k), &value[0], &imp[0]);
 				}
 
 				m_sensorSampler->reject();
@@ -223,10 +314,10 @@ public:
 		/* Perform the last splat */
 		for (size_t k=0; k<current->size(); ++k) {
 			Spectrum value = current->getValue(k) * cumulativeWeight;
+			Spectrum imp = current->getImportance(k) * cumulativeWeight;
 			if (!value.isZero())
-				result->put(current->getPosition(k), &value[0]);
+				wr->put(current->getPosition(k), &value[0], &imp[0]);
 		}
-
 
 		delete current;
 		delete proposed;
@@ -275,6 +366,7 @@ void CMLTProcess::develop() {
 	LockGuard lock(m_resultMutex);
 	size_t pixelCount = m_accum->getBitmap()->getPixelCount();
 	const Spectrum *accum = (Spectrum *) m_accum->getBitmap()->getData();
+	const Spectrum *accumImp = (Spectrum *)m_accumImp->getBitmap()->getData();
 	const Spectrum *direct = m_directImage != NULL ?
 		(Spectrum *) m_directImage->getData() : NULL;
 	const Float *importanceMap = m_config.importanceMap != NULL ?
@@ -282,8 +374,9 @@ void CMLTProcess::develop() {
 	Spectrum *target = (Spectrum *) m_developBuffer->getData();
 
 	/* Compute the luminance correction factor */
-	Float avgLuminance = 0;
-	if (importanceMap) {
+	BDAssert(!importanceMap);
+	Float avgLuminance = 0.f;	
+	if (importanceMap){
 		for (size_t i=0; i<pixelCount; ++i)
 			avgLuminance += accum[i].getLuminance() * importanceMap[i];
 	} else {
@@ -291,7 +384,21 @@ void CMLTProcess::develop() {
 			avgLuminance += accum[i].getLuminance();
 	}
 
-	avgLuminance /= (Float) pixelCount;
+	Float avgLuminance2 = 0.f;
+	if (importanceMap){
+		for (size_t i = 0; i < pixelCount; ++i)
+			avgLuminance2 += accumImp[i].getLuminance() * importanceMap[i];
+	}
+	else {
+		for (size_t i = 0; i < pixelCount; ++i)
+			avgLuminance2 += accumImp[i].getLuminance();
+	}
+
+	avgLuminance /= (Float)pixelCount;
+	avgLuminance2 /= (Float)pixelCount;
+
+	//Log(EInfo, "original avg = %f, new avg = %f", avgLuminance, avgLuminance2);
+	avgLuminance = avgLuminance2;
 	Float luminanceFactor = m_config.luminance / avgLuminance;
 
 	for (size_t i=0; i<pixelCount; ++i) {
@@ -311,9 +418,11 @@ void CMLTProcess::develop() {
 
 void CMLTProcess::processResult(const WorkResult *wr, bool cancelled) {
 	LockGuard lock(m_resultMutex);
-	const ImageBlock *result = static_cast<const ImageBlock *>(wr);
-	m_accum->put(result);
-	m_progress->update(++m_resultCounter);
+	const CMLTWorkResult *result = static_cast<const CMLTWorkResult *>(wr);
+	m_accum->put(result->getImageBlock());
+	m_accumImp->put(result->getImportanceBlock());
+	//m_avgLuminance += result->getImportance();
+	m_progress->update(++m_resultCounter);	
 	m_refreshTimeout = std::min(2000U, m_refreshTimeout * 2);
 
 	/* Re-develop the entire image every two seconds if partial results are
@@ -347,6 +456,8 @@ void CMLTProcess::bindResource(const std::string &name, int id) {
 		m_progress = new ProgressReporter("Rendering", m_config.workUnits, m_job);
 		m_accum = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize());
 		m_accum->clear();
+		m_accumImp = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize());
+		m_accumImp->clear();
 		m_developBuffer = new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, m_film->getCropSize());
 	}
 }
@@ -354,5 +465,6 @@ void CMLTProcess::bindResource(const std::string &name, int id) {
 MTS_IMPLEMENT_CLASS_S(CMLTRenderer, false, WorkProcessor)
 MTS_IMPLEMENT_CLASS(CMLTProcess, false, ParallelProcess)
 MTS_IMPLEMENT_CLASS(SeedWorkUnit, false, WorkUnit)
+MTS_IMPLEMENT_CLASS(CMLTWorkResult, false, WorkResult)
 
 MTS_NAMESPACE_END

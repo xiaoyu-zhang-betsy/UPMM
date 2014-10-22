@@ -691,6 +691,29 @@
 			Specifies the minimum path depth, after which the implementation will start to use the
 			"russian roulette" path termination criterion (set to <tt>-1</tt> to disable).
 		</param>
+		
+		<param name="connectionImportance" readableName="connectionImportance" type="boolean" default="true" importance="1">
+		   Connection flag for importance function. Please see the documentation for details.
+		</param>
+		<param name="connectionRadiance" readableName="connectionRadiance" type="boolean" default="true" importance="1">
+		   Connection flag for importance function. Please see the documentation for details.
+		</param>
+		<param name="connectionVisibility" readableName="connectionVisibility" type="boolean" default="true" importance="1">
+		   Connection flag for importance function. Please see the documentation for details.
+		</param>
+		<param name="connectionMIS" readableName="connectionMIS" type="boolean" default="true" importance="1">
+		   Connection flag for importance function. Please see the documentation for details.
+		</param>
+		<param name="connectionBSDFs" readableName="connectionBSDFs" type="boolean" default="false" importance="1">
+		   Connection flag for importance function. Please see the documentation for details.
+		</param>
+		<param name="connectionGeometry" readableName="connectionGeometry" type="boolean" default="false" importance="1">
+		   Connection flag for importance function. Please see the documentation for details.
+		</param>
+		<param name="connectionFull" readableName="connectionFull" type="boolean" default="false" importance="1">
+		   Connection flag for importance function. Please see the documentation for details.
+		</param>
+		
 	</plugin>
 
 	<plugin type="integrator" name="mlt" readableName="Path Space MLT" show="true"

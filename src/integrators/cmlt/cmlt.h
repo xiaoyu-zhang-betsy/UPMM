@@ -56,6 +56,14 @@ struct CMLTConfiguration {
 	size_t timeout;
 	ref<Bitmap> importanceMap;
 
+	bool connectionImportance;
+	bool connectionRadiance;
+	bool connectionVisibility;
+	bool connectionMIS;
+	bool connectionBSDFs;
+	bool connectionGeometry;
+	bool connectionFull;
+
 	inline CMLTConfiguration() { }
 
 	void dump() const {

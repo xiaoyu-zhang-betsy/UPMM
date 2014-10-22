@@ -123,6 +123,9 @@
     </ClInclude>
     <ClInclude Include="..\src\bsdfs\ior.h">
     </ClInclude>
+    <ClInclude Include="..\src\integrators\cmlt\cmlt.h" />
+    <ClInclude Include="..\src\integrators\cmlt\cmlt_proc.h" />
+    <ClInclude Include="..\src\integrators\cmlt\cmlt_sampler.h" />
     <ClInclude Include="..\src\samplers\faure.h">
     </ClInclude>
     <ClInclude Include="..\src\samplers\sobolseq.h">
@@ -623,6 +626,9 @@
     </ClCompile>
     <ClCompile Include="..\src\bsdfs\roughplastic.cpp">
     </ClCompile>
+    <ClCompile Include="..\src\integrators\cmlt\cmlt.cpp" />
+    <ClCompile Include="..\src\integrators\cmlt\cmlt_proc.cpp" />
+    <ClCompile Include="..\src\integrators\cmlt\cmlt_sampler.cpp" />
     <ClCompile Include="..\src\librender\trimesh.cpp">
     </ClCompile>
     <ClCompile Include="..\src\librender\irrcache.cpp">

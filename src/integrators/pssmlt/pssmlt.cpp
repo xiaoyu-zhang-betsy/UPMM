@@ -386,6 +386,8 @@ public:
 		scheduler->unregisterResource(rplSamplerResID);
 		process->develop();
 
+		Statistics::getInstance()->printStats();
+
 		return process->getReturnStatus() == ParallelProcess::ESuccess;
 	}
 

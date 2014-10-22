@@ -25,6 +25,114 @@
 
 MTS_NAMESPACE_BEGIN
 
+enum EConnectionFlags {
+	EConnectVisibility = 1,
+	EConnectGeometry = 2,
+	EConnectBRDF = 4,
+	EConnectMis = 8,
+	EConnectImportance = 16,
+	EConnectRadiance = 32,
+	EConnectAll = 64
+};
+
+struct MTS_EXPORT_BIDIR SplatListImp {
+	/// Represents a screen-space splat produced by a path sampling technique
+	typedef std::pair<Point2, Spectrum> Splat;
+
+	/// A series of splats associated with the current sample
+	std::vector<Splat> splats;
+	std::vector<Spectrum> importances;
+	/// Combined importance of all splats in this sample
+	Float importance;
+	/// Total number of samples in the splat list
+	int nSamples;
+
+	inline SplatListImp() : importance(1.0f), nSamples(0) { }
+
+	/// for arbitrary Metropolis importance functions	
+	/// Appends a splat entry to the list
+	inline void append(const Point2 &samplePos, const Spectrum &value, const Spectrum &imp) {
+		splats.push_back(std::make_pair(samplePos, value));
+		importances.push_back(imp);
+		importance += imp.getLuminance();
+		++nSamples;
+	}
+
+	/// Increases the contribution of an existing splat
+	inline void accum(size_t i, const Spectrum &value, const Spectrum &imp) {
+		splats[i].second += value;
+		importances[i] += imp;
+		importance += imp.getLuminance();
+		++nSamples;
+	}
+
+	/// Returns the number of contributions
+	inline size_t size() const {
+		return splats.size();
+	}
+
+	/// Clear the splat list
+	inline void clear() {
+		importance = 1;
+		nSamples = 0;
+		splats.clear();
+		importances.clear();
+	}
+
+	/// Return the position associated with a splat in the list
+	inline const Point2 &getPosition(size_t i) const { return splats[i].first; }
+
+	/// Return the spectral contribution associated with a splat in the list
+	inline const Spectrum &getValue(size_t i) const { return splats[i].second; }
+
+	inline const Spectrum &getImportance(size_t i) const { return importances[i]; }
+
+	/**
+	* \brief Normalize the splat list
+	*
+	* This function divides all splats so that they have unit
+	* luminance (though it leaves the \c luminance field untouched).
+	* When given an optional importance map in 2-stage MLT approaches,
+	* it divides the splat values by the associated importance
+	* map values
+	*/
+	void normalize(const Bitmap *importanceMap = NULL){
+		if (importanceMap) {
+			BDAssert(false); // not implemented yet
+
+			// 			importance = 0.0f;
+			// 
+			// 			/* Two-stage MLT -- weight contributions using a luminance image */
+			// 			const Float *luminanceValues = importanceMap->getFloatData();
+			// 			Vector2i size = importanceMap->getSize();
+			// 			for (size_t i = 0; i < splats.size(); ++i) {
+			// 				if (splats[i].second.isZero())
+			// 					continue;
+			// 
+			// 				const Point2 &pos = splats[i].first;
+			// 				Point2i intPos(
+			// 					std::min(std::max(0, (int)pos.x), size.x - 1),
+			// 					std::min(std::max(0, (int)pos.y), size.y - 1));
+			// 				Float lumValue = luminanceValues[intPos.x + intPos.y * size.x];
+			// 				splats[i].second /= lumValue;
+			// 				luminance += splats[i].second.getLuminance();
+			// 			}
+		}
+
+		if (importance > 0) {
+			/* Normalize the contributions */
+			Float invImportance = 1.0f / importance;
+			for (size_t i = 0; i < splats.size(); ++i){
+				splats[i].second *= invImportance;
+				importances[i] *= invImportance;
+			}
+		}
+	}
+
+	/// Return a string representation
+	std::string toString() const;
+};
+
 /**
  * \brief Implements a sampling strategy that is able to produce paths using
  * bidirectional path tracing or unidirectional volumetric path tracing.
@@ -187,6 +295,14 @@ public:
 
 	/// Return the underlying memory pool
 	inline MemoryPool &getMemoryPool() { return m_pool; }
+
+	/// for Connection MLT
+	void sampleSplatsConnection(const Point2i &offset, SplatListImp &list, const int connectionFlag);
+	Float generateSeedsConnection(size_t sampleCount, size_t seedCount,
+		bool fineGrained, const Bitmap *importanceMap,
+		std::vector<PathSeed> &seeds, const int connectionFlag);
+	int getConnectionFlag(bool connectionImportance, bool connectionRadiance, bool connectionVisibility,
+		bool connectionMIS, bool connectionBSDFs, bool connectionGeometry, bool connectionFull);
 
 	MTS_DECLARE_CLASS()
 protected:

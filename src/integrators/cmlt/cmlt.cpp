@@ -240,10 +240,18 @@ public:
 		   transmitted), hence it is important to set this value as low as
 		   possible, while ensuring that there are enough units to keep all
 		   workers busy. */
-		m_config.workUnits = props.getInteger("workUnits", -1);
+		m_config.workUnits = props.getInteger("workUnits", 8); // hard-coded
 
 		/* Stop MLT after X seconds -- useful for equal-time comparisons */
 		m_config.timeout = props.getInteger("timeout", 0);
+
+		m_config.connectionImportance = props.getBoolean("connectionImportance", true);
+		m_config.connectionRadiance = props.getBoolean("connectionRadiance", true);
+		m_config.connectionVisibility = props.getBoolean("connectionVisibility", true);
+		m_config.connectionMIS = props.getBoolean("connectionMIS", true);
+		m_config.connectionBSDFs = props.getBoolean("connectionBSDFs", false);
+		m_config.connectionGeometry = props.getBoolean("connectionGeometry", false);
+		m_config.connectionFull = props.getBoolean("connectionFull", false);
 	}
 
 	/// Unserialize from a binary data stream
@@ -336,7 +344,7 @@ public:
 		}
 
 		m_config.nMutations = (cropSize.x * cropSize.y *
-			sampleCount) / m_config.workUnits;
+			sampleCount) / m_config.workUnits;		
 
 		ref<Bitmap> directImage;
 		if (m_config.separateDirect && m_config.directSamples > 0 && !nested) {
@@ -352,11 +360,14 @@ public:
 			rplSampler, rplSampler, rplSampler, m_config.maxDepth, m_config.rrDepth,
 			m_config.separateDirect, m_config.directSampling);
 
+		int connectionFlag = pathSampler->getConnectionFlag(m_config.connectionImportance, m_config.connectionRadiance, m_config.connectionVisibility,
+			m_config.connectionMIS, m_config.connectionBSDFs, m_config.connectionGeometry, m_config.connectionFull);
+
 		ref<CMLTProcess> process = new CMLTProcess(job, queue,
 				m_config, directImage, pathSeeds);
 
-		m_config.luminance = pathSampler->generateSeeds(luminanceSamples,
-			m_config.workUnits, false, m_config.importanceMap, pathSeeds);
+		m_config.luminance = pathSampler->generateSeedsConnection(luminanceSamples,
+			m_config.workUnits, false, m_config.importanceMap, pathSeeds, connectionFlag);
 
 		if (!nested)
 			m_config.dump();
@@ -385,6 +396,8 @@ public:
 		m_process = NULL;
 		scheduler->unregisterResource(rplSamplerResID);
 		process->develop();
+
+		Statistics::getInstance()->printStats();
 
 		return process->getReturnStatus() == ParallelProcess::ESuccess;
 	}

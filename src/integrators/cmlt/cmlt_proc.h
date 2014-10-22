@@ -56,13 +56,14 @@ private:
 	const Bitmap *m_directImage;
 	ref<Bitmap> m_developBuffer;
 	ImageBlock *m_accum;
+	ImageBlock *m_accumImp;
 	ProgressReporter *m_progress;
 	const std::vector<PathSeed> &m_seeds;
 	ref<Mutex> m_resultMutex;
 	ref<Film> m_film;
 	int m_resultCounter, m_workCounter;
 	unsigned int m_refreshTimeout;
-	ref<Timer> m_timeoutTimer, m_refreshTimer;
+	ref<Timer> m_timeoutTimer, m_refreshTimer;	
 };
 
 MTS_NAMESPACE_END
