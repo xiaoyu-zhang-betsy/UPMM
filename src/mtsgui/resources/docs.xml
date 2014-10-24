@@ -496,6 +496,92 @@
 			"russian roulette" path termination criterion (set to <tt>-1</tt> to disable).
 		</param>
 	</plugin>
+	
+	<plugin type="integrator" name="vcm" readableName="Vertex Connection and Merging" show="true"
+			className="VCMIntegrator" extends="Integrator">
+		<descr>
+			<p>This plugin implements a Veach-style bidirectional path tracer (short:
+			BDPT) with support for multiple importance sampling.</p>
+
+			<p>A bidirectional path tracer generates a sample by starting two separate
+			random walks from an emitter and a sensor. The resulting <em>subpaths</em> are
+			connected at every possible position, creating a large number of complete paths
+			of different lengths. These paths are then used to estimate the amount of
+			radiance that is transferred from the emitter to a pixel on the sensor.</p>
+
+			<p>Generally, some of the created paths will be unusable, since they lead to
+			high-variance radiance estimates. To alleviate this situation, BDPT makes
+			use of <em>multiple importance sampling</em> which, roughly speaking, weights
+			paths based on their predicted utility.</p>
+
+			<p>The bidirectional path tracer in Mitsuba is a complete implementation of the
+			technique that handles all sampling strategies, including those that involve
+			direct interactions with the sensor. For this purpose, finite-aperture sensors
+			are explicitly represented by surfaces in the scene so that they can be
+			intersected by random walks started at emitters.</p>
+
+			<p>Bidirectional path tracing is a relatively "heavy" rendering technique&mdash;for
+			the same number of samples per pixel, it is easily 3-4 times slower than regular
+			path tracing. However, it usually makes up for this by producing considerably
+			lower-variance radiance estimates (i.e. the output images have less noise).</p>
+
+			<p>The code parallelizes over multiple cores and machines, but with one caveat:
+			some of the BDPT path sampling strategies are incompatble with the usual
+			approach of rendering an image tile by tile, since they can potentially
+			contribute to <em>any</em> pixel on the screen. This means that each
+			rendering work unit must be associated with a full-sized image!
+			When network render nodes are involved or the resolution of this <em>light image</em>
+			is very high, a bottleneck can arise where more work is spent accumulating or
+			transmitting these images than actual rendering.</p>
+
+			<p>There are two possible resorts should this situation arise: the first one
+			is to reduce the number of work units so that there is approximately one
+			unit per core (and hence one image to transmit per core). This can be done by
+			increasing the block size in the GUI preferences or passing the <tt>-b</tt>
+			parameter to the <tt>mitsuba</tt> executable. The second option is to simply
+			disable these sampling strategies at the cost of reducing the
+			effectiveness of bidirectional path tracing (particularly, when rendering
+			caustics). For this, set <tt>lightImage</tt> to <tt>false</tt>.
+			When rendering an image of a reasonable resolution without network nodes,
+			this is not a big concern, hence these strategies are enabled by default.</p>
+		</descr>
+		<param name="maxDepth" readableName="Maximum depth" type="integer" default="-1">
+			Specifies the longest path depth in the generated output image (where <tt>-1</tt>
+			corresponds to ∞). A value of 1 will only render directly visible light sources.
+			2 will lead to single-bounce (direct-only) illumination, and so on.
+		</param>
+		<param name="lightImage" readableName="Create light image" type="boolean" default="true">
+			Include sampling strategies that connect
+			paths traced from emitters directly to the camera? (i.e. what the adjoint particle tracer does)
+			This improves the effectiveness of bidirectional path tracing
+			but severely increases the local and remote communication
+			overhead, since large <em>light images</em> must be transferred between threads
+			or over the network. See the main documentation for a more detailed explanation.
+		</param>
+		<param name="sampleDirect" readableName="Use direct sampling methods" type="boolean" default="true">
+			Enable direct sampling strategies? This is a generalization of direct illumination sampling that works with both emitters
+			and sensors. Usually a good idea.
+		</param>
+		<param name="rrDepth" readableName="Russian Roulette starting depth" type="integer" default="5" importance="1">
+			Specifies the minimum path depth, after which the implementation will start to use the
+			"russian roulette" path termination criterion (set to <tt>-1</tt> to disable).
+		</param>
+		<param name="timeout" readableName="Target render time" type="integer" default="0" importance="1">
+			A non-zero target render time (in seconds) will override SPP setup, the rendering process will 
+			keep going until target render time arrived. 
+		</param>
+		<param name="radiusScale" readableName="Scale of initial gather radius?" type="float" default="1.0" importance="1">
+			A scale to adjust the initial radius of vertex merging gathering radius. 0.0 will
+			disable vertex merging sampling technique and fall back to original pssmlt, 1.0 
+			will use a default guess of the radius based on the scene size.
+		</param>
+		<param name="useVC" readableName="Use vertex connection" type="boolean" default="true">
+			Use vertex connection
+		</param>
+		<param name="useVM" readableName="Use vertex merging" type="boolean" default="true">
+			Use vertex merging
+		</param>
+	</plugin>
 
 	<plugin type="integrator" name="pssmlt" readableName="Primary Sample Space MLT" show="true"
 			className="PSSMLT" extends="Integrator">

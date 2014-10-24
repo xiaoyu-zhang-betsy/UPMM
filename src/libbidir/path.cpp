@@ -263,7 +263,7 @@ bool Path::operator==(const Path &path) const {
 	return true;
 }
 
-Float Path::miWeight(const Scene *scene, const Path &emitterSubpath,
+Float Path::miWeight(bool watchThread, const Scene *scene, const Path &emitterSubpath,
 		const PathEdge *connectionEdge, const Path &sensorSubpath,
 		int s, int t, bool sampleDirect, bool lightImage) {
 	int k = s+t+1, n = k+1;
@@ -273,6 +273,10 @@ Float Path::miWeight(const Scene *scene, const Path &emitterSubpath,
 			*vtPred = sensorSubpath.vertexOrNull(t-1),
 			*vs = emitterSubpath.vertex(s),
 			*vt = sensorSubpath.vertex(t);
+
+	if (watchThread){
+		float fuck = 1.f;
+	}
 
 	/* pdfImp[i] and pdfRad[i] store the area/volume density of vertex
 	   'i' when sampled from the adjacent vertex in the emitter
@@ -476,6 +480,10 @@ Float Path::miWeight(const Scene *scene, const Path &emitterSubpath,
 			initial /= ratioEmitterDirect;
 		else if (t == 1)
 			initial /= ratioSensorDirect;
+
+		if (watchThread){
+			float fuck = 1.f;
+		}
 	}
 
 	double weight = 1, pdf = initial;
@@ -526,7 +534,81 @@ Float Path::miWeight(const Scene *scene, const Path &emitterSubpath,
 		pdf = next;
 	}
 
+	if (watchThread && s == 1){
+		float fuck = 1.f;
+	}
+
 	return (Float) (1.0 / weight);
+}
+
+Float Path::miWeightVC(bool watchThread, const Scene *scene,
+	const PathVertex *vsPred, const PathVertex *vs,
+	const PathVertex *vt, const PathVertex *vtPred,
+	int s, int t, bool sampleDirect,
+	float emitterdVCM, float emitterdVC,
+	float sensordVCM, float sensordVC,
+	Float misVmWeightFactor, size_t nLightPaths){
+
+	Float weight = 0.0f;
+
+	if (watchThread){
+		float fuck = 1.f;
+	}
+
+	if ((s > 1 && t > 1) || (s == 1 && t == 1)){
+		Float psr2_w = vs->evalPdf(scene, vt, vsPred, ERadiance, ESolidAngle);
+		Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
+		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
+		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
+		Float wLight = psr1 * (misVmWeightFactor + emitterdVCM + psr2_w * emitterdVC);
+		Float wCamera = ptr1 * (misVmWeightFactor + sensordVCM + ptr2_w * sensordVC);
+		weight = 1.f / (1.f + wLight + wCamera);		
+	}
+	else if (t == 1 && s > 1){
+		EMeasure measure = vt->getAbstractEmitter()->getDirectMeasure();
+		Float pconnect = vs->evalPdfDirect(scene, vt, ERadiance, measure == ESolidAngle ? EArea : measure);
+		Float ptrace = vtPred->pdf[ERadiance];
+
+// 		const PositionSamplingRecord &pRec = vt->getPositionSamplingRecord();
+// 		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+// 		DirectionSamplingRecord dRec(normalize(vt->getPosition() - vs->getPosition()));
+// 		Spectrum value = sensor->evalDirection(dRec, pRec);
+// 		ptrace *= sensor->pdfDirection(dRec, pRec);		
+
+		Float psr2_w = vs->evalPdf(scene, vt, vsPred, ERadiance, ESolidAngle);		
+		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
+
+		Float wLight = ptrace * psr1 / pconnect * (misVmWeightFactor + emitterdVCM + psr2_w * emitterdVC);
+		weight = 1.f / (1.f + wLight);		
+	}
+	else if (s == 1 && t > 1){
+		EMeasure measure = vs->getAbstractEmitter()->getDirectMeasure();
+		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure);
+		Float ptrace = vsPred->pdf[EImportance];
+
+		if (vs->getAbstractEmitter()->needsDirectionSample()){
+			const PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
+			const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+			DirectionSamplingRecord dRec(normalize(vt->getPosition() - vs->getPosition()));
+			ptrace *= emitter->pdfDirection(dRec, pRec);
+		}		
+
+		Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
+		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
+		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
+		Float wLight = psr1 / pconnect;
+		Float wCamera = ptrace / pconnect * (misVmWeightFactor + sensordVCM + ptr2_w * sensordVC);
+		weight = 1.f / (1.f + wLight + wCamera);		
+	}
+	else{
+		SLog(EError, "Not implemented miweightVC for s = %d, t = %d", s, t);
+	}
+
+	if (watchThread){
+		float fuck = 1.f;
+	}
+	
+	return weight;
 }
 
 void Path::collapseTo(PathEdge &target) const {

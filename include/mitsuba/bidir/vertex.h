@@ -476,7 +476,7 @@ struct MTS_EXPORT_BIDIR PathVertex {
 	 * \return The contribution weighting factor
 	 */
 	Spectrum eval(const Scene *scene, const PathVertex *pred,
-		const PathVertex *succ, ETransportMode mode, EMeasure measure = EArea) const;
+		const PathVertex *succ, ETransportMode mode, EMeasure measure = EArea) const;	
 
 	/**
 	 * \brief Compute the density of a successor node
@@ -561,6 +561,14 @@ struct MTS_EXPORT_BIDIR PathVertex {
 	const Medium *getTargetMedium(const PathEdge *predEdge,
 			const Vector &d) const;
 
+	/*
+	* For VCM
+	*/
+	Spectrum PathVertex::eval(const Scene *scene, const Vector wi,
+		const Vector wo, ETransportMode mode, EMeasure measure = EArea) const;
+	Float PathVertex::evalPdf(const Scene *scene, const Vector wi,
+		const Vector wo, ETransportMode mode, EMeasure measure = EArea) const;
+
 	//! @}
 	/* ==================================================================== */
 
@@ -577,6 +585,8 @@ struct MTS_EXPORT_BIDIR PathVertex {
 	 * Throws an exception when called on a supernode
 	 */
 	Point getPosition() const;
+
+	void PathVertex::setPosition(Point p);
 
 	/// Check if the vertex lies on a surface
 	inline bool isOnSurface() const {

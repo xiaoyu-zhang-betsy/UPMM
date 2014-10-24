@@ -139,6 +139,11 @@ public:
 		PathVertex tempEndpoint, tempSample;
 		PathEdge tempEdge, connectionEdge;
 
+		bool watchThread = false;
+		if (initialSamplePos.x > 200 && initialSamplePos.x < 201 && initialSamplePos.y > 256 && initialSamplePos.y < 257){
+			watchThread = true;
+		}
+
 		/* Compute the combined weights along the two subpaths */
 		Spectrum *importanceWeights = (Spectrum *) alloca(emitterSubpath.vertexCount() * sizeof(Spectrum)),
 				 *radianceWeights  = (Spectrum *) alloca(sensorSubpath.vertexCount()  * sizeof(Spectrum));
@@ -279,7 +284,7 @@ public:
 				}
 
 				/* Compute the multiple importance sampling weight */
-				Float miWeight = Path::miWeight(scene, emitterSubpath, &connectionEdge,
+				Float miWeight = Path::miWeight(watchThread, scene, emitterSubpath, &connectionEdge,
 					sensorSubpath, s, t, m_config.sampleDirect, m_config.lightImage);
 
 				if (sampleDirect) {
@@ -294,6 +299,12 @@ public:
 				if (vt->isSensorSample() && !vt->getSamplePosition(vs, samplePos))
 					continue;
 
+				value *= miWeight;
+
+				if (watchThread){
+					float fuck = 1.f;
+				}
+
 				#if BDPT_DEBUG == 1
 					/* When the debug mode is on, collect samples
 					   separately for each sampling strategy. Note: the
@@ -302,12 +313,12 @@ public:
 					Spectrum splatValue = value * (m_config.showWeighted
 						? miWeight : 1.0f);// * std::pow(2.0f, s+t-3.0f));
 					wr->putDebugSample(s, t, samplePos, splatValue);
-				#endif
+				#endif					
 
 				if (t >= 2)
-					sampleValue += value * miWeight;
+					sampleValue += value;
 				else
-					wr->putLightSample(samplePos, value * miWeight);
+					wr->putLightSample(samplePos, value);
 			}
 		}
 		wr->putSample(initialSamplePos, sampleValue);

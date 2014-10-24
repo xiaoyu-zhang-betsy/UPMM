@@ -144,6 +144,9 @@
     <Filter Include="Source Files\integrators\cmlt">
       <UniqueIdentifier>{33cd4900-4eab-42ff-93bb-701c697d628a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\integrators\vcm">
+      <UniqueIdentifier>{cad26d7d-dff2-4f4c-98ea-90315cc8891a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup Label="Source Files">
     <ClCompile Include="..\src\converter\mtsimport.cpp">
@@ -1031,6 +1034,12 @@
     <ClCompile Include="..\src\integrators\cmlt\cmlt_sampler.cpp">
       <Filter>Source Files\integrators\cmlt</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\integrators\vcm\vcm.cpp">
+      <Filter>Source Files\integrators\vcm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\vcm\vcm_proc.cpp">
+      <Filter>Source Files\integrators\vcm</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup Label="Header Files">
     <ClInclude Include="..\src\converter\converter.h">
@@ -1725,6 +1734,12 @@
     </ClInclude>
     <ClInclude Include="..\src\integrators\cmlt\cmlt_sampler.h">
       <Filter>Source Files\integrators\cmlt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\vcm\vcm.h">
+      <Filter>Source Files\integrators\vcm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\vcm\vcm_proc.h">
+      <Filter>Source Files\integrators\vcm</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

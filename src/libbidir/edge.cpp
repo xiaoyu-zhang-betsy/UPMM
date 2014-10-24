@@ -546,7 +546,7 @@ bool PathEdge::pathConnectAndCollapse(const Scene *scene, const PathEdge *predEd
 			}
 		}
 
-		if (medium != vs->getTargetMedium(predEdge, -d)) {
+		if (predEdge != NULL && medium != vs->getTargetMedium(predEdge, -d)) {
 			#if defined(MTS_BD_TRACE)
 				SLog(EWarn, "PathEdge::pathConnectAndCollapse(): attempted two connect "
 					"two vertices that disagree about the medium in between! "

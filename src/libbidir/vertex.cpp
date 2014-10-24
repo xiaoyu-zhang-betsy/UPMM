@@ -1375,6 +1375,122 @@ PathVertex *PathVertex::clone(MemoryPool &pool) const {
 	return result;
 }
 
+void PathVertex::setPosition(Point p) {
+	switch (type) {
+	case ESurfaceInteraction:
+		getIntersection().p = p;
+		break;
+	case EMediumInteraction:
+		getMediumSamplingRecord().p = p;
+		break;
+	case EEmitterSample:
+	case ESensorSample:
+		getPositionSamplingRecord().p = p;
+		break;
+	default:
+		SLog(EError, "PathVertex::setPosition(): Encountered an "
+			"unsupported vertex type (%i)!", type);
+	}
+}
+
+
+Spectrum PathVertex::eval(const Scene *scene, const Vector wi,
+	const Vector wo, ETransportMode mode, EMeasure measure) const {
+	Spectrum result(0.0f);
+
+	switch (type) {
+
+	case ESensorSample: {
+		const PositionSamplingRecord &pRec = getPositionSamplingRecord();
+		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+		DirectionSamplingRecord dRec(wo, measure == EArea ? ESolidAngle : measure);
+		result = sensor->evalDirection(dRec, pRec);
+		Float dp = absDot(pRec.n, wo);
+		if (measure != EDiscrete && dp != 0)
+			result /= dp;
+
+		return result;
+	}
+		break;
+
+	case ESurfaceInteraction: {
+		const Intersection &its = getIntersection();
+		const BSDF *bsdf = its.getBSDF();
+
+		BSDFSamplingRecord bRec(its, its.toLocal(wi),
+			its.toLocal(wo), mode);
+
+		if (measure == EArea)
+			measure = ESolidAngle;
+
+		result = bsdf->eval(bRec, measure);
+
+		/* Prevent light leaks due to the use of shading normals */
+		Float wiDotGeoN = dot(its.geoFrame.n, wi),
+			woDotGeoN = dot(its.geoFrame.n, wo);
+
+		if (wiDotGeoN * Frame::cosTheta(bRec.wi) <= 0 ||
+			woDotGeoN * Frame::cosTheta(bRec.wo) <= 0)
+			return Spectrum(0.0f);
+
+		if (mode == EImportance) {
+			/* Adjoint BSDF for shading normals */
+			result *= std::abs(
+				(Frame::cosTheta(bRec.wi) * woDotGeoN) /
+				(Frame::cosTheta(bRec.wo) * wiDotGeoN));
+		}
+
+		if (measure != EDiscrete && Frame::cosTheta(bRec.wo) != 0)
+			result /= std::abs(Frame::cosTheta(bRec.wo));
+	}
+		break;
+
+	default:
+		SLog(EError, "PathVertex::eval(directional): Encountered an "
+			"unsupported vertex type (%i)!", type);
+		return Spectrum(0.0f);
+	}
+
+	return result;
+}
+Float PathVertex::evalPdf(const Scene *scene, const Vector wi,
+	const Vector wo, ETransportMode mode, EMeasure measure) const {
+	Float dist = 0.0f, result = 0.0f;
+
+	switch (type) {
+	case ESurfaceInteraction: {
+		const Intersection &its = getIntersection();
+		const BSDF *bsdf = its.getBSDF();
+
+		BSDFSamplingRecord bRec(its, its.toLocal(wi), its.toLocal(wo), mode);
+		result = bsdf->pdf(bRec, measure == EArea ? ESolidAngle : measure);
+
+		/* Prevent light leaks due to the use of shading normals */
+		Float wiDotGeoN = dot(its.geoFrame.n, wi),
+			woDotGeoN = dot(its.geoFrame.n, wo);
+
+		if (wiDotGeoN * Frame::cosTheta(bRec.wi) <= 0 ||
+			woDotGeoN * Frame::cosTheta(bRec.wo) <= 0)
+			return 0.0f;
+	}
+		break;
+
+	default:
+		SLog(EError, "PathVertex::evalPdf(direction): Encountered an "
+			"unsupported vertex type (%i)!", type);
+		return 0.0f;
+	}
+
+	// 	if (measure == EArea) {
+	// 		result /= dist * dist;
+	// 		if (succ->isOnSurface())
+	// 			result *= absDot(wo, succ->getGeometricNormal());
+	// 	}
+
+	return result;
+}
+
+
 std::string PathVertex::toString() const {
 	std::ostringstream oss;
 	oss << "PathVertex[" << endl

@@ -125,8 +125,11 @@ public:
 	inline void getNormalDerivative(Vector &dndu, Vector &dndv,
 		bool shadingFrame = true) const;
 
+	void setShapePointer(const Shape* _shape){ shape = _shape; }
+
 	/// Return a string representation
 	std::string toString() const;
+
 public:
 	/// Pointer to the associated shape
 	const Shape *shape;

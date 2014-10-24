@@ -413,7 +413,8 @@ public:
 	 *    (specifically, those with <tt>t==0</tt> or <tt>t==1</tt>) are included
 	 *    in the rendering process.
 	 */
-	static Float miWeight(const Scene *scene,
+	static Float miWeight(bool watchThread, 
+			const Scene *scene,
 			const Path &emitterSubpath,
 			const PathEdge *connectionEdge,
 			const Path &sensorSubpath, int s, int t,
@@ -508,6 +509,16 @@ public:
 
 	/// Return a basic string summary of the path
 	std::string summarize() const;
+
+	/// MIS weighting for VCM
+	static Float miWeightVC(bool watchThread, 
+		const Scene *scene,
+		const PathVertex *vsPred, const PathVertex *vs,
+		const PathVertex *vt, const PathVertex *vtPred,
+		int s, int t, bool sampleDirect,
+		float emitterdVCM, float emitterdVC,
+		float sensordVCM, float sensordVC,
+		Float misVmWeightFactor, size_t nLightPaths);
 
 	//! @}
     /* ==================================================================== */

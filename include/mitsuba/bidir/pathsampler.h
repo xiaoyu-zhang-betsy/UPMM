@@ -23,8 +23,104 @@
 #include <mitsuba/bidir/path.h>
 #include <boost/function.hpp>
 
+#include <mitsuba/core/kdtree.h>
+
 MTS_NAMESPACE_BEGIN
 
+/*
+*	Misc for VCM
+*/
+enum EMisTech {
+	EVCM = 0,
+	EVC = 1,
+	EVM = 2,
+	EMisTechs = 3
+};
+struct MTS_EXPORT_BIDIR MisState{
+	float state[EMisTechs];
+	MisState(){
+		state[EVCM] = 0.f;
+		state[EVC] = 0.f;
+		state[EVM] = 0.f;
+	}
+	float& operator[](EMisTech tech){
+		return state[tech];
+	}
+};
+struct LightVertex{
+	Spectrum importanceWeight;
+	Vector wo;
+	MisState emitterState;
+	inline  LightVertex(const PathVertex *vs, const PathVertex *vsPred,
+		const MisState &state, Spectrum _wgt) :
+		emitterState(state), importanceWeight(_wgt){
+		wo = normalize(vsPred->getPosition() - vs->getPosition());
+	}
+};
+struct LightVertexExt{
+	int depth;
+	const Shape *shape;
+	Point3 position;
+	Frame shFrame;
+	Frame geoFrame;
+	uint8_t measure;
+	uint8_t type;
+
+	bool hasVsPred;
+	Point3 posPred;
+	Float pdfPred;
+	uint8_t typePred;
+	uint8_t measPred;
+
+	inline LightVertexExt(const PathVertex *vs, const PathVertex *vsPred, int _depth){
+		const Intersection &its = vs->getIntersection();
+		depth = _depth;
+		shape = its.shape;
+		position = its.p;
+		shFrame = its.shFrame;
+		geoFrame = its.geoFrame;
+		measure = vs->measure;
+		type = vs->type;
+		if (vsPred != NULL){
+			hasVsPred = true;
+			posPred = vsPred->getPosition();
+			pdfPred = vsPred->pdf[EImportance];
+			typePred = vsPred->type;
+			measPred = vsPred->measure;
+		}
+		else{
+			hasVsPred = false;
+		}
+	}
+};
+struct LightPathNodeData{
+	int depth;
+	size_t vertexIndex;
+};
+struct LightPathNode : public SimpleKDNode < Point, LightPathNodeData > {
+
+	inline LightPathNode(){}
+
+	inline  LightPathNode(const Point3 p, size_t vertexIndex, int depth){
+		position = p;
+		data.vertexIndex = vertexIndex;
+		data.depth = depth;
+	}
+	inline LightPathNode(Stream *stream) {
+		// TODO
+	}
+	void serialize(Stream *stream) const {
+		// TODO
+	}
+};
+typedef PointKDTree<LightPathNode>		LightPathTree;
+typedef LightPathTree::IndexType     IndexType;
+typedef LightPathTree::SearchResult SearchResult;
+
+
+/*
+*	Misc for CMLT
+*/
 enum EConnectionFlags {
 	EConnectVisibility = 1,
 	EConnectGeometry = 2,
@@ -34,7 +130,6 @@ enum EConnectionFlags {
 	EConnectRadiance = 32,
 	EConnectAll = 64
 };
-
 struct MTS_EXPORT_BIDIR SplatListImp {
 	/// Represents a screen-space splat produced by a path sampling technique
 	typedef std::pair<Point2, Spectrum> Splat;
@@ -99,26 +194,7 @@ struct MTS_EXPORT_BIDIR SplatListImp {
 	void normalize(const Bitmap *importanceMap = NULL){
 		if (importanceMap) {
 			BDAssert(false); // not implemented yet
-
-			// 			importance = 0.0f;
-			// 
-			// 			/* Two-stage MLT -- weight contributions using a luminance image */
-			// 			const Float *luminanceValues = importanceMap->getFloatData();
-			// 			Vector2i size = importanceMap->getSize();
-			// 			for (size_t i = 0; i < splats.size(); ++i) {
-			// 				if (splats[i].second.isZero())
-			// 					continue;
-			// 
-			// 				const Point2 &pos = splats[i].first;
-			// 				Point2i intPos(
-			// 					std::min(std::max(0, (int)pos.x), size.x - 1),
-			// 					std::min(std::max(0, (int)pos.y), size.y - 1));
-			// 				Float lumValue = luminanceValues[intPos.x + intPos.y * size.x];
-			// 				splats[i].second /= lumValue;
-			// 				luminance += splats[i].second.getLuminance();
-			// 			}
 		}
-
 		if (importance > 0) {
 			/* Normalize the contributions */
 			Float invImportance = 1.0f / importance;
@@ -209,7 +285,8 @@ public:
 	 */
 	PathSampler(ETechnique technique, const Scene *scene, Sampler *emitterSampler,
 		Sampler *sensorSampler, Sampler *directSampler, int maxDepth, int rrDepth,
-		bool excludeDirectIllum, bool sampleDirect, bool lightImage = true);
+		bool excludeDirectIllum, bool sampleDirect, bool lightImage = true,
+		Float gatherRadius = 0.0f, Sampler *lightPathSampler = NULL);
 
 	/**
 	 * \brief Generate a sample using the configured sampling strategy
@@ -304,6 +381,10 @@ public:
 	int getConnectionFlag(bool connectionImportance, bool connectionRadiance, bool connectionVisibility,
 		bool connectionMIS, bool connectionBSDFs, bool connectionGeometry, bool connectionFull);
 
+	/// for VCM
+	void gatherLightPaths(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, ImageBlock* lightImage = NULL);
+	void sampleCameraPath(const bool useVC, const bool useVM, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
+
 	MTS_DECLARE_CLASS()
 protected:
 	/// Virtual destructor
@@ -324,6 +405,14 @@ protected:
 	Path m_emitterSubpath, m_sensorSubpath;
 	Path m_connectionSubpath, m_fullPath;
 	MemoryPool m_pool;
+
+	// VCM
+	size_t m_lightPathNum;
+	ref<Sampler> m_lightPathSampler;	
+	LightPathTree m_lightPathTree;
+	std::vector<LightVertex> m_lightVertices;
+	std::vector<LightVertexExt> m_lightVerticesExt;
+	std::vector<size_t> m_lightPathEnds;
 };
 
 /**
@@ -378,9 +467,10 @@ struct PathSeed {
 class SeedWorkUnit : public WorkUnit {
 public:
 	inline void set(const WorkUnit *wu) {
+		m_id = static_cast<const SeedWorkUnit *>(wu)->m_id;
 		m_seed = static_cast<const SeedWorkUnit *>(wu)->m_seed;
 		m_timeout = static_cast<const SeedWorkUnit *>(wu)->m_timeout;
-	}
+	}	
 
 	inline const PathSeed &getSeed() const {
 		return m_seed;
@@ -412,8 +502,16 @@ public:
 		return "SeedWorkUnit[]";
 	}
 
+	inline const int getID() const{
+		return m_id;
+	}
+	inline const void setID(int id){
+		m_id = id;
+	}
+
 	MTS_DECLARE_CLASS()
 private:
+	int m_id;
 	PathSeed m_seed;
 	int m_timeout;
 };
