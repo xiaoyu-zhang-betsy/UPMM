@@ -126,6 +126,8 @@
     <ClInclude Include="..\src\integrators\cmlt\cmlt.h" />
     <ClInclude Include="..\src\integrators\cmlt\cmlt_proc.h" />
     <ClInclude Include="..\src\integrators\cmlt\cmlt_sampler.h" />
+    <ClInclude Include="..\src\integrators\upm\upm.h" />
+    <ClInclude Include="..\src\integrators\upm\upm_proc.h" />
     <ClInclude Include="..\src\integrators\vcm\vcm.h" />
     <ClInclude Include="..\src\integrators\vcm\vcm_proc.h" />
     <ClInclude Include="..\src\samplers\faure.h">
@@ -631,6 +633,8 @@
     <ClCompile Include="..\src\integrators\cmlt\cmlt.cpp" />
     <ClCompile Include="..\src\integrators\cmlt\cmlt_proc.cpp" />
     <ClCompile Include="..\src\integrators\cmlt\cmlt_sampler.cpp" />
+    <ClCompile Include="..\src\integrators\upm\upm.cpp" />
+    <ClCompile Include="..\src\integrators\upm\upm_proc.cpp" />
     <ClCompile Include="..\src\integrators\vcm\vcm.cpp" />
     <ClCompile Include="..\src\integrators\vcm\vcm_proc.cpp" />
     <ClCompile Include="..\src\librender\trimesh.cpp">

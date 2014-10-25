@@ -147,6 +147,9 @@
     <Filter Include="Source Files\integrators\vcm">
       <UniqueIdentifier>{cad26d7d-dff2-4f4c-98ea-90315cc8891a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\integrators\upm">
+      <UniqueIdentifier>{c8610930-b8dc-4ad0-b84f-56b231b19122}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup Label="Source Files">
     <ClCompile Include="..\src\converter\mtsimport.cpp">
@@ -1040,6 +1043,12 @@
     <ClCompile Include="..\src\integrators\vcm\vcm_proc.cpp">
       <Filter>Source Files\integrators\vcm</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\integrators\upm\upm.cpp">
+      <Filter>Source Files\integrators\upm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\upm\upm_proc.cpp">
+      <Filter>Source Files\integrators\upm</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup Label="Header Files">
     <ClInclude Include="..\src\converter\converter.h">
@@ -1740,6 +1749,12 @@
     </ClInclude>
     <ClInclude Include="..\src\integrators\vcm\vcm_proc.h">
       <Filter>Source Files\integrators\vcm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\upm\upm.h">
+      <Filter>Source Files\integrators\upm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\upm\upm_proc.h">
+      <Filter>Source Files\integrators\upm</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

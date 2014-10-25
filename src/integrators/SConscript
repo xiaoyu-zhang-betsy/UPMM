@@ -45,5 +45,8 @@ plugins += bidirEnv.SharedLibrary('cmlt',
     
 plugins += bidirEnv.SharedLibrary('vcm',
 	['vcm/vcm.cpp', 'vcm/vcm_proc.cpp'])
+	
+plugins += bidirEnv.SharedLibrary('upm',
+	['upm/upm.cpp', 'upm/upm_proc.cpp'])
 
 Export('plugins')
