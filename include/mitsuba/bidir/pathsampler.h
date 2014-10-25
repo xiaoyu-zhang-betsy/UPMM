@@ -383,7 +383,9 @@ public:
 
 	/// for VCM
 	void gatherLightPaths(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, ImageBlock* lightImage = NULL);
-	void sampleCameraPath(const bool useVC, const bool useVM, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
+	void sampleSplatsVCM(const bool useVC, const bool useVM, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
+	/// for UPM
+	void sampleSplatsUPM(const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
 
 	MTS_DECLARE_CLASS()
 protected:

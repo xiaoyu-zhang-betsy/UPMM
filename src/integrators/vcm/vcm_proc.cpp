@@ -110,7 +110,7 @@ public:
 
 				Point2i offset = Point2i(hilbertCurve[i]);
 				m_sampler->generate(offset);
-				m_pathSampler->sampleCameraPath(m_config.useVC, m_config.useVM, radius, offset, i, *splats);
+				m_pathSampler->sampleSplatsVCM(m_config.useVC, m_config.useVM, radius, offset, i, *splats);
 
 				for (size_t k = 0; k < splats->size(); ++k) {
 					Spectrum value = splats->getValue(k);

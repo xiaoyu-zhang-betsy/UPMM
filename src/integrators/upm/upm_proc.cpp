@@ -58,8 +58,10 @@ public:
 	}
 
 	ref<WorkResult> createWorkResult() const {
-		return new ImageBlock(Bitmap::ESpectrum,
+		ImageBlock* block = new ImageBlock(Bitmap::ESpectrum,
 			m_film->getCropSize(), m_film->getReconstructionFilter());
+		block->clear();
+		return block;
 	}
 
 	void prepare() {
@@ -85,6 +87,7 @@ public:
 	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {
 		ImageBlock *result = static_cast<ImageBlock *>(workResult);
 		ImageBlock *midres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
+		midres->clear();
 		const SeedWorkUnit *wu = static_cast<const SeedWorkUnit *>(workUnit);
 		const int workID = wu->getID();
 		SplatList *splats = new SplatList();		
@@ -98,19 +101,19 @@ public:
 		float radius = m_config.initialRadius;
 		ref<Timer> timer = new Timer();
 		for (size_t j = 0; j < m_config.sampleCount || (wu->getTimeout() > 0 && (int)timer->getMilliseconds() < wu->getTimeout()); j++) {
-			if (m_config.initialRadius > 0.0f){
-				float reduceFactor = 1.f / std::pow(float(iteration + 1), 0.5f * (1 - 0.75f/*radiusAlpha*/));
-				radius = std::max(reduceFactor * m_config.initialRadius, 1e-7f);
-				iteration += 8;
-			}
-			m_pathSampler->gatherLightPaths(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), midres);
+// 			if (m_config.initialRadius > 0.0f){
+// 				float reduceFactor = 1.f / std::pow(float(iteration + 1), 0.5f * (1 - 0.75f/*radiusAlpha*/));
+// 				radius = std::max(reduceFactor * m_config.initialRadius, 1e-7f);
+// 				iteration += 8;
+// 			}
+			m_pathSampler->gatherLightPaths(false, m_config.useVM, radius, hilbertCurve.getPointCount(), NULL/*exclude light image but not affect MIS*/);
 
 			for (size_t i = 0; i < hilbertCurve.getPointCount(); ++i) {
 				if (stop) break;
 
 				Point2i offset = Point2i(hilbertCurve[i]);
 				m_sampler->generate(offset);
-				m_pathSampler->sampleCameraPath(m_config.useVC, m_config.useVM, radius, offset, i, *splats);
+				m_pathSampler->sampleSplatsUPM(radius, offset, i, *splats);
 
 				for (size_t k = 0; k < splats->size(); ++k) {
 					Spectrum value = splats->getValue(k);
@@ -126,7 +129,7 @@ public:
 		Spectrum *presult = (Spectrum *)result->getBitmap()->getData();
 		size_t pixelCount = midres->getBitmap()->getPixelCount();
 		for (int i = 0; i < pixelCount; i++){
-			presult[i] = pmidres[i] / float(actualSampleCount);;
+			presult[i] = pmidres[i] / float(actualSampleCount);
 		}
 		midres->clear();
 		//delete midres; // TODO: better handle the memory of midres
@@ -182,8 +185,10 @@ void UPMProcess::develop() {
 	m_queue->signalRefresh(m_job);
 }
 
-void UPMProcess::processResult(const WorkResult *wr, bool cancelled) {
+void UPMProcess::processResult(const WorkResult *wr, bool cancelled) {	
 	LockGuard lock(m_resultMutex);
+	if (m_resultCounter == 0)
+		m_accum->clear();
 	const ImageBlock *result = static_cast<const ImageBlock *>(wr);
 	m_accum->put(result);
 	m_progress->update(++m_resultCounter);
