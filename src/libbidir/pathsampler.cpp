@@ -243,7 +243,7 @@ void PathSampler::sampleSplats(const Point2i &offset, SplatList &list) {
 						}
 
 						/* Compute the multiple importance sampling weight */
-						value *= Path::miWeight(false, m_scene, m_emitterSubpath, &connectionEdge,
+						value *= Path::miWeight(m_scene, m_emitterSubpath, &connectionEdge,
 							m_sensorSubpath, s, t, m_sampleDirect, m_lightImage);
 
 						if (sampleDirect) {
@@ -495,7 +495,7 @@ void PathSampler::samplePaths(const Point2i &offset, PathCallback &callback) {
 			}
 
 			/* Compute the multiple importance sampling weight */
-			value *= Path::miWeight(false, m_scene, m_emitterSubpath, &connectionEdge,
+			value *= Path::miWeight(m_scene, m_emitterSubpath, &connectionEdge,
 				m_sensorSubpath, s, t, m_sampleDirect, m_lightImage);
 
 			if (!value.isZero()) {
@@ -953,7 +953,7 @@ void PathSampler::sampleSplatsConnection(const Point2i &offset, SplatListImp &li
 				}
 
 				/* Compute the multiple importance sampling weight */
-				Float misWeight = Path::miWeight(false, m_scene, m_emitterSubpath, &connectionEdge,
+				Float misWeight = Path::miWeight(m_scene, m_emitterSubpath, &connectionEdge,
 					m_sensorSubpath, s, t, m_sampleDirect, m_lightImage);
 				value *= misWeight;
 
@@ -1239,14 +1239,7 @@ void PathSampler::gatherLightPaths(const bool useVC, const bool useVM,
 			if (vs->measure != EDiscrete && lightImage != NULL && useVC){
 				Spectrum value = importanceWeight * vs->sampleDirect(m_scene, m_directSampler,
 					&vtPred, &vtEdge, &vt, ERadiance);
-				if (value.isZero()) continue;
-
-				Point2 samplePos(0.0f);
-				vt.getSamplePosition(vs, samplePos);
-				bool watchThread = false;
-				if (samplePos.x > 50 && samplePos.x < 51 && samplePos.y > 256 && samplePos.y < 257){
-					watchThread = true;
-				}
+				if (value.isZero()) continue;								
 
 				value *= vs->eval(m_scene, vsPred, &vt, EImportance);
 				vs->measure = EArea;
@@ -1254,19 +1247,16 @@ void PathSampler::gatherLightPaths(const bool useVC, const bool useVM,
 				if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, &vt, &vtEdge, interactions))
 					continue;
 				value *= connectionEdge.evalCached(vs, &vt, PathEdge::ETransmittance | PathEdge::ECosineImp);
-				Float weight = Path::miWeightVC(watchThread, m_scene, vsPred, vs, &vt, &vtPred,
+				Float weight = Path::miWeightVC(m_scene, vsPred, vs, &vt, &vtPred,
 					s, 1, m_sampleDirect,
 					emitterState[EVCM], emitterState[EVC],
 					sensorState[EVCM], sensorState[EVC],
 					misVmWeightFactor, m_lightPathNum);
 				value *= weight;
 				if (value.isZero()) continue;
-
-				if (watchThread){
-					float fuck = 1.f;
-				}
-
-				//value *= invLightPathNum;				
+				
+				Point2 samplePos(0.0f);
+				vt.getSamplePosition(vs, samplePos);
 				lightImage->put(samplePos, &value[0]);
 			}
 		}
@@ -1363,15 +1353,10 @@ void PathSampler::sampleCameraPath(const bool useVC, const bool useVM,
 			m_sensorSubpath.vertex(i - 1)->rrWeight *
 			m_sensorSubpath.edge(i - 1)->weight[ERadiance];
 
-		bool watchThread = false;
 		if (m_sensorSubpath.vertexCount() > 2) {
 			Point2 samplePos(0.0f);
 			m_sensorSubpath.vertex(1)->getSamplePosition(m_sensorSubpath.vertex(2), samplePos);
 			list.append(samplePos, Spectrum(0.0f));
-
-			if (samplePos.x > 50 && samplePos.x < 51 && samplePos.y > 256 && samplePos.y < 257){
-				watchThread = true;
-			}
 		}
 
 		// initialize of MIS helper
@@ -1551,18 +1536,14 @@ void PathSampler::sampleCameraPath(const bool useVC, const bool useVM,
 						(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
 
 					MisState sensorState = sensorStates[t - 1];
-					Float weight = Path::miWeightVC(watchThread, m_scene, vsPred, vs, vt, vtPred,
+					Float weight = Path::miWeightVC(m_scene, vsPred, vs, vt, vtPred,
 						s, t, m_sampleDirect,
 						emitterState[EVCM], emitterState[EVC],
 						sensorState[EVCM], sensorState[EVC],
 						misVmWeightFactor, nLightPaths);
 					value *= weight;
 
-					if (weight == 0.0f) continue;
-
-					if (watchThread){
-						float fuck = 1.f;
-					}
+					if (weight == 0.0f) continue;					
 
 					if (t < 2) {
 						list.append(samplePos, value);

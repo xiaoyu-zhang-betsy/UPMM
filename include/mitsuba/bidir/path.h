@@ -413,7 +413,7 @@ public:
 	 *    (specifically, those with <tt>t==0</tt> or <tt>t==1</tt>) are included
 	 *    in the rendering process.
 	 */
-	static Float miWeight(bool watchThread, 
+	static Float miWeight(
 			const Scene *scene,
 			const Path &emitterSubpath,
 			const PathEdge *connectionEdge,
@@ -511,7 +511,7 @@ public:
 	std::string summarize() const;
 
 	/// MIS weighting for VCM
-	static Float miWeightVC(bool watchThread, 
+	static Float miWeightVC( 
 		const Scene *scene,
 		const PathVertex *vsPred, const PathVertex *vs,
 		const PathVertex *vt, const PathVertex *vtPred,

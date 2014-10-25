@@ -139,11 +139,6 @@ public:
 		PathVertex tempEndpoint, tempSample;
 		PathEdge tempEdge, connectionEdge;
 
-		bool watchThread = false;
-		if (initialSamplePos.x > 200 && initialSamplePos.x < 201 && initialSamplePos.y > 256 && initialSamplePos.y < 257){
-			watchThread = true;
-		}
-
 		/* Compute the combined weights along the two subpaths */
 		Spectrum *importanceWeights = (Spectrum *) alloca(emitterSubpath.vertexCount() * sizeof(Spectrum)),
 				 *radianceWeights  = (Spectrum *) alloca(sensorSubpath.vertexCount()  * sizeof(Spectrum));
@@ -284,7 +279,7 @@ public:
 				}
 
 				/* Compute the multiple importance sampling weight */
-				Float miWeight = Path::miWeight(watchThread, scene, emitterSubpath, &connectionEdge,
+				Float miWeight = Path::miWeight(scene, emitterSubpath, &connectionEdge,
 					sensorSubpath, s, t, m_config.sampleDirect, m_config.lightImage);
 
 				if (sampleDirect) {
@@ -300,11 +295,7 @@ public:
 					continue;
 
 				value *= miWeight;
-
-				if (watchThread){
-					float fuck = 1.f;
-				}
-
+				
 				#if BDPT_DEBUG == 1
 					/* When the debug mode is on, collect samples
 					   separately for each sampling strategy. Note: the
