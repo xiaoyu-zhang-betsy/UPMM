@@ -320,17 +320,17 @@ public:
 
 		bitmap = bitmap->convert(m_pixelFormat, Bitmap::EUInt8, m_gamma, multiplier);
 
-		if (m_hasBanner && m_cropSize.x > bannerWidth+5 && m_cropSize.y > bannerHeight + 5) {
-			int xoffs = m_cropSize.x - bannerWidth - 5,
-			    yoffs = m_cropSize.y - bannerHeight - 5;
-			for (int y=0; y<bannerHeight; y++) {
-				for (int x=0; x<bannerWidth; x++) {
-					if (banner[x+y*bannerWidth])
-						continue;
-					bitmap->setPixel(Point2i(x+xoffs, y+yoffs), Spectrum(1));
-				}
-			}
-		}
+// 		if (m_hasBanner && m_cropSize.x > bannerWidth+5 && m_cropSize.y > bannerHeight + 5) {
+// 			int xoffs = m_cropSize.x - bannerWidth - 5,
+// 			    yoffs = m_cropSize.y - bannerHeight - 5;
+// 			for (int y=0; y<bannerHeight; y++) {
+// 				for (int x=0; x<bannerWidth; x++) {
+// 					if (banner[x+y*bannerWidth])
+// 						continue;
+// 					bitmap->setPixel(Point2i(x+xoffs, y+yoffs), Spectrum(1));
+// 				}
+// 			}
+// 		}
 
 		fs::path filename = m_destFile;
 		std::string extension = boost::to_lower_copy(filename.extension().string());

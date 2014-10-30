@@ -1668,6 +1668,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 		PathVertex *succVertex = m_pool.allocVertex();
 		PathEdge *succEdge = m_pool.allocEdge();
 		Point2 samplePos(0.0f);
+		std::vector<uint32_t> searchResults;
 
 		int minT = 2, maxT = (int)m_sensorSubpath.vertexCount() - 1;
 		if (m_maxDepth != -1)
@@ -1685,21 +1686,36 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 // 				Vector wi = normalize(vtPred->getPosition() - vt->getPosition());
 // 				Vector wiPred = (t == 2) ? Vector(-1.f, -1.f, -1.f) : normalize(vtPred2->getPosition() - vtPred->getPosition());
-// 				UnbiasedRadiusQuery query(m_scene, vt, vtPred, wi, wiPred, radianceWeights[t], m_lightVertices,
+// 				VertexMergingQuery query(m_scene, vt, vtPred, wi, wiPred, radianceWeights[t], m_lightVertices,
 // 					t, m_maxDepth, misVcWeightFactor, vmNormalization, sensorStates[t - 1]);
 // 				m_lightPathTree.executeQuery(vt->getPosition(), gatherRadius, query);
-
-				std::vector<uint32_t> searchResults;
+// 				if (!query.result.isZero())
+// 					list.accum(0, query.result);
+				
+				searchResults.clear();
 				m_lightPathTree.search(vt->getPosition(), gatherRadius, searchResults);
 				Vector wi = normalize(vtPred->getPosition() - vt->getPosition());
 				MisState sensorState = sensorStates[t - 1];
-				Spectrum value = Spectrum(0.f);
 				for (int k = 0; k < searchResults.size(); k++){
 					LightPathNode node = m_lightPathTree[searchResults[k]];
 					int s = node.data.depth;
-					if (m_maxDepth != -1 && s + t > m_maxDepth + 2) return;
+					if (m_maxDepth != -1 && s + t > m_maxDepth + 2) continue;
 					size_t vertexIndex = node.data.vertexIndex;
 					LightVertex v = m_lightVertices[vertexIndex];
+
+// 					Vector wo = v.wo;
+// 					MisState emitterState = v.emitterState;
+// 					Spectrum bsdfFactor = vt->eval(m_scene, wi, wo, ERadiance);
+// 					Spectrum val = v.importanceWeight * radianceWeights[t] * bsdfFactor;
+// 					if (val.isZero()) continue;
+// 					Float weightExt = 0.f;
+// 					Float psr2_w = vt->evalPdf(m_scene, wi, wo, ERadiance, ESolidAngle);
+// 					Float ptr2_w = vt->evalPdf(m_scene, wo, wi, EImportance, ESolidAngle);
+// 					Float wLight = emitterState[EVCM] * misVcWeightFactor + psr2_w * emitterState[EVM];
+// 					Float wCamera = sensorState[EVCM] * misVcWeightFactor + ptr2_w * sensorState[EVM];
+// 					weightExt = 1.f / (1.f + wLight + wCamera);
+// 					Spectrum contrib = val * weightExt * vmNormalization;
+
 					LightVertexExt lvertexExt = m_lightVerticesExt[vertexIndex];
 					vs = vs0;
 					Intersection &itp = vs->getIntersection();
@@ -1721,24 +1737,12 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 					samplePos = initialSamplePos;
 					if (vtPred->isSensorSample())
-						if (!vtPred->getSamplePosition(vs, samplePos))
+						if (!vtPred->getSamplePosition(vs, samplePos)){
 							continue;
-
-// 					Vector wo = v.wo;
-// 					MisState emitterState = v.emitterState;
-// 					Spectrum bsdfFactor = vt->eval(m_scene, wi, wo, ERadiance);
-// 					Spectrum val = v.importanceWeight * radianceWeights[t] * bsdfFactor;
-// 					if (val.isZero()) return;
-// 					Float weightExt = 0.f;
-// 					Float psr2_w = vt->evalPdf(m_scene, wi, wo, ERadiance, ESolidAngle);
-// 					Float ptr2_w = vt->evalPdf(m_scene, wo, wi, EImportance, ESolidAngle);
-// 					Float wLight = emitterState[EVCM] * misVcWeightFactor + psr2_w * emitterState[EVM];
-// 					Float wCamera = sensorState[EVCM] * misVcWeightFactor + ptr2_w * sensorState[EVM];
-// 					weightExt = 1.f / (1.f + wLight + wCamera);
-// 					value += val * weightExt * vmNormalization;
+						}
 					
 					// evaluate contribution
-					Spectrum contrib = radianceWeights[t - 1] * v.importanceWeight * invLightPaths;;
+					Spectrum contrib = radianceWeights[t - 1] * v.importanceWeight * invLightPaths;
 					//		connection two BRDF					
 					contrib *= vs->eval(m_scene, vsPred, vtPred, EImportance) *	vtPred->eval(m_scene, vtPred2, vs, ERadiance);
 					//		connection geometry term
@@ -1748,8 +1752,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
  					contrib *= connectionEdge.evalCached(vs, vtPred, PathEdge::EGeneralizedGeometricTerm);
 
 					// original approx. connection probability
-					Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
-					//contrib *= invpOrig;
+// 					Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
+// 					contrib *= invpOrig;
 
 					// evaluate connection probability						
 					Spectrum throughput = Spectrum(1.f);			
@@ -1774,8 +1778,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					separately for each sampling strategy. Note: the
 					following piece of code artificially increases the
 					exposure of longer paths */
-					Spectrum splatValue =contrib;// * std::pow(2.0f, s+t-3.0f));
-					wr->putDebugSample(s, t - 1, samplePos, splatValue);
+ 					Spectrum splatValue =contrib;// * std::pow(2.0f, s+t-3.0f));
+ 					wr->putDebugSample(s, t - 1, samplePos, splatValue);
 #endif			
 
 					// MIS weighting

@@ -491,17 +491,17 @@ public:
 					m_componentFormat, m_channelNames);
 		}
 
-		if (m_banner && m_cropSize.x > bannerWidth+5 && m_cropSize.y > bannerHeight + 5 && m_pixelFormats.size() == 1) {
-			int xoffs = m_cropSize.x - bannerWidth - 5,
-			    yoffs = m_cropSize.y - bannerHeight - 5;
-			for (int y=0; y<bannerHeight; y++) {
-				for (int x=0; x<bannerWidth; x++) {
-					if (banner[x+y*bannerWidth])
-						continue;
-					bitmap->setPixel(Point2i(x+xoffs, y+yoffs), Spectrum(1024));
-				}
-			}
-		}
+// 		if (m_banner && m_cropSize.x > bannerWidth+5 && m_cropSize.y > bannerHeight + 5 && m_pixelFormats.size() == 1) {
+// 			int xoffs = m_cropSize.x - bannerWidth - 5,
+// 			    yoffs = m_cropSize.y - bannerHeight - 5;
+// 			for (int y=0; y<bannerHeight; y++) {
+// 				for (int x=0; x<bannerWidth; x++) {
+// 					if (banner[x+y*bannerWidth])
+// 						continue;
+// 					bitmap->setPixel(Point2i(x+xoffs, y+yoffs), Spectrum(1024));
+// 				}
+// 			}
+// 		}
 
 		fs::path filename = m_destFile;
 		std::string properExtension;
