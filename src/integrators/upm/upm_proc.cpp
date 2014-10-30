@@ -22,6 +22,9 @@
 #include <mitsuba/bidir/path.h>
 #include "upm_proc.h"
 
+#include <mitsuba/core/bitmap.h>
+#include <mitsuba/core/fstream.h>
+
 
 MTS_NAMESPACE_BEGIN
 
@@ -58,10 +61,7 @@ public:
 	}
 
 	ref<WorkResult> createWorkResult() const {
-		ImageBlock* block = new ImageBlock(Bitmap::ESpectrum,
-			m_film->getCropSize(), m_film->getReconstructionFilter());
-		block->clear();
-		return block;
+		return new UPMWorkResult(m_film->getCropSize().x, m_film->getCropSize().y, m_config.maxDepth, m_film->getReconstructionFilter());
 	}
 
 	void prepare() {
@@ -85,22 +85,33 @@ public:
 	}
 
 	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {
-		ImageBlock *result = static_cast<ImageBlock *>(workResult);
+		UPMWorkResult *wr = static_cast<UPMWorkResult *>(workResult);
+		wr->clear();
 		ImageBlock *midres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
 		midres->clear();
 		const SeedWorkUnit *wu = static_cast<const SeedWorkUnit *>(workUnit);
 		const int workID = wu->getID();
 		SplatList *splats = new SplatList();		
+		splats->clear();
+
+		// [UC] for unbiased check
+		//ImageBlock *batres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
+		//batres->clear();
+		//int numSampleBatch = 1;
+		//float invSampleBatch = 1.f / (float)numSampleBatch;
+		//size_t numBatch = 0;
 
 		HilbertCurve2D<int> hilbertCurve;
 		TVector2<int> filmSize(m_film->getCropSize());
 		hilbertCurve.initialize(filmSize);
 		uint64_t iteration = workID;
-		size_t actualSampleCount = 0;
 
+		int splatcnt = 0;
+
+		size_t actualSampleCount;
 		float radius = m_config.initialRadius;
 		ref<Timer> timer = new Timer();
-		for (size_t j = 0; j < m_config.sampleCount || (wu->getTimeout() > 0 && (int)timer->getMilliseconds() < wu->getTimeout()); j++) {
+		for (actualSampleCount = 0; actualSampleCount < m_config.sampleCount || (wu->getTimeout() > 0 && (int)timer->getMilliseconds() < wu->getTimeout()); actualSampleCount++) {
 // 			if (m_config.initialRadius > 0.0f){
 // 				float reduceFactor = 1.f / std::pow(float(iteration + 1), 0.5f * (1 - 0.75f/*radiusAlpha*/));
 // 				radius = std::max(reduceFactor * m_config.initialRadius, 1e-7f);
@@ -113,26 +124,33 @@ public:
 
 				Point2i offset = Point2i(hilbertCurve[i]);
 				m_sampler->generate(offset);
-				m_pathSampler->sampleSplatsUPM(radius, offset, i, *splats);
+ 				m_pathSampler->sampleSplatsUPM(wr, radius, offset, i, *splats);
 
 				for (size_t k = 0; k < splats->size(); ++k) {
-					Spectrum value = splats->getValue(k);
-					midres->put(splats->getPosition(k), &value[0]);
-				}
+ 					Spectrum value = splats->getValue(k);
+					wr->putSample(splats->getPosition(k), &value[0]);
+// 					// [UC] for unbiased check
+// 					value *= invSampleBatch;
+// 					batres->put(splats->getPosition(k), &value[0]);
+ 				}
+			}			
+
+			// [UC] for unbiased check
+			/*
+			if ((actualSampleCount + 1) % numSampleBatch == 0){
+				Bitmap *bitmap = const_cast<Bitmap *>(batres->getBitmap());
+				ref<Bitmap> hdrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, -1, 1.f);
+				fs::path filename = fs::path(formatString("%s_k%02d.pfm", "test", numBatch * 8 + workID));
+				ref<FileStream> targetFile = new FileStream(filename,
+					FileStream::ETruncReadWrite);
+				hdrBitmap->write(Bitmap::EPFM, targetFile, 1);
+				batres->clear();
 			}
-			actualSampleCount++;
+			*/
 		}
 
 		Log(EInfo, "Run %d iterations", actualSampleCount);
-
-		const Spectrum *pmidres = (Spectrum *)midres->getBitmap()->getData();
-		Spectrum *presult = (Spectrum *)result->getBitmap()->getData();
-		size_t pixelCount = midres->getBitmap()->getPixelCount();
-		for (int i = 0; i < pixelCount; i++){
-			presult[i] = pmidres[i] / float(actualSampleCount);
-		}
-		midres->clear();
-		//delete midres; // TODO: better handle the memory of midres
+		wr->accumSampleCount(actualSampleCount);
 		
 		delete splats;
 	}
@@ -172,25 +190,23 @@ ref<WorkProcessor> UPMProcess::createWorkProcessor() const {
 
 void UPMProcess::develop() {
 	LockGuard lock(m_resultMutex);
-	size_t pixelCount = m_accum->getBitmap()->getPixelCount();
-	const Spectrum *accum = (Spectrum *) m_accum->getBitmap()->getData();
+	size_t pixelCount = m_result->getImageBlock()->getBitmap()->getPixelCount();
+	const Spectrum *accum = (Spectrum *)(m_result->getImageBlock()->getBitmap()->getData());
 	Spectrum *target = (Spectrum *) m_developBuffer->getData();
-
+ 	Float invFactor = 1.f / Float(m_result->getSampleCount());
 	for (size_t i=0; i<pixelCount; ++i) {
-		target[i] = accum[i] / float(m_config.workUnits);
-	}
+		target[i] = accum[i] * invFactor;
+	}	
 	m_film->setBitmap(m_developBuffer);
 	m_refreshTimer->reset();
-
 	m_queue->signalRefresh(m_job);
 }
 
-void UPMProcess::processResult(const WorkResult *wr, bool cancelled) {	
+void UPMProcess::processResult(const WorkResult *workResult, bool cancelled) {	
+	const UPMWorkResult *wr = static_cast<const UPMWorkResult *>(workResult);
 	LockGuard lock(m_resultMutex);
-	if (m_resultCounter == 0)
-		m_accum->clear();
-	const ImageBlock *result = static_cast<const ImageBlock *>(wr);
-	m_accum->put(result);
+	if (m_resultCounter == 0) m_result->clear();	
+	m_result->put(wr);
 	m_progress->update(++m_resultCounter);
 	m_refreshTimeout = std::min(2000U, m_refreshTimeout * 2);
 
@@ -223,8 +239,8 @@ void UPMProcess::bindResource(const std::string &name, int id) {
 		if (m_progress)
 			delete m_progress;
 		m_progress = new ProgressReporter("Rendering", m_config.workUnits, m_job);
-		m_accum = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize());
-		m_accum->clear();
+		m_result = new UPMWorkResult(m_film->getCropSize().x, m_film->getCropSize().y, m_config.maxDepth, NULL);
+		m_result->clear();		
 		m_developBuffer = new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, m_film->getCropSize());
 	}
 }
@@ -232,5 +248,5 @@ void UPMProcess::bindResource(const std::string &name, int id) {
 MTS_IMPLEMENT_CLASS_S(UPMRenderer, false, WorkProcessor)
 MTS_IMPLEMENT_CLASS(UPMProcess, false, ParallelProcess)
 MTS_IMPLEMENT_CLASS(SeedWorkUnit, false, WorkUnit)
-
+MTS_IMPLEMENT_CLASS(UPMWorkResult, false, WorkResult)
 MTS_NAMESPACE_END

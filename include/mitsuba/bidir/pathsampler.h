@@ -22,7 +22,7 @@
 
 #include <mitsuba/bidir/path.h>
 #include <boost/function.hpp>
-
+#include <mitsuba/core/fstream.h>
 #include <mitsuba/core/kdtree.h>
 
 MTS_NAMESPACE_BEGIN
@@ -206,7 +206,156 @@ struct MTS_EXPORT_BIDIR SplatListImp {
 	}
 
 	/// Return a string representation
-	std::string toString() const;
+	std::string toString() const;	
+};
+
+/* ==================================================================== */
+/*                         Work result for UPM                        */
+/* ==================================================================== */
+#define UPM_DEBUG 1
+class UPMWorkResult : public WorkResult {
+public:
+	UPMWorkResult(const int width, const int height, const int maxDepth, const ReconstructionFilter *rfilter){
+		/* Stores the 'camera image' -- this can be blocked when
+		spreading out work to multiple workers */
+		Vector2i blockSize = Vector2i(width, height);
+
+		m_block = new ImageBlock(Bitmap::ESpectrum, blockSize, rfilter);
+		m_block->setOffset(Point2i(0, 0));
+		m_block->setSize(blockSize);
+
+		/* When debug mode is active, we additionally create
+		full-resolution bitmaps storing the contributions of
+		each individual sampling strategy */
+#if UPM_DEBUG == 1
+		m_debugBlocks.resize(
+			maxDepth*(5 + maxDepth) / 2);
+
+		for (size_t i = 0; i<m_debugBlocks.size(); ++i) {
+			m_debugBlocks[i] = new ImageBlock(
+				Bitmap::ESpectrum, blockSize, rfilter);
+			m_debugBlocks[i]->setOffset(Point2i(0, 0));
+			m_debugBlocks[i]->setSize(blockSize);
+		}
+#endif
+		sampleCount = 0;
+	}
+
+	// Clear the contents of the work result
+	void clear(){
+#if UPM_DEBUG == 1
+		for (size_t i = 0; i < m_debugBlocks.size(); ++i)
+			m_debugBlocks[i]->clear();
+#endif
+		m_block->clear();
+		sampleCount = 0;
+	}
+
+	/// Fill the work result with content acquired from a binary data stream
+	virtual void load(Stream *stream){
+#if UPM_DEBUG == 1
+		for (size_t i = 0; i < m_debugBlocks.size(); ++i)
+			m_debugBlocks[i]->load(stream);
+#endif
+		m_block->load(stream);
+	}
+
+	/// Serialize a work result to a binary data stream
+	virtual void save(Stream *stream) const{
+#if UPM_DEBUG == 1
+		for (size_t i = 0; i < m_debugBlocks.size(); ++i)
+			m_debugBlocks[i]->save(stream);
+#endif
+		m_block->save(stream);
+	}
+
+	/// Aaccumulate another work result into this one
+	void put(const UPMWorkResult *workResult){
+#if UPM_DEBUG == 1
+		for (size_t i = 0; i < m_debugBlocks.size(); ++i)
+			m_debugBlocks[i]->put(workResult->m_debugBlocks[i].get());
+#endif
+		m_block->put(workResult->m_block.get());
+		sampleCount += workResult->getSampleCount();
+	}
+
+#if UPM_DEBUG == 1
+	/* In debug mode, this function allows to dump the contributions of
+	the individual sampling strategies to a series of images */
+	void dump(const int width, const int height, const int maxDepth,
+		const fs::path &prefix, const fs::path &stem) const {
+		Float weight = 1.f / (Float)sampleCount;
+		for (int k = 1; k <= maxDepth; ++k) {
+			for (int t = 0; t <= k + 1; ++t) {
+				size_t s = k + 1 - t;
+				Bitmap *bitmap = const_cast<Bitmap *>(m_debugBlocks[strategyIndex(s, t)]->getBitmap());
+				ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat, -1, weight);
+				fs::path filename =
+					prefix / fs::path(formatString("%s_upm_k%02i_s%02i_t%02i.pfm", stem.filename().string().c_str(), k, s, t));
+				ref<FileStream> targetFile = new FileStream(filename,
+					FileStream::ETruncReadWrite);
+				ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
+			}
+		}
+	}
+
+	inline void putDebugSample(int s, int t, const Point2 &sample,
+		const Spectrum &spec) {
+		m_debugBlocks[strategyIndex(s, t)]->put(sample, (const Float *)&spec);
+	}
+#endif
+
+	inline void putSample(const Point2 &sample, const Float *value) {
+		m_block->put(sample, value);
+	}
+
+	// 	inline void putLightSample(const Point2 &sample, const Spectrum &spec) {
+	// 		m_lightImage->put(sample, spec, 1.0f);
+	// 	}
+
+	inline const ImageBlock *getImageBlock() const {
+		return m_block.get();
+	}
+
+	// 	inline const ImageBlock *getLightImage() const {
+	// 		return m_lightImage.get();
+	// 	}
+
+	inline void setSize(const Vector2i &size) {
+		m_block->setSize(size);
+	}
+
+	inline void setOffset(const Point2i &offset) {
+		m_block->setOffset(offset);
+	}
+
+	void accumSampleCount(size_t count){
+		sampleCount += count;
+	}
+	size_t getSampleCount() const{
+		return sampleCount;
+	}
+
+	/// Return a string representation
+	std::string toString() const {
+		return m_block->toString();
+	}
+
+	MTS_DECLARE_CLASS()
+protected:
+	/// Virtual destructor
+	virtual ~UPMWorkResult(){}
+
+	inline int strategyIndex(int s, int t) const {
+		int above = s + t - 2;
+		return s + above*(5 + above) / 2;
+	}
+protected:
+#if UPM_DEBUG == 1
+	ref_vector<ImageBlock> m_debugBlocks;
+#endif
+	size_t sampleCount;
+	ref<ImageBlock> m_block; // , m_lightImage;
 };
 
 /**
@@ -385,7 +534,7 @@ public:
 	void gatherLightPaths(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, ImageBlock* lightImage = NULL);
 	void sampleSplatsVCM(const bool useVC, const bool useVM, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
 	/// for UPM
-	void sampleSplatsUPM(const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
+	void sampleSplatsUPM(UPMWorkResult *wr, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
 
 	MTS_DECLARE_CLASS()
 protected:

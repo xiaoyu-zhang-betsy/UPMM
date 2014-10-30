@@ -191,9 +191,10 @@ public:
 			Float rad = scene->getBSphere().radius;
 			Vector2i filmSize = scene->getSensor()->getFilm()->getSize();
 
-			//m_config.initialRadius = std::min(rad / filmSize.x, rad / filmSize.y) * 5; // Mitsuba style
-			m_config.initialRadius = rad * 0.003f; //VCM style
+			m_config.initialRadius = std::min(rad / filmSize.x, rad / filmSize.y) * 3; // Mitsuba style
+			//m_config.initialRadius = rad * 0.003f; //VCM style
 			//m_config.initialRadius = 0.003f * 2.21705961; // for debug
+			//m_config.initialRadius = 1.44111049; // for debug
 
 		}
 		m_config.initialRadius *= m_config.radiusScale;

@@ -82,9 +82,10 @@ public:
 			true, m_config.initialRadius, m_sampler);
 	}
 
-	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {
+	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {		
 		ImageBlock *result = static_cast<ImageBlock *>(workResult);
 		ImageBlock *midres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
+		midres->clear();
 		const SeedWorkUnit *wu = static_cast<const SeedWorkUnit *>(workUnit);
 		const int workID = wu->getID();
 		SplatList *splats = new SplatList();		

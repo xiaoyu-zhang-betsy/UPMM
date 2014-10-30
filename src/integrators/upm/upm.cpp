@@ -191,8 +191,8 @@ public:
 			Float rad = scene->getBSphere().radius;
 			Vector2i filmSize = scene->getSensor()->getFilm()->getSize();
 
-			//m_config.initialRadius = std::min(rad / filmSize.x, rad / filmSize.y) * 5; // Mitsuba style
-			m_config.initialRadius = rad * 0.003f; //VCM style
+			m_config.initialRadius = std::min(rad / filmSize.x, rad / filmSize.y) * 3; // Mitsuba style
+			//m_config.initialRadius = rad * 0.003f; //VCM style
 			//m_config.initialRadius = 0.003f * 2.21705961; // for debug
 
 		}
@@ -247,6 +247,12 @@ public:
 		scheduler->wait(process);
 		m_process = NULL;
 		process->develop();
+
+#if UPM_DEBUG == 1
+		fs::path path = scene->getDestinationFile();
+		if (m_config.lightImage)
+			process->getResult()->dump(cropSize.x, cropSize.y, m_config.maxDepth, path.parent_path(), path.stem());
+#endif
 
 		return process->getReturnStatus() == ParallelProcess::ESuccess;
 	}

@@ -1561,7 +1561,7 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 		if (useVM){
 			int minT = 2, maxT = (int)m_sensorSubpath.vertexCount() - 1;
 			if (m_maxDepth != -1)
-				maxT = std::min(maxT, m_maxDepth - 1);
+				maxT = std::min(maxT, m_maxDepth);
 
 			for (int t = minT; t <= maxT; ++t) {
 				PathVertex
@@ -1599,8 +1599,9 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 
 
 
-void PathSampler::sampleSplatsUPM(const float gatherRadius, 
-	const Point2i &offset, const size_t cameraPathIndex, SplatList &list) {
+void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
+	const float gatherRadius, const Point2i &offset, 
+	const size_t cameraPathIndex, SplatList &list) {
 	list.clear();
 
 	const Sensor *sensor = m_scene->getSensor();
@@ -1642,15 +1643,12 @@ void PathSampler::sampleSplatsUPM(const float gatherRadius,
 			m_sensorSubpath.vertex(i - 1)->rrWeight *
 			m_sensorSubpath.edge(i - 1)->weight[ERadiance];
 
-		bool watchThread = false;
+		Point2 initialSamplePos(0.0f);
 		if (m_sensorSubpath.vertexCount() > 2) {
 			Point2 samplePos(0.0f);
 			m_sensorSubpath.vertex(1)->getSamplePosition(m_sensorSubpath.vertex(2), samplePos);
 			list.append(samplePos, Spectrum(0.0f));
-
-			if (samplePos.x > 50 && samplePos.x < 51 && samplePos.y > 256 && samplePos.y < 257){
-				watchThread = true;
-			}
+			initialSamplePos = samplePos;
 		}
 
 		// initialize of MIS helper
@@ -1721,8 +1719,10 @@ void PathSampler::sampleSplatsUPM(const float gatherRadius,
 					else
 						vsPred = NULL;
 
-					if (vtPred->isSensorSample() && !vtPred->getSamplePosition(vs, samplePos))
-						continue;
+					samplePos = initialSamplePos;
+					if (vtPred->isSensorSample())
+						if (!vtPred->getSamplePosition(vs, samplePos))
+							continue;
 
 // 					Vector wo = v.wo;
 // 					MisState emitterState = v.emitterState;
@@ -1738,7 +1738,7 @@ void PathSampler::sampleSplatsUPM(const float gatherRadius,
 // 					value += val * weightExt * vmNormalization;
 					
 					// evaluate contribution
-					Spectrum contrib = radianceWeights[t - 1] * v.importanceWeight;
+					Spectrum contrib = radianceWeights[t - 1] * v.importanceWeight * invLightPaths;;
 					//		connection two BRDF					
 					contrib *= vs->eval(m_scene, vsPred, vtPred, EImportance) *	vtPred->eval(m_scene, vtPred2, vs, ERadiance);
 					//		connection geometry term
@@ -1753,7 +1753,7 @@ void PathSampler::sampleSplatsUPM(const float gatherRadius,
 
 					// evaluate connection probability						
 					Spectrum throughput = Spectrum(1.f);			
-					size_t totalShoot = 0, acceptShoot = 0, targetShoot = 10, clampThreshold = 10000000;
+					size_t totalShoot = 0, acceptShoot = 0, targetShoot = 1, clampThreshold = 10000000;
 					Point vsp = vs->getPosition();
 					Float distSquared = gatherRadius * gatherRadius;
 					while (acceptShoot < targetShoot && totalShoot < clampThreshold){
@@ -1767,7 +1767,16 @@ void PathSampler::sampleSplatsUPM(const float gatherRadius,
 					if (totalShoot >= clampThreshold)
 						Log(EWarn, "total shoot exceeds clamp threshold!");
 					Float invp = (acceptShoot > 0) ? (Float)totalShoot / (Float)acceptShoot : 0;
-					contrib *= invp;				
+					contrib *= invp;
+
+#if UPM_DEBUG == 1
+					/* When the debug mode is on, collect samples
+					separately for each sampling strategy. Note: the
+					following piece of code artificially increases the
+					exposure of longer paths */
+					Spectrum splatValue =contrib;// * std::pow(2.0f, s+t-3.0f));
+					wr->putDebugSample(s, t - 1, samplePos, splatValue);
+#endif			
 
 					// MIS weighting
 					Vector wo = v.wo;
@@ -1782,10 +1791,10 @@ void PathSampler::sampleSplatsUPM(const float gatherRadius,
 					// accumulate to image
 					if (contrib.isZero()) continue;
 					if (t == 2) {
-						list.append(samplePos, contrib * invLightPaths);
+						list.append(samplePos, contrib);
 					}
 					else {
-						list.accum(0, contrib * invLightPaths);
+						list.accum(0, contrib);
 					}
 				}
 			}
@@ -1835,4 +1844,5 @@ std::string SplatList::toString() const {
 
 MTS_IMPLEMENT_CLASS(PathSampler, false, Object)
 MTS_IMPLEMENT_CLASS(SeedWorkUnit, false, WorkUnit)
+MTS_IMPLEMENT_CLASS(UPMWorkResult, false, WorkResult)
 MTS_NAMESPACE_END
