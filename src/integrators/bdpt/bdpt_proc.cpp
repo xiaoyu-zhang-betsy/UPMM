@@ -293,8 +293,6 @@ public:
 				/* Determine the pixel sample position when necessary */
 				if (vt->isSensorSample() && !vt->getSamplePosition(vs, samplePos))
 					continue;
-
-				value *= miWeight;
 				
 				#if BDPT_DEBUG == 1
 					/* When the debug mode is on, collect samples
@@ -302,10 +300,11 @@ public:
 					   following piece of code artificially increases the
 					   exposure of longer paths */
 					Spectrum splatValue = value * (m_config.showWeighted
-						? miWeight : 1.0f);// * std::pow(2.0f, s+t-3.0f));
+ 						? miWeight : 1.0f);// * std::pow(2.0f, s+t-3.0f));
 					wr->putDebugSample(s, t, samplePos, splatValue);
-				#endif					
+				#endif			
 
+				value *= miWeight;
 				if (t >= 2)
 					sampleValue += value;
 				else

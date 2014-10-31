@@ -1233,6 +1233,12 @@ void PathSampler::gatherLightPaths(const bool useVC, const bool useVM,
 				m_lightVerticesExt.push_back(lvertexExt);
 				LightPathNode lnode(vs->getPosition(), m_lightVertices.size() - 1, s);
 				m_lightPathTree.push_back(lnode);
+
+// 				Point2 samplePos(0.0f);
+// 				vs->sampleDirect(m_scene, m_directSampler, &vtPred, &vtEdge, &vt, ERadiance);
+// 				vt.getSamplePosition(vs, samplePos);
+// 				Spectrum value = Spectrum(1.f);
+// 				lightImage->put(samplePos, &value[0]);
 			}
 
 			// connect to camera
@@ -1680,6 +1686,30 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 				*vt = m_sensorSubpath.vertex(t);
 			PathEdge
 				*predEdge = m_sensorSubpath.edge(t - 2);
+			
+			{
+				vs = vs0;
+				vs->makeEndpoint(m_scene, time, EImportance);
+				*succVertex = *vt;
+				/* If possible, convert 'vt' into an emitter sample */
+				if (succVertex->cast(m_scene, PathVertex::EEmitterSample) && !succVertex->isDegenerate()){
+					Spectrum contrib = radianceWeights[t] *
+						vs->eval(m_scene, vsPred, succVertex, EImportance) *
+						succVertex->eval(m_scene, vtPred, vs, ERadiance);
+
+					if (t == 2){
+						list.accum(0, contrib);
+					}
+					else{
+						bool isSpecular = true;
+						for (int i = 2; i < t; i++){
+							if (m_sensorSubpath.vertex(i)->measure != EDiscrete) isSpecular = false;
+						}
+						if (isSpecular)
+							list.accum(0, contrib);						
+					}
+				}
+			}
 
 			if (!vt->isDegenerate()){
 				BDAssert(vt->type == PathVertex::ESurfaceInteraction);
@@ -1691,11 +1721,10 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 // 				m_lightPathTree.executeQuery(vt->getPosition(), gatherRadius, query);
 // 				if (!query.result.isZero())
 // 					list.accum(0, query.result);
-				
+				MisState sensorState = sensorStates[t - 1];
 				searchResults.clear();
 				m_lightPathTree.search(vt->getPosition(), gatherRadius, searchResults);
 				Vector wi = normalize(vtPred->getPosition() - vt->getPosition());
-				MisState sensorState = sensorStates[t - 1];
 				for (int k = 0; k < searchResults.size(); k++){
 					LightPathNode node = m_lightPathTree[searchResults[k]];
 					int s = node.data.depth;
@@ -1752,8 +1781,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
  					contrib *= connectionEdge.evalCached(vs, vtPred, PathEdge::EGeneralizedGeometricTerm);
 
 					// original approx. connection probability
-// 					Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
-// 					contrib *= invpOrig;
+//  					Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
+//  					contrib *= invpOrig;
 
 					// evaluate connection probability						
 					Spectrum throughput = Spectrum(1.f);			
@@ -1774,10 +1803,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					contrib *= invp;
 
 #if UPM_DEBUG == 1
-					/* When the debug mode is on, collect samples
-					separately for each sampling strategy. Note: the
-					following piece of code artificially increases the
-					exposure of longer paths */
  					Spectrum splatValue =contrib;// * std::pow(2.0f, s+t-3.0f));
  					wr->putDebugSample(s, t - 1, samplePos, splatValue);
 #endif			

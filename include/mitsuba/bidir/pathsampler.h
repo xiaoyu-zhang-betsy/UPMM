@@ -316,6 +316,9 @@ public:
 	inline const ImageBlock *getImageBlock() const {
 		return m_block.get();
 	}
+	inline ImageBlock *getImageBlock() {
+		return m_block.get();
+	}
 
 	// 	inline const ImageBlock *getLightImage() const {
 	// 		return m_lightImage.get();
