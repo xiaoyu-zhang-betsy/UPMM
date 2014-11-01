@@ -1675,6 +1675,9 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 		PathEdge *succEdge = m_pool.allocEdge();
 		Point2 samplePos(0.0f);
 		std::vector<uint32_t> searchResults;
+		std::vector<Point> searchPos;
+		std::vector<uint32_t> acceptCnt;
+		std::vector<size_t> shootCnt;
 
 		int minT = 2, maxT = (int)m_sensorSubpath.vertexCount() - 1;
 		if (m_maxDepth != -1)
@@ -1721,10 +1724,46 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 // 				m_lightPathTree.executeQuery(vt->getPosition(), gatherRadius, query);
 // 				if (!query.result.isZero())
 // 					list.accum(0, query.result);
-				MisState sensorState = sensorStates[t - 1];
+
 				searchResults.clear();
 				m_lightPathTree.search(vt->getPosition(), gatherRadius, searchResults);
-				Vector wi = normalize(vtPred->getPosition() - vt->getPosition());
+
+				searchPos.resize(searchResults.size());
+				acceptCnt.resize(searchResults.size());
+				shootCnt.resize(searchResults.size());
+				for (int i = 0; i < searchResults.size(); i++){
+					acceptCnt[i] = 0;
+					shootCnt[i] = 0;
+					LightPathNode node = m_lightPathTree[searchResults[i]];
+					size_t vertexIndex = node.data.vertexIndex;
+					LightVertexExt lvertexExt = m_lightVerticesExt[vertexIndex];
+					searchPos[i] = lvertexExt.position;
+				}
+				size_t totalShoot = 0, targetShoot = 1, clampThreshold = 10000000;
+				uint32_t finishCnt = 0;
+				Float distSquared = gatherRadius * gatherRadius;
+				while (finishCnt < searchResults.size() && totalShoot < clampThreshold){
+					totalShoot++;
+					Spectrum throughput = Spectrum(1.f);
+					if (!vtPred->sampleNext(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, false, &throughput))
+						continue;
+					for (int i = 0; i < searchPos.size(); i++){
+						if (shootCnt[i] > 0) continue;
+						Float pointDistSquared = (succVertex->getPosition() - searchPos[i]).lengthSquared();
+						if (pointDistSquared < distSquared){
+							acceptCnt[i]++;
+							if (acceptCnt[i] == targetShoot){
+								shootCnt[i] = totalShoot;
+								finishCnt++;
+							}
+						}
+					}
+				}
+				if (finishCnt > searchResults.size())
+					Log(EWarn, "total shoot exceeds clamp threshold!");
+
+				MisState sensorState = sensorStates[t - 1];
+				Vector wi = normalize(vtPred->getPosition() - vt->getPosition());				
 				for (int k = 0; k < searchResults.size(); k++){
 					LightPathNode node = m_lightPathTree[searchResults[k]];
 					int s = node.data.depth;
@@ -1781,25 +1820,28 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
  					contrib *= connectionEdge.evalCached(vs, vtPred, PathEdge::EGeneralizedGeometricTerm);
 
 					// original approx. connection probability
-//  					Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
-//  					contrib *= invpOrig;
+//  				Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
+//  				contrib *= invpOrig;
 
 					// evaluate connection probability						
-					Spectrum throughput = Spectrum(1.f);			
-					size_t totalShoot = 0, acceptShoot = 0, targetShoot = 1, clampThreshold = 10000000;
-					Point vsp = vs->getPosition();
-					Float distSquared = gatherRadius * gatherRadius;
-					while (acceptShoot < targetShoot && totalShoot < clampThreshold){
-						totalShoot++;
-						if (!vtPred->sampleNext(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, false, &throughput))
-							continue;
-						const Float pointDistSquared = (succVertex->getPosition() - vsp).lengthSquared();
-						if (pointDistSquared < distSquared)
-							++acceptShoot;
-					}
-					if (totalShoot >= clampThreshold)
-						Log(EWarn, "total shoot exceeds clamp threshold!");
-					Float invp = (acceptShoot > 0) ? (Float)totalShoot / (Float)acceptShoot : 0;
+// 					Spectrum throughput = Spectrum(1.f);			
+// 					size_t totalShoot = 0, acceptShoot = 0, targetShoot = 1, clampThreshold = 10000000;
+// 					Point vsp = vs->getPosition();
+// 					Float distSquared = gatherRadius * gatherRadius;
+// 					while (acceptShoot < targetShoot && totalShoot < clampThreshold){
+// 						totalShoot++;
+// 						if (!vtPred->sampleNext(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, false, &throughput))
+// 							continue;
+// 						const Float pointDistSquared = (succVertex->getPosition() - vsp).lengthSquared();
+// 						if (pointDistSquared < distSquared)
+// 							++acceptShoot;
+// 					}
+// 					if (totalShoot >= clampThreshold)
+// 						Log(EWarn, "total shoot exceeds clamp threshold!");
+// 					Float invp = (acceptShoot > 0) ? (Float)totalShoot / (Float)acceptShoot : 0;
+// 					contrib *= invp;
+					
+					Float invp = (acceptCnt[k] > 0) ? (Float)shootCnt[k] / (Float)acceptCnt[k] : 0;
 					contrib *= invp;
 
 #if UPM_DEBUG == 1
