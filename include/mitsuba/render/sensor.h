@@ -351,8 +351,12 @@ public:
 	   and addition of all child \ref ConfigurableObject instances). */
 	virtual void configure();
 
+	// For UPM
+	virtual Vector4 evaluateSphereBounds(Point p, Float radius) const;
+	virtual Float evaluateSpherePdf(Point p, Float radius) const;
+
 	//! @}
-	// =============================================================
+	// =============================================================	
 
 	MTS_DECLARE_CLASS()
 protected:

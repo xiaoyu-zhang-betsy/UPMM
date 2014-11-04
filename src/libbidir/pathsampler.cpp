@@ -1738,15 +1738,35 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					size_t vertexIndex = node.data.vertexIndex;
 					LightVertexExt lvertexExt = m_lightVerticesExt[vertexIndex];
 					searchPos[i] = lvertexExt.position;
-				}
+				}				
+
+				// evaluate sampling domain
+				Point p0 = vtPred->getPosition();
+				Point p1 = vt->getPosition();
+				Vector dir = p1 - p0;
+				Float dis = dir.length();
+				dir /= dis;
+				Float deltaTheta = atan2(2.f * gatherRadius, dis);
+				// normalize new pdf
+				Float brdfIntegral = vtPred->samplingProbability(vt->getPosition(), gatherRadius);
+				if (brdfIntegral == 0.f) continue;
+				Float invBrdfIntegral = 1.f / brdfIntegral;
+
 				size_t totalShoot = 0, targetShoot = 1, clampThreshold = 10000000;
 				uint32_t finishCnt = 0;
 				Float distSquared = gatherRadius * gatherRadius;
 				while (finishCnt < searchResults.size() && totalShoot < clampThreshold){
 					totalShoot++;
 					Spectrum throughput = Spectrum(1.f);
-					if (!vtPred->sampleNext(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, false, &throughput))
+
+					// uniform sampling evaluation shoots
+// 					if (!vtPred->sampleNext(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, false, &throughput))
+// 						continue;					
+
+					// restricted sampling evaluation shoots
+					if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius, deltaTheta))
 						continue;
+
 					for (int i = 0; i < searchPos.size(); i++){
 						if (shootCnt[i] > 0) continue;
 						Float pointDistSquared = (succVertex->getPosition() - searchPos[i]).lengthSquared();
@@ -1841,7 +1861,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 // 					Float invp = (acceptShoot > 0) ? (Float)totalShoot / (Float)acceptShoot : 0;
 // 					contrib *= invp;
 					
-					Float invp = (acceptCnt[k] > 0) ? (Float)shootCnt[k] / (Float)acceptCnt[k] : 0;
+					Float invp = (acceptCnt[k] > 0) ? (Float)shootCnt[k] / (Float)acceptCnt[k] * invBrdfIntegral : 0;
 					contrib *= invp;
 
 #if UPM_DEBUG == 1

@@ -129,7 +129,7 @@ public:
 				for (size_t k = 0; k < splats->size(); ++k) {
  					Spectrum value = splats->getValue(k);
 					wr->putSample(splats->getPosition(k), &value[0]);
-// 					// [UC] for unbiased check
+ 					// [UC] for unbiased check
 					value *= invSampleBatch;
 					batres->put(splats->getPosition(k), &value[0]);
  				}

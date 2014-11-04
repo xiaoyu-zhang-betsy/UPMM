@@ -1552,5 +1552,224 @@ std::ostream &operator<<(std::ostream &os, PathVertex::EVertexType type) {
 	}
 	return os;
 }
+
+
+Float PathVertex::samplingProbability(Point p, Float radius){
+	switch (type) {
+	case ESensorSample: {
+		// Assume perspective camera
+		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+		return sensor->evaluateSpherePdf(p, radius * 2.f);
+	}
+		break;
+	case ESurfaceInteraction: {
+		// Assume diffuse BRDF for now
+		const Intersection &its = getIntersection();
+		Vector dir = p - its.p;
+		Float dis = dir.length();
+		dir /= dis;
+		if (dis < 2.f * radius) return 1.f;
+		Float dTheta = atan2(2.f * radius, dis);
+		Vector nml = its.geoFrame.n;
+		Float theta = dot(dir, nml);
+		Float t0 = std::max(0.f, std::min(0.5f * M_PI, theta - dTheta));
+		Float t1 = std::max(0.f, std::min(0.5f * M_PI, theta + dTheta));
+		Float sin0 = sin(t0);
+		Float sin1 = sin(t1);		
+		return 2.f * dTheta * (sin1 * sin1 - sin0 * sin0) / M_PI;
+	}
+		break;
+
+	default:
+		SLog(EError, "PathVertex::sampsamplingProbabilityleNext(): Encountered an "
+			"unsupported vertex type (%i)!", type);
+		return 0.f;
+	}
+}
+bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
+	const PathVertex *pred, const PathEdge *predEdge,
+	PathEdge *succEdge, PathVertex *succ,
+	ETransportMode mode, 
+	Point gatherPosition, Float gatherRadius, Float dTheta,
+	bool russianRoulette, Spectrum *throughput) {
+	Ray ray;
+
+	memset(succEdge, 0, sizeof(PathEdge));
+	memset(succ, 0, sizeof(PathVertex));
+
+	size_t totalSmpl = 0, clampThreshold = 10000000;
+
+	switch (type) {
+	case ESensorSample: {
+		BDAssert(mode == ERadiance && pred->type == ESensorSupernode);
+		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+		DirectionSamplingRecord dRec;
+
+		BDAssert(sensor->needsDirectionSample()); // not support other kinds of camera now
+		Vector4 bbox = sensor->evaluateSphereBounds(gatherPosition, gatherRadius * 2.f);
+
+		Point2 smp = sampler->next2D();
+		smp.x = (bbox.y - bbox.x) * smp.x + bbox.x;
+		smp.y = (bbox.w - bbox.z) * smp.y + bbox.z;
+
+		Spectrum result = sensor->sampleDirection(dRec, pRec, smp);
+
+		if (result.isZero())
+			return false;
+
+		weight[EImportance] = result * dRec.pdf * (
+			sensor->isOnSurface() ? 1.0f / absDot(dRec.d, pRec.n) : 1.0f);
+		weight[ERadiance] = result;
+		pdf[EImportance] = 1.0f;
+		pdf[ERadiance] = dRec.pdf;
+
+		measure = dRec.measure;
+		succEdge->medium = sensor->getMedium();
+		ray.time = pRec.time;
+		ray.setOrigin(pRec.p);
+		ray.setDirection(dRec.d);
+	}
+		break;
+
+	case ESurfaceInteraction: {
+		const Intersection &its = getIntersection();
+		const BSDF *bsdf = its.getBSDF();
+		Vector wi = normalize(pred->getPosition() - its.p);
+		Vector wo;
+
+		Vector originalDirection = gatherPosition - its.p;
+		Float dis = originalDirection.length();
+		originalDirection /= dis;
+		Float cosThreshold = (dis < 2.f * gatherRadius) ? 0.f : atan2(2.f * gatherRadius, dis);
+
+		/* Sample the BSDF */
+		BSDFSamplingRecord bRec(its, sampler, mode);
+		bRec.wi = its.toLocal(wi);
+
+		while (totalSmpl < clampThreshold){
+			totalSmpl++;
+			weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
+			Vector newDirection = normalize(its.toWorld(bRec.wo));
+			Float newCos = dot(newDirection, originalDirection);
+			if (newCos >= cosThreshold)
+				break;
+		}
+
+		if (weight[mode].isZero())
+			return false;
+
+		measure = BSDF::getMeasure(bRec.sampledType);
+		componentType = (uint16_t)(bRec.sampledType & BSDF::EAll);
+
+		wo = its.toWorld(bRec.wo);
+
+		/* Prevent light leaks due to the use of shading normals */
+		Float wiDotGeoN = dot(its.geoFrame.n, wi),
+			woDotGeoN = dot(its.geoFrame.n, wo);
+		if (wiDotGeoN * Frame::cosTheta(bRec.wi) <= 0 ||
+			woDotGeoN * Frame::cosTheta(bRec.wo) <= 0)
+			return false;
+
+		/* Account for medium changes if applicable */
+		if (its.isMediumTransition()) {
+			const Medium *expected = its.getTargetMedium(wi);
+			if (expected != predEdge->medium) {
+#if defined(MTS_BD_TRACE)
+				SLog(EWarn, "Detected an inconsistency: approached "
+					"surface %s within medium %s, but the surface "
+					"states that the ray should have been in medium %s.",
+					its.toString().c_str(), predEdge->medium ?
+					predEdge->medium->toString().c_str() : "null",
+					expected ? expected->toString().c_str() : "null");
+#endif
+				++mediumInconsistencies;
+				return false;
+			}
+			succEdge->medium = its.getTargetMedium(wo);
+		}
+
+		/* Compute the reverse quantities */
+		bRec.reverse();
+		pdf[1 - mode] = bsdf->pdf(bRec, (EMeasure)measure);
+		if (pdf[1 - mode] == 0) {
+			/* This can happen rarely due to roundoff errors -- be strict */
+			return false;
+		}
+
+		if (!(bsdf->getType() & BSDF::ENonSymmetric)) {
+			/* Make use of symmetry -- no need to re-evaluate
+			everything (only the pdf and cosine factors changed) */
+			weight[1 - mode] = weight[mode] * (pdf[mode] / pdf[1 - mode]);
+			if (measure == ESolidAngle)
+				weight[1 - mode] *=
+				std::abs(Frame::cosTheta(bRec.wo) / Frame::cosTheta(bRec.wi));
+		}
+		else {
+			weight[1 - mode] = bsdf->eval(bRec, (EMeasure)measure) / pdf[1 - mode];
+		}
+		bRec.reverse();
+
+		/* Adjoint BSDF for shading normals */
+		if (mode == EImportance)
+			weight[EImportance] *= std::abs(
+			(Frame::cosTheta(bRec.wi) * woDotGeoN) /
+			(Frame::cosTheta(bRec.wo) * wiDotGeoN));
+		else
+			weight[EImportance] *= std::abs(
+			(Frame::cosTheta(bRec.wo) * wiDotGeoN) /
+			(Frame::cosTheta(bRec.wi) * woDotGeoN));
+
+		/// For BDPT & russian roulette, track radiance * eta^2
+		if (throughput && mode == ERadiance && bRec.eta != 1)
+			(*throughput) *= bRec.eta * bRec.eta;
+
+		ray.time = its.time;
+		ray.setOrigin(its.p);
+		ray.setDirection(wo);
+	}
+		break;
+
+	default:
+		SLog(EError, "PathVertex::sampleNext(): Encountered an "
+			"unsupported vertex type (%i)!", type);
+		return false;
+	}
+
+	if (totalSmpl >= clampThreshold)
+		SLog(EWarn, "total BRDF smpl. exceeds clamp threshold!");
+
+	if (throughput) {
+		/* For BDPT: keep track of the path throughput to run russian roulette */
+		(*throughput) *= weight[mode];
+
+		if (russianRoulette) {
+			Float q = std::min(throughput->max(), (Float) 0.95f);
+
+			if (sampler->next1D() > q) {
+				measure = EInvalidMeasure;
+				return false;
+			}
+			else {
+				rrWeight = 1.0f / q;
+				(*throughput) *= rrWeight;
+			}
+		}
+	}
+
+	if (!succEdge->sampleNext(scene, sampler, this, ray, succ, mode)) {
+		/* Sampling a successor edge + vertex failed, hence the vertex
+		is not committed to a particular measure yet -- revert. */
+		measure = EInvalidMeasure;
+		return false;
+	}
+	else {
+		if (throughput)
+			(*throughput) *= succEdge->weight[mode];
+	}
+
+	return true;
+}
 MTS_NAMESPACE_END
 

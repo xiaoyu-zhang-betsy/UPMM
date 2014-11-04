@@ -911,6 +911,15 @@ struct MTS_EXPORT_BIDIR PathVertex {
 		return !operator==(vertex);
 	}
 
+	/// For UPM
+	Float samplingProbability(Point p, Float radius);
+	bool sampleShoot(const Scene *scene, Sampler *sampler,
+		const PathVertex *pred, const PathEdge *predEdge,
+		PathEdge *succEdge, PathVertex *succ,
+		ETransportMode mode, 
+		Point gatherPosition, Float gatherRadius, Float dTheta,
+		bool russianRoulette = false, Spectrum *throughput = NULL);
+
 	//! @}
 	/* ==================================================================== */
 };

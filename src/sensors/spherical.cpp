@@ -211,6 +211,10 @@ public:
 		return oss.str();
 	}
 
+	/// For UPM
+	Vector4 evaluateSphereBounds(Point p, Float radius) const { return Vector4(0.f); }
+	Float evaluateSpherePdf(Point p, Float radius) const{ return 0.f; }
+
 	MTS_DECLARE_CLASS()
 };
 

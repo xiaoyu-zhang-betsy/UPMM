@@ -316,6 +316,9 @@ Float PerspectiveCamera::getDiagonalFov() const {
 	return radToDeg(2*std::atan(diagonal));
 }
 
+Vector4 Sensor::evaluateSphereBounds(Point p, Float radius) const { return Vector4(0.f); }
+Float Sensor::evaluateSpherePdf(Point p, Float radius) const{ return 0.f; }
+
 MTS_IMPLEMENT_CLASS(PerspectiveCamera, true, ProjectiveCamera)
 MTS_IMPLEMENT_CLASS(ProjectiveCamera, true, Sensor)
 MTS_IMPLEMENT_CLASS(Sensor, true, AbstractEmitter)

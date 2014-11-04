@@ -461,6 +461,78 @@ public:
 		return oss.str();
 	}
 
+	void getBoundsForPhi(Float phi, Vector center, Float radius, Vector &B, Vector &L) const{
+		bool trivialAccept = (center.z + radius) < m_nearClip;
+
+		Vector a = Vector(cos(phi), sin(phi), 0.f);
+		Vector2 projectedCenter = Vector2(dot(a, center), center.z);
+		Vector2 bounds_az[2];
+		Float projCenterSqLength = dot(projectedCenter, projectedCenter);
+		Float tSquared = projCenterSqLength - radius * radius;
+		Float costheta, sintheta;
+		Float sqrtPart;
+		Float dz = m_nearClip - projectedCenter.y;
+		//if (!trivialAccept) sqrtPart = sqrt(radius * radius - dz * dz);
+
+		if (tSquared > 0){
+			Float t = sqrt(tSquared);
+			Float invCLength = 1.f / sqrt(projCenterSqLength);
+			costheta = t * invCLength;
+			sintheta = radius * invCLength;
+		}
+
+		for (int i = 0; i < 2; i++){
+			if (tSquared > 0){
+				Matrix2x2 rotateTheta = Matrix2x2(Vector2(costheta, sintheta), Vector2(-sintheta, costheta));
+				bounds_az[i] = costheta * (rotateTheta * projectedCenter);
+			}
+// 			if (!trivialAccept && (tSquared <= 0.f || bounds_az[i].y > m_nearClip)){
+// 				bounds_az[i].x = projectedCenter.x + sqrtPart;
+// 				bounds_az[i].y = m_nearClip;
+// 			}
+			sintheta *= -1.f;
+			sqrtPart *= -1.f;
+		}
+		B = bounds_az[0].x * a;
+		B.z = bounds_az[0].y;
+		L = bounds_az[1].x * a;
+		L.z = bounds_az[1].y;
+	}
+
+	Vector4 evaluateSphereBounds(Point p, Float radius) const{
+		const Transform &trafo = m_worldTransform->eval(0);
+		const Transform &trafoInv = trafo.inverse();
+		Point pc = trafo(Point(0.0f));
+		Vector center = trafoInv(p - pc);
+
+		Vector xb, xl, yb, yl;
+		getBoundsForPhi(0.f, center, radius, xb, xl);
+		getBoundsForPhi(M_PI * 0.5f, center, radius, yb, yl);
+
+		xb /= xb.z;
+		xl /= xl.z;
+		yb /= yb.z;
+		yl /= yl.z;
+
+		xb = m_cameraToSample(xb);
+		xl = m_cameraToSample(xl);
+		yb = m_cameraToSample(yb);
+		yl = m_cameraToSample(yl);
+
+		Float xmin = std::max(0.f, std::min(xb.x, xl.x));
+		Float xmax = std::min(1.f, std::max(xb.x, xl.x));
+		Float ymin = std::max(0.f, std::min(yb.y, yl.y));
+		Float ymax = std::min(1.f, std::max(yb.y, yl.y));
+
+		return Vector4(xmin, xmax, ymin, ymax);
+	}
+	
+	Float evaluateSpherePdf(Point p, Float radius) const{
+		Vector4 bbox = evaluateSphereBounds(p, radius);
+		Float Ar = (bbox.y - bbox.x) * (bbox.w - bbox.z);
+		return Ar;
+	}
+
 	MTS_DECLARE_CLASS()
 private:
 	Transform m_cameraToSample;
