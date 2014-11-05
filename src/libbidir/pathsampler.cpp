@@ -1761,7 +1761,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 					// uniform sampling evaluation shoots
 // 					if (!vtPred->sampleNext(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, false, &throughput))
-// 						continue;					
+// 						continue;
 
 					// restricted sampling evaluation shoots
 					if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius, deltaTheta))

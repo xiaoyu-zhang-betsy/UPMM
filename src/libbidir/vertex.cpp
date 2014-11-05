@@ -1568,16 +1568,19 @@ Float PathVertex::samplingProbability(Point p, Float radius){
 		const Intersection &its = getIntersection();
 		Vector dir = p - its.p;
 		Float dis = dir.length();
-		dir /= dis;
 		if (dis < 2.f * radius) return 1.f;
-		Float dTheta = atan2(2.f * radius, dis);
+		dir /= dis;
+		Float dTheta = acos(sqrt(dis * dis - 4.f * radius * radius) / dis);
 		Vector nml = its.geoFrame.n;
-		Float theta = dot(dir, nml);
-		Float t0 = std::max(0.f, std::min(0.5f * M_PI, theta - dTheta));
-		Float t1 = std::max(0.f, std::min(0.5f * M_PI, theta + dTheta));
-		Float sin0 = sin(t0);
-		Float sin1 = sin(t1);		
-		return 2.f * dTheta * (sin1 * sin1 - sin0 * sin0) / M_PI;
+		Float theta = acos(dot(dir, nml));
+		//Float theta0 = std::max(0.f, std::min(0.5f * M_PI, theta - dTheta));
+		//Float theta1 = std::max(0.f, std::min(0.5f * M_PI, theta + dTheta));
+		Float theta0 = std::min(0.5f * M_PI, theta - dTheta);
+		Float theta1 = std::min(0.5f * M_PI, theta + dTheta);
+		Float cos0 = cos(theta0);
+		Float cos1 = cos(theta1);
+		Float prob = dTheta * (cos0 * cos0 - cos1 * cos1) / M_PI;
+		return prob;
 	}
 		break;
 
@@ -1641,8 +1644,12 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 
 		Vector originalDirection = gatherPosition - its.p;
 		Float dis = originalDirection.length();
-		originalDirection /= dis;
-		Float cosThreshold = (dis < 2.f * gatherRadius) ? 0.f : atan2(2.f * gatherRadius, dis);
+		originalDirection /= dis;		
+		Float dTheta = acos(sqrt(dis * dis - 4.f * gatherRadius * gatherRadius) / dis);
+		Float dot0 = dot(originalDirection, its.geoFrame.n);
+		Float theta0 = acos(dot0);
+		Vector originalDirectionProj = normalize(originalDirection - dot0 * its.geoFrame.n);
+		//Float cosThreshold = (dis < 2.f * gatherRadius) ? 0.f : (sqrt(dis * dis - 4.f * gatherRadius * gatherRadius) / dis);
 
 		/* Sample the BSDF */
 		BSDFSamplingRecord bRec(its, sampler, mode);
@@ -1652,8 +1659,11 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 			totalSmpl++;
 			weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
 			Vector newDirection = normalize(its.toWorld(bRec.wo));
-			Float newCos = dot(newDirection, originalDirection);
-			if (newCos >= cosThreshold)
+			Float dot1 = dot(newDirection, its.geoFrame.n);
+			Float theta1 = acos(dot1);
+			Vector newDirectionProj = normalize(newDirection - dot1 * its.geoFrame.n);
+			Float dPhi = acos(dot(newDirectionProj, originalDirectionProj));
+			if ((abs(theta0 - theta1) < dTheta && dPhi < dTheta) || dis < 2.f * gatherRadius)
 				break;
 		}
 
