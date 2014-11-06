@@ -24,6 +24,9 @@ MTS_NAMESPACE_BEGIN
 static StatsCounter mediumInconsistencies("Bidirectional layer",
 		"Medium inconsistencies in sampleNext()");
 
+static StatsCounter numericalIssue("Unbiased photon mapping",
+	"Generated direction lays outside the bound");
+
 void PathVertex::makeEndpoint(const Scene *scene, Float time, ETransportMode mode) {
 	memset(this, 0, sizeof(PathVertex));
 	type = (mode == EImportance) ? EEmitterSupernode : ESensorSupernode;
@@ -1576,7 +1579,7 @@ Float PathVertex::samplingProbability(Point p, Float radius){
 		Float theta0 = theta - dTheta;
 		Float theta1 = std::min(0.5f * M_PI, theta + dTheta);
 		Float prob = 0.f;
-		if (theta0 < 0.f){
+		if (theta0 < 0.f || true){
 			// sample the full sphere cap of polar
 			Float cos0 = 1.f;
 			Float cos1 = cos(2.f * theta1);
@@ -1672,16 +1675,52 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 			Float thetaOrig = acos(dotOrig);
 			Float theta0 = thetaOrig - dTheta;
 			Float theta1 = std::min(0.5f * M_PI, thetaOrig + dTheta);
-			if (theta0 < 0.f){
+			if (theta0 < 0.f || true){
+				Point2 smp = sampler->next2D();
+				Float cos0 = cos(std::max(0.f, theta0));
+				Float cos1 = cos(theta1);
+				Float r0 = sqrt(1.f - cos0 * cos0);
+				Float r1 = sqrt(1.f - cos1 * cos1);
+// 				Float r0 = sin(std::max(0.f, theta0));
+// 				Float r1 = sin(theta1);
+				smp.x = smp.x * 2.f - 1.f;
+				smp.y = smp.y * 2.f - 1.f;
+				Float baser = r0;
+				if (smp.x * smp.x > smp.y * smp.y){
+					Float r2r1 = smp.y / smp.x;
+					if (smp.x < 0.f) baser = -baser;
+					smp.x = smp.x * (r1 - r0) + baser;
+					smp.y = r2r1 * smp.x;
+				}
+				else{
+					Float r1r2 = smp.x / smp.y;
+					if (smp.y < 0.f) baser = -baser;
+					smp.y = smp.y * (r1 - r0) + baser;
+					smp.x = r1r2 * smp.y;
+				}
+				smp.x = (smp.x + 1.f) * 0.5f;
+				smp.y = (smp.y + 1.f) * 0.5f;
 				// sampling the whole sphere cap
 				while (totalSmpl < clampThreshold){
 					totalSmpl++;
-					weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
-					Vector newDirection = normalize(its.toWorld(bRec.wo));
-					Float dotNew = dot(newDirection, nml);
-					Float thetaNew = acos(dotNew);
-					if (thetaNew < theta1 && thetaNew > theta0)
+					weight[mode] = bsdf->sample(bRec, pdf[mode], smp);
+					if (bRec.wo.z >= cos1 && bRec.wo.z <= cos0)
 						break;
+					else{
+						++numericalIssue;
+						break;
+					}
+
+// 					Vector newDirection = normalize(its.toWorld(bRec.wo));
+// 					Float dotNew = dot(newDirection, nml);
+// 					//Float thetaNew = acos(dotNew);
+// 					if (dotNew >= cos1 && dotNew <= cos0)
+// 						break;
+// 					else{
+// 						//SLog(EWarn, "Numerical issue, generate %f which should between %f and %f", dotNew, cos1, cos0);
+// 						++numericalIssue;
+// 						break;
+// 					}
 				}
 			}
 			else{
