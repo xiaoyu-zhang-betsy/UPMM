@@ -1573,13 +1573,26 @@ Float PathVertex::samplingProbability(Point p, Float radius){
 		Float dTheta = acos(sqrt(dis * dis - 4.f * radius * radius) / dis);
 		Vector nml = its.geoFrame.n;
 		Float theta = acos(dot(dir, nml));
-		//Float theta0 = std::max(0.f, std::min(0.5f * M_PI, theta - dTheta));
-		//Float theta1 = std::max(0.f, std::min(0.5f * M_PI, theta + dTheta));
-		Float theta0 = std::min(0.5f * M_PI, theta - dTheta);
+		Float theta0 = theta - dTheta;
 		Float theta1 = std::min(0.5f * M_PI, theta + dTheta);
-		Float cos0 = cos(theta0);
-		Float cos1 = cos(theta1);
-		Float prob = dTheta * (cos0 * cos0 - cos1 * cos1) / M_PI;
+		Float prob = 0.f;
+		if (theta0 < 0.f){
+			// sample the full sphere cap of polar
+			Float cos0 = 1.f;
+			Float cos1 = cos(2.f * theta1);
+			prob = 0.5f * (cos0 - cos1);
+		}
+		else{
+			// sample the bbox of the cone
+			Point pProj = p - dot(p - its.p, nml) * nml;
+			Vector dirProj = pProj - its.p;
+			Float disProj = dirProj.length();
+			Float dPhi = acos(sqrt(disProj * disProj - 4.f * radius * radius) / disProj);
+
+			Float cos0 = cos(2.f * theta0);
+			Float cos1 = cos(2.f * theta1);
+			prob = 0.5f * dPhi * (cos0 - cos1) / M_PI;
+		}
 		return prob;
 	}
 		break;
@@ -1641,31 +1654,59 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		const BSDF *bsdf = its.getBSDF();
 		Vector wi = normalize(pred->getPosition() - its.p);
 		Vector wo;
-
-		Vector originalDirection = gatherPosition - its.p;
-		Float dis = originalDirection.length();
-		originalDirection /= dis;		
-		Float dTheta = acos(sqrt(dis * dis - 4.f * gatherRadius * gatherRadius) / dis);
-		Float dot0 = dot(originalDirection, its.geoFrame.n);
-		Float theta0 = acos(dot0);
-		Vector originalDirectionProj = normalize(originalDirection - dot0 * its.geoFrame.n);
-		//Float cosThreshold = (dis < 2.f * gatherRadius) ? 0.f : (sqrt(dis * dis - 4.f * gatherRadius * gatherRadius) / dis);
-
 		/* Sample the BSDF */
 		BSDFSamplingRecord bRec(its, sampler, mode);
 		bRec.wi = its.toLocal(wi);
 
-		while (totalSmpl < clampThreshold){
-			totalSmpl++;
+		Vector nml = its.geoFrame.n;
+		Vector originalDirection = gatherPosition - its.p;
+		Float dis = originalDirection.length();
+		if (dis < 2.f * gatherRadius){
+			// uniform sampling
 			weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
-			Vector newDirection = normalize(its.toWorld(bRec.wo));
-			Float dot1 = dot(newDirection, its.geoFrame.n);
-			Float theta1 = acos(dot1);
-			Vector newDirectionProj = normalize(newDirection - dot1 * its.geoFrame.n);
-			Float dPhi = acos(dot(newDirectionProj, originalDirectionProj));
-			if ((abs(theta0 - theta1) < dTheta && dPhi < dTheta) || dis < 2.f * gatherRadius)
-				break;
 		}
+		else{
+			originalDirection /= dis;
+			Float dTheta = acos(sqrt(dis * dis - 4.f * gatherRadius * gatherRadius) / dis);
+			Float dotOrig = dot(originalDirection, nml);
+			Float thetaOrig = acos(dotOrig);
+			Float theta0 = thetaOrig - dTheta;
+			Float theta1 = std::min(0.5f * M_PI, thetaOrig + dTheta);
+			if (theta0 < 0.f){
+				// sampling the whole sphere cap
+				while (totalSmpl < clampThreshold){
+					totalSmpl++;
+					weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
+					Vector newDirection = normalize(its.toWorld(bRec.wo));
+					Float dotNew = dot(newDirection, nml);
+					Float thetaNew = acos(dotNew);
+					if (thetaNew < theta1 && thetaNew > theta0)
+						break;
+				}
+			}
+			else{
+				// sampling a bbox in theta-phi space
+				Point gatherPositionProj = gatherPosition - dot(gatherPosition - its.p, nml) * nml;
+				Vector originalDirectionProj = gatherPositionProj - its.p;
+				Float disProj = originalDirectionProj.length();
+				Float dPhi = acos(sqrt(disProj * disProj - 4.f * gatherRadius * gatherRadius) / disProj);
+				originalDirectionProj /= disProj;
+				while (totalSmpl < clampThreshold){
+					totalSmpl++;
+					weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
+					Vector newDirection = normalize(its.toWorld(bRec.wo));
+					Float dotNew = dot(newDirection, nml);
+					Float thetaNew = acos(dotNew);
+					Vector newDirectionProj = normalize(newDirection - dotNew * nml);
+					Float dPhiNew = acos(dot(newDirectionProj, originalDirectionProj));
+					if (abs(thetaNew - thetaOrig) < dTheta && dPhiNew < dPhi) // accept this BRDF sampling
+						break;
+				}
+			}
+		}			
+		
+		if (totalSmpl >= clampThreshold)
+			SLog(EWarn, "total BRDF smpl. exceeds clamp threshold!");
 
 		if (weight[mode].isZero())
 			return false;
@@ -1745,10 +1786,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		SLog(EError, "PathVertex::sampleNext(): Encountered an "
 			"unsupported vertex type (%i)!", type);
 		return false;
-	}
-
-	if (totalSmpl >= clampThreshold)
-		SLog(EWarn, "total BRDF smpl. exceeds clamp threshold!");
+	}	
 
 	if (throughput) {
 		/* For BDPT: keep track of the path throughput to run russian roulette */

@@ -1649,12 +1649,17 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			m_sensorSubpath.vertex(i - 1)->rrWeight *
 			m_sensorSubpath.edge(i - 1)->weight[ERadiance];
 
+		bool watchThread = false;
 		Point2 initialSamplePos(0.0f);
 		if (m_sensorSubpath.vertexCount() > 2) {
 			Point2 samplePos(0.0f);
 			m_sensorSubpath.vertex(1)->getSamplePosition(m_sensorSubpath.vertex(2), samplePos);
 			list.append(samplePos, Spectrum(0.0f));
 			initialSamplePos = samplePos;
+
+			if (samplePos.x >= 31 && samplePos.x < 32 && samplePos.y >= 10 && samplePos.y < 11){
+				watchThread = true;
+			}
 		}
 
 		// initialize of MIS helper
@@ -1765,8 +1770,9 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 					// restricted sampling evaluation shoots
 					if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius, deltaTheta))
-						continue;
+						continue;					
 
+					Point pshoot = succVertex->getPosition();
 					for (int i = 0; i < searchPos.size(); i++){
 						if (shootCnt[i] > 0) continue;
 						Float pointDistSquared = (succVertex->getPosition() - searchPos[i]).lengthSquared();
@@ -1861,7 +1867,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 // 					Float invp = (acceptShoot > 0) ? (Float)totalShoot / (Float)acceptShoot : 0;
 // 					contrib *= invp;
 					
-					Float invp = (acceptCnt[k] > 0) ? (Float)shootCnt[k] / (Float)acceptCnt[k] * invBrdfIntegral : 0;
+					Float invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
 					contrib *= invp;
 
 #if UPM_DEBUG == 1
@@ -1893,6 +1899,11 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 		/* Release any used edges and vertices back to the memory pool */
 		m_sensorSubpath.release(m_pool);
+		m_pool.release(vs0);
+		m_pool.release(vsPred0);
+		m_pool.release(vsEdge0);
+		m_pool.release(succVertex);
+		m_pool.release(succEdge);		
 	}
 		break;
 

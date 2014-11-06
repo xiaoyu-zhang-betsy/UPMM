@@ -254,6 +254,8 @@ public:
 			process->getResult()->dump(cropSize.x, cropSize.y, m_config.maxDepth, path.parent_path(), path.stem());
 #endif
 
+		Statistics::getInstance()->printStats();
+
 		return process->getReturnStatus() == ParallelProcess::ESuccess;
 	}
 
