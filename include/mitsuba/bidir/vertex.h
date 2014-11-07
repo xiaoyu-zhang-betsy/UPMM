@@ -917,7 +917,7 @@ struct MTS_EXPORT_BIDIR PathVertex {
 		const PathVertex *pred, const PathEdge *predEdge,
 		PathEdge *succEdge, PathVertex *succ,
 		ETransportMode mode, 
-		Point gatherPosition, Float gatherRadius, Float dTheta,
+		Point gatherPosition, Float gatherRadius,
 		bool russianRoulette = false, Spectrum *throughput = NULL);
 
 	//! @}

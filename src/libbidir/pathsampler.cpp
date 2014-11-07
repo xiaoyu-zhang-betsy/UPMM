@@ -1745,15 +1745,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					searchPos[i] = lvertexExt.position;
 				}				
 
-				// evaluate sampling domain
-				Point p0 = vtPred->getPosition();
-				Point p1 = vt->getPosition();
-				Vector dir = p1 - p0;
-				Float dis = dir.length();
-				dir /= dis;
-				Float deltaTheta = atan2(2.f * gatherRadius, dis);
-				// normalize new pdf
-				Float brdfIntegral = vtPred->samplingProbability(vt->getPosition(), gatherRadius);
+				// evaluate sampling domain pdf normalization				
+				Float brdfIntegral = vtPred->samplingProbability(vt->getPosition(), gatherRadius * 2.f);
 				if (brdfIntegral == 0.f) continue;
 				Float invBrdfIntegral = 1.f / brdfIntegral;
 
@@ -1764,12 +1757,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					totalShoot++;
 					Spectrum throughput = Spectrum(1.f);
 
-					// uniform sampling evaluation shoots
-// 					if (!vtPred->sampleNext(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, false, &throughput))
-// 						continue;
-
 					// restricted sampling evaluation shoots
-					if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius, deltaTheta))
+					if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f))
 						continue;					
 
 					Point pshoot = succVertex->getPosition();

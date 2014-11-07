@@ -1563,7 +1563,7 @@ Float PathVertex::samplingProbability(Point p, Float radius){
 		// Assume perspective camera
 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
 		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
-		return sensor->evaluateSpherePdf(p, radius * 2.f);
+		return sensor->evaluateSpherePdf(p, radius);
 	}
 		break;
 	case ESurfaceInteraction: {
@@ -1571,17 +1571,17 @@ Float PathVertex::samplingProbability(Point p, Float radius){
 		const Intersection &its = getIntersection();
 		Vector dir = p - its.p;
 		Float dis = dir.length();
-		if (dis < 2.f * radius) return 1.f;
+		if (dis < radius) return 1.f;
 		dir /= dis;
-		Float dTheta = acos(sqrt(dis * dis - 4.f * radius * radius) / dis);
+		Float dTheta = acos(sqrt(dis * dis - radius * radius) / dis);
 		Vector nml = its.geoFrame.n;
 		Float theta = acos(dot(dir, nml));
 		Float theta0 = theta - dTheta;
 		Float theta1 = std::min(0.5f * M_PI, theta + dTheta);
 		Float prob = 0.f;
-		if (theta0 < 0.f || true){
+		if (theta0 < 0.f){
 			// sample the full sphere cap of polar
-			Float cos0 = 1.f;
+			Float cos0 = cos(2.f * theta0);
 			Float cos1 = cos(2.f * theta1);
 			prob = 0.5f * (cos0 - cos1);
 		}
@@ -1590,7 +1590,7 @@ Float PathVertex::samplingProbability(Point p, Float radius){
 			Point pProj = p - dot(p - its.p, nml) * nml;
 			Vector dirProj = pProj - its.p;
 			Float disProj = dirProj.length();
-			Float dPhi = acos(sqrt(disProj * disProj - 4.f * radius * radius) / disProj);
+			Float dPhi = acos(sqrt(disProj * disProj - radius * radius) / disProj);
 
 			Float cos0 = cos(2.f * theta0);
 			Float cos1 = cos(2.f * theta1);
@@ -1610,7 +1610,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 	const PathVertex *pred, const PathEdge *predEdge,
 	PathEdge *succEdge, PathVertex *succ,
 	ETransportMode mode, 
-	Point gatherPosition, Float gatherRadius, Float dTheta,
+	Point gatherPosition, Float gatherRadius,
 	bool russianRoulette, Spectrum *throughput) {
 	Ray ray;
 
@@ -1627,7 +1627,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		DirectionSamplingRecord dRec;
 
 		BDAssert(sensor->needsDirectionSample()); // not support other kinds of camera now
-		Vector4 bbox = sensor->evaluateSphereBounds(gatherPosition, gatherRadius * 2.f);
+		Vector4 bbox = sensor->evaluateSphereBounds(gatherPosition, gatherRadius);
 
 		Point2 smp = sampler->next2D();
 		smp.x = (bbox.y - bbox.x) * smp.x + bbox.x;
@@ -1664,25 +1664,25 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		Vector nml = its.geoFrame.n;
 		Vector originalDirection = gatherPosition - its.p;
 		Float dis = originalDirection.length();
-		if (dis < 2.f * gatherRadius){
+		if (dis < gatherRadius){
 			// uniform sampling
 			weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
 		}
 		else{
 			originalDirection /= dis;
-			Float dTheta = acos(sqrt(dis * dis - 4.f * gatherRadius * gatherRadius) / dis);
+			Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);
 			Float dotOrig = dot(originalDirection, nml);
 			Float thetaOrig = acos(dotOrig);
 			Float theta0 = thetaOrig - dTheta;
 			Float theta1 = std::min(0.5f * M_PI, thetaOrig + dTheta);
-			if (theta0 < 0.f || true){
+			if (theta0 < 0.f){
+				// Sampling the whole sphere cap
+				// Specific sampling for diffuse
 				Point2 smp = sampler->next2D();
 				Float cos0 = cos(std::max(0.f, theta0));
 				Float cos1 = cos(theta1);
 				Float r0 = sqrt(1.f - cos0 * cos0);
 				Float r1 = sqrt(1.f - cos1 * cos1);
-// 				Float r0 = sin(std::max(0.f, theta0));
-// 				Float r1 = sin(theta1);
 				smp.x = smp.x * 2.f - 1.f;
 				smp.y = smp.y * 2.f - 1.f;
 				Float baser = r0;
@@ -1700,47 +1700,65 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 				}
 				smp.x = (smp.x + 1.f) * 0.5f;
 				smp.y = (smp.y + 1.f) * 0.5f;
-				// sampling the whole sphere cap
-				while (totalSmpl < clampThreshold){
-					totalSmpl++;
-					weight[mode] = bsdf->sample(bRec, pdf[mode], smp);
-					if (bRec.wo.z >= cos1 && bRec.wo.z <= cos0)
-						break;
-					else{
-						++numericalIssue;
-						break;
-					}
+				weight[mode] = bsdf->sample(bRec, pdf[mode], smp);
+				if (bRec.wo.z < cos1 && bRec.wo.z > cos0)
+					++numericalIssue;
 
+				// rejection sampling
+// 				while (totalSmpl < clampThreshold){
+// 					totalSmpl++;
+// 					weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
 // 					Vector newDirection = normalize(its.toWorld(bRec.wo));
 // 					Float dotNew = dot(newDirection, nml);
-// 					//Float thetaNew = acos(dotNew);
-// 					if (dotNew >= cos1 && dotNew <= cos0)
+// 					Float thetaNew = acos(dotNew);
+// 					if (thetaNew < theta1 && thetaNew > theta0)
 // 						break;
-// 					else{
-// 						//SLog(EWarn, "Numerical issue, generate %f which should between %f and %f", dotNew, cos1, cos0);
-// 						++numericalIssue;
-// 						break;
-// 					}
-				}
+// 				}
 			}
 			else{
 				// sampling a bbox in theta-phi space
+				// Specific diffuse sampling
 				Point gatherPositionProj = gatherPosition - dot(gatherPosition - its.p, nml) * nml;
 				Vector originalDirectionProj = gatherPositionProj - its.p;
 				Float disProj = originalDirectionProj.length();
-				Float dPhi = acos(sqrt(disProj * disProj - 4.f * gatherRadius * gatherRadius) / disProj);
+				Float dPhi = acos(sqrt(disProj * disProj - gatherRadius * gatherRadius) / disProj);
 				originalDirectionProj /= disProj;
-				while (totalSmpl < clampThreshold){
-					totalSmpl++;
-					weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
-					Vector newDirection = normalize(its.toWorld(bRec.wo));
-					Float dotNew = dot(newDirection, nml);
-					Float thetaNew = acos(dotNew);
-					Vector newDirectionProj = normalize(newDirection - dotNew * nml);
-					Float dPhiNew = acos(dot(newDirectionProj, originalDirectionProj));
-					if (abs(thetaNew - thetaOrig) < dTheta && dPhiNew < dPhi) // accept this BRDF sampling
-						break;
-				}
+				Vector localDir = normalize(its.toLocal(originalDirectionProj));
+				Float phi = atan2(localDir.y, localDir.x);
+				Float phi0 = phi - dPhi;
+				Float phi1 = phi + dPhi;
+				Float sin0 = sin(std::max(0.f, theta0));
+				Float sin1 = sin(theta1);
+				Point2 smp = sampler->next2D();
+				Float isin = smp.x * (sin1 - sin0) + sin0;
+				Float iphi = smp.y * (phi1 - phi0) + phi0;
+				Float r = isin;
+				Float z = sqrt(1.f - isin * isin);
+				Float cosPhi, sinPhi;
+				math::sincos(iphi, &sinPhi, &cosPhi);
+				bRec.wo = Vector(r * cosPhi, r* sinPhi, z);
+				bRec.eta = 1.0f;
+				bRec.sampledComponent = 0;
+				bRec.sampledType = BSDF::EDiffuseReflection;
+				pdf[mode] = Warp::squareToCosineHemispherePdf(bRec.wo);
+
+				// rejection sampling
+// 				Point gatherPositionProj = gatherPosition - dot(gatherPosition - its.p, nml) * nml;
+// 				Vector originalDirectionProj = gatherPositionProj - its.p;
+// 				Float disProj = originalDirectionProj.length();
+// 				Float dPhi = acos(sqrt(disProj * disProj - gatherRadius * gatherRadius) / disProj);
+// 				originalDirectionProj /= disProj;
+// 				while (totalSmpl < clampThreshold){
+// 					totalSmpl++;
+// 					weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
+// 					Vector newDirection = normalize(its.toWorld(bRec.wo));
+// 					Float dotNew = dot(newDirection, nml);
+// 					Float thetaNew = acos(dotNew);
+// 					Vector newDirectionProj = normalize(newDirection - dotNew * nml);
+// 					Float dPhiNew = acos(dot(newDirectionProj, originalDirectionProj));
+// 					if (abs(thetaNew - thetaOrig) < dTheta && dPhiNew < dPhi) // accept this BRDF sampling
+// 						break;
+// 				}
 			}
 		}			
 		
