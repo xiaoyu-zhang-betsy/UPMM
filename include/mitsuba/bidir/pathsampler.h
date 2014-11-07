@@ -212,7 +212,7 @@ struct MTS_EXPORT_BIDIR SplatListImp {
 /* ==================================================================== */
 /*                         Work result for UPM                        */
 /* ==================================================================== */
-#define UPM_DEBUG 1
+//#define UPM_DEBUG 1
 class UPMWorkResult : public WorkResult {
 public:
 	UPMWorkResult(const int width, const int height, const int maxDepth, const ReconstructionFilter *rfilter){

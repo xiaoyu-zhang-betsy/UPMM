@@ -912,12 +912,12 @@ struct MTS_EXPORT_BIDIR PathVertex {
 	}
 
 	/// For UPM
-	Float samplingProbability(Point p, Float radius);
+	Float samplingDomainPdf(Point p, Float radius, Vector4 &bbox);
 	bool sampleShoot(const Scene *scene, Sampler *sampler,
 		const PathVertex *pred, const PathEdge *predEdge,
 		PathEdge *succEdge, PathVertex *succ,
 		ETransportMode mode, 
-		Point gatherPosition, Float gatherRadius,
+		Point gatherPosition, Float gatherRadius, Vector4 bbox,
 		bool russianRoulette = false, Spectrum *throughput = NULL);
 
 	//! @}

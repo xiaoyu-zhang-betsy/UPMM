@@ -1745,8 +1745,9 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					searchPos[i] = lvertexExt.position;
 				}				
 
-				// evaluate sampling domain pdf normalization				
-				Float brdfIntegral = vtPred->samplingProbability(vt->getPosition(), gatherRadius * 2.f);
+				// evaluate sampling domain pdf normalization
+				Vector4 smplBBox = Vector4(0.f);
+				Float brdfIntegral = vtPred->samplingDomainPdf(vt->getPosition(), gatherRadius * 2.f, smplBBox);
 				if (brdfIntegral == 0.f) continue;
 				Float invBrdfIntegral = 1.f / brdfIntegral;
 
@@ -1758,7 +1759,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					Spectrum throughput = Spectrum(1.f);
 
 					// restricted sampling evaluation shoots
-					if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f))
+					if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f, smplBBox))
 						continue;					
 
 					Point pshoot = succVertex->getPosition();
@@ -1837,24 +1838,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					// original approx. connection probability
 //  				Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
 //  				contrib *= invpOrig;
-
-					// evaluate connection probability						
-// 					Spectrum throughput = Spectrum(1.f);			
-// 					size_t totalShoot = 0, acceptShoot = 0, targetShoot = 1, clampThreshold = 10000000;
-// 					Point vsp = vs->getPosition();
-// 					Float distSquared = gatherRadius * gatherRadius;
-// 					while (acceptShoot < targetShoot && totalShoot < clampThreshold){
-// 						totalShoot++;
-// 						if (!vtPred->sampleNext(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, false, &throughput))
-// 							continue;
-// 						const Float pointDistSquared = (succVertex->getPosition() - vsp).lengthSquared();
-// 						if (pointDistSquared < distSquared)
-// 							++acceptShoot;
-// 					}
-// 					if (totalShoot >= clampThreshold)
-// 						Log(EWarn, "total shoot exceeds clamp threshold!");
-// 					Float invp = (acceptShoot > 0) ? (Float)totalShoot / (Float)acceptShoot : 0;
-// 					contrib *= invp;
 					
 					Float invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
 					contrib *= invp;
