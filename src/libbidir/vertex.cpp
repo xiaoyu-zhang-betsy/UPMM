@@ -24,8 +24,10 @@ MTS_NAMESPACE_BEGIN
 static StatsCounter mediumInconsistencies("Bidirectional layer",
 		"Medium inconsistencies in sampleNext()");
 
-static StatsCounter numericalIssue("Unbiased photon mapping",
-	"Generated direction lays outside the bound");
+static StatsCounter numericalIssue("Unbiased photon mapping", "Generated direction lays outside the bound");
+static StatsCounter uniformShootRatio("Unbiased photon mapping", "Percentage of uniform sampled shoot", EPercentage);
+static StatsCounter thetaShootRatio("Unbiased photon mapping", "Percentage of theta bounded shoot", EPercentage);
+static StatsCounter phiShootRatio("Unbiased photon mapping", "Percentage of theta-phi bounded shoot", EPercentage);
 
 void PathVertex::makeEndpoint(const Scene *scene, Float time, ETransportMode mode) {
 	memset(this, 0, sizeof(PathVertex));
@@ -1654,12 +1656,17 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		BSDFSamplingRecord bRec(its, sampler, mode);
 		bRec.wi = its.toLocal(wi);
 
+		uniformShootRatio.incrementBase();
+		thetaShootRatio.incrementBase();
+		phiShootRatio.incrementBase();
+
 		Vector nml = its.geoFrame.n;
 		Vector originalDirection = gatherPosition - its.p;
 		Float dis = originalDirection.length();
 		if (bbox.x == 0.f && bbox.y == 0.5f * M_PI && bbox.z == 0.f && bbox.w == 2.f * M_PI){
 			// uniform sampling
 			bsdf->sample(bRec, pdf[mode], sampler->next2D());
+			++uniformShootRatio;
 		}
 		else{
 // 			originalDirection /= dis;
@@ -1703,6 +1710,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 // 					if (thetaNew < theta1 && thetaNew > theta0)
 // 						break;
 // 				}
+				++thetaShootRatio;
 			}
 			else{
 				// sampling a bbox in theta-phi space
@@ -1751,6 +1759,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 // 					if (abs(thetaNew - thetaOrig) < dTheta && dPhiNew < dPhi) // accept this BRDF sampling
 // 						break;
 // 				}
+				++phiShootRatio;
 			}
 		}			
 		

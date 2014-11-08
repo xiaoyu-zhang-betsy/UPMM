@@ -175,6 +175,8 @@ public:
 					*vsEdge = emitterSubpath.edgeOrNull(s-1),
 					*vtEdge = sensorSubpath.edgeOrNull(t-1);
 
+				//if (s + t <= 3) continue; // Temporary exclude direct lighting
+
 				RestoreMeasureHelper rmh0(vs), rmh1(vt);
 
 				/* Will be set to true if direct sampling was used */

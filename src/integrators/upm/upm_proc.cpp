@@ -32,15 +32,6 @@ MTS_NAMESPACE_BEGIN
 /*                         Worker implementation                        */
 /* ==================================================================== */
 
-StatsCounter largeStepRatio("Primary sample space MLT",
-	"Accepted large steps", EPercentage);
-StatsCounter smallStepRatio("Primary sample space MLT",
-	"Accepted small steps", EPercentage);
-StatsCounter acceptanceRate("Primary sample space MLT",
-	"Overall acceptance rate", EPercentage);
-StatsCounter forcedAcceptance("Primary sample space MLT",
-	"Number of forced acceptances");
-
 class UPMRenderer : public WorkProcessor {
 public:
 	UPMRenderer(const UPMConfiguration &conf)
@@ -95,11 +86,11 @@ public:
 		splats->clear();
 
 		// [UC] for unbiased check
-		ImageBlock *batres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
-		batres->clear();
-		int numSampleBatch = 32;
-		float invSampleBatch = 1.f / (float)numSampleBatch;
-		size_t numBatch = 0;
+// 		ImageBlock *batres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
+// 		batres->clear();
+// 		int numSampleBatch = 32;
+// 		float invSampleBatch = 1.f / (float)numSampleBatch;
+// 		size_t numBatch = 0;
 
 		HilbertCurve2D<int> hilbertCurve;
 		TVector2<int> filmSize(m_film->getCropSize());
@@ -130,22 +121,22 @@ public:
  					Spectrum value = splats->getValue(k);
 					wr->putSample(splats->getPosition(k), &value[0]);
  					// [UC] for unbiased check
-					value *= invSampleBatch;
-					batres->put(splats->getPosition(k), &value[0]);
+// 					value *= invSampleBatch;
+// 					batres->put(splats->getPosition(k), &value[0]);
  				}
 			}			
 
 			// [UC] for unbiased check
-			if ((actualSampleCount + 1) % numSampleBatch == 0){
-				Bitmap *bitmap = const_cast<Bitmap *>(batres->getBitmap());
-				ref<Bitmap> hdrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, -1, 1.f);
-				fs::path filename = fs::path(formatString("E:\\%s_k%02d.pfm", "test", numBatch * 8 + workID));
-				ref<FileStream> targetFile = new FileStream(filename,
-					FileStream::ETruncReadWrite);
-				hdrBitmap->write(Bitmap::EPFM, targetFile, 1);
-				batres->clear();
-				numBatch++;
-			}
+// 			if ((actualSampleCount + 1) % numSampleBatch == 0){
+// 				Bitmap *bitmap = const_cast<Bitmap *>(batres->getBitmap());
+// 				ref<Bitmap> hdrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, -1, 1.f);
+// 				fs::path filename = fs::path(formatString("E:\\%s_k%02d.pfm", "test", numBatch * 8 + workID));
+// 				ref<FileStream> targetFile = new FileStream(filename,
+// 					FileStream::ETruncReadWrite);
+// 				hdrBitmap->write(Bitmap::EPFM, targetFile, 1);
+// 				batres->clear();
+// 				numBatch++;
+// 			}
 		}
 
 		Log(EInfo, "Run %d iterations", actualSampleCount);

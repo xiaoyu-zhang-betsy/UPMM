@@ -23,7 +23,19 @@
 #include <mitsuba/core/plugin.h>
 #include <boost/bind.hpp>
 
+#include <mitsuba/core/statistics.h>
+
 MTS_NAMESPACE_BEGIN
+
+StatsCounter avgGatherPoints("Unbiased photon mapping", "Avg. number of gather points", EAverage);
+StatsCounter maxGatherPoints("Unbiased photon mapping", "Max. number of gather points", EMaximumValue);
+StatsCounter numZeroGatherPoints("Unbiased photon mapping", "Percentage of zero gather points", EPercentage);
+
+StatsCounter maxInvpShoots("Unbiased photon mapping", "Max. number of 1/p shoots", EMaximumValue);
+StatsCounter numInvpShoots("Unbiased photon mapping", "Total number of 1/p shoots");
+StatsCounter avgInvpShoots("Unbiased photon mapping", "Avg. number of 1/p shoots", EAverage);
+
+StatsCounter numClampShoots("Unbiased photon mapping", "Percentage of clamped invp evaluations(bias)", EPercentage);
 
 PathSampler::PathSampler(ETechnique technique, const Scene *scene, Sampler *sensorSampler,
 		Sampler *emitterSampler, Sampler *directSampler, int maxDepth, int rrDepth,
@@ -1732,6 +1744,14 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 				searchResults.clear();
 				m_lightPathTree.search(vt->getPosition(), gatherRadius, searchResults);
+				avgGatherPoints.incrementBase();
+				avgGatherPoints += searchResults.size();
+				maxGatherPoints.recordMaximum(searchResults.size());
+				numZeroGatherPoints.incrementBase();
+				if (searchResults.size() == 0){
+					++numZeroGatherPoints;
+					continue;
+				}
 
 				searchPos.resize(searchResults.size());
 				acceptCnt.resize(searchResults.size());
@@ -1746,37 +1766,49 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 				}				
 
 				// evaluate sampling domain pdf normalization
-				Vector4 smplBBox = Vector4(0.f);
-				Float brdfIntegral = vtPred->samplingDomainPdf(vt->getPosition(), gatherRadius * 2.f, smplBBox);
-				if (brdfIntegral == 0.f) continue;
-				Float invBrdfIntegral = 1.f / brdfIntegral;
+				int shareShootThreshold = 32;
+				int clampThreshold = 1000;
+				Float invBrdfIntegral = 1.f;
+				bool shareShoot = false;
+				if (searchPos.size() > shareShootThreshold || t == 2){
+					shareShoot = true;
+					Vector4 smplBBox = Vector4(0.f);
+					Float brdfIntegral = vtPred->samplingDomainPdf(vt->getPosition(), gatherRadius * 2.f, smplBBox);
+					if (brdfIntegral == 0.f) continue;
+					invBrdfIntegral = 1.f / brdfIntegral;
 
-				size_t totalShoot = 0, targetShoot = 1, clampThreshold = 10000000;
-				uint32_t finishCnt = 0;
-				Float distSquared = gatherRadius * gatherRadius;
-				while (finishCnt < searchResults.size() && totalShoot < clampThreshold){
-					totalShoot++;
-					Spectrum throughput = Spectrum(1.f);
+					size_t totalShoot = 0, targetShoot = 1;
+					uint32_t finishCnt = 0;
+					Float distSquared = gatherRadius * gatherRadius;
+					while (finishCnt < searchResults.size() && totalShoot < clampThreshold){
+						totalShoot++;
 
-					// restricted sampling evaluation shoots
-					if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f, smplBBox))
-						continue;					
+						// restricted sampling evaluation shoots
+						if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f, smplBBox))
+							continue;
 
-					Point pshoot = succVertex->getPosition();
-					for (int i = 0; i < searchPos.size(); i++){
-						if (shootCnt[i] > 0) continue;
-						Float pointDistSquared = (succVertex->getPosition() - searchPos[i]).lengthSquared();
-						if (pointDistSquared < distSquared){
-							acceptCnt[i]++;
-							if (acceptCnt[i] == targetShoot){
-								shootCnt[i] = totalShoot;
-								finishCnt++;
+						Point pshoot = succVertex->getPosition();
+						for (int i = 0; i < searchPos.size(); i++){
+							if (shootCnt[i] > 0) continue;
+							Float pointDistSquared = (succVertex->getPosition() - searchPos[i]).lengthSquared();
+							if (pointDistSquared < distSquared){
+								acceptCnt[i]++;
+								if (acceptCnt[i] == targetShoot){
+									shootCnt[i] = totalShoot;
+									finishCnt++;
+								}
 							}
 						}
 					}
+					avgInvpShoots.incrementBase();
+					avgInvpShoots += totalShoot;
+					maxInvpShoots.recordMaximum(totalShoot);
+					numInvpShoots += totalShoot;
+					numClampShoots.incrementBase(searchResults.size());
+					if (finishCnt < searchResults.size()){
+						numClampShoots += searchResults.size() - finishCnt;
+					}
 				}
-				if (finishCnt > searchResults.size())
-					Log(EWarn, "total shoot exceeds clamp threshold!");
 
 				MisState sensorState = sensorStates[t - 1];
 				Vector wi = normalize(vtPred->getPosition() - vt->getPosition());				
@@ -1784,6 +1816,9 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					LightPathNode node = m_lightPathTree[searchResults[k]];
 					int s = node.data.depth;
 					if (m_maxDepth != -1 && s + t > m_maxDepth + 2) continue;
+
+					//if (s + t <= 4) continue; // Temporary exclude direct lighting
+
 					size_t vertexIndex = node.data.vertexIndex;
 					LightVertex v = m_lightVertices[vertexIndex];
 
@@ -1836,11 +1871,49 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
  					contrib *= connectionEdge.evalCached(vs, vtPred, PathEdge::EGeneralizedGeometricTerm);
 
 					// original approx. connection probability
-//  				Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
-//  				contrib *= invpOrig;
+// 					Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
+// 					contrib *= invpOrig;
 					
-					Float invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
-					contrib *= invp;
+					if (shareShoot){
+						Float invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
+						contrib *= invp;
+					}
+					else{
+						Vector4 smplBBox = Vector4(0.f);
+						Float brdfIntegral = vtPred->samplingDomainPdf(searchPos[k], gatherRadius, smplBBox);
+						if (brdfIntegral == 0.f) continue;
+						invBrdfIntegral = 1.f / brdfIntegral;
+						size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
+						Float distSquared = gatherRadius * gatherRadius;
+						while (totalShoot < clampThreshold){
+							totalShoot++;
+
+							// restricted sampling evaluation shoots
+							if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, searchPos[k], gatherRadius, smplBBox))
+								continue;
+
+							Point pshoot = succVertex->getPosition();
+							Float pointDistSquared = (succVertex->getPosition() - searchPos[k]).lengthSquared();
+							if (pointDistSquared < distSquared){
+								acceptedShoot++;
+								if (acceptedShoot == targetShoot){
+									break;
+								}
+							}
+						}
+						avgInvpShoots.incrementBase();
+						avgInvpShoots += totalShoot;
+						maxInvpShoots.recordMaximum(totalShoot);
+						numInvpShoots += totalShoot;
+
+						numClampShoots.incrementBase();
+						if (totalShoot >= clampThreshold)
+							++numClampShoots;
+
+						Float invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
+						contrib *= invp;
+					}
+
 
 #if UPM_DEBUG == 1
  					Spectrum splatValue =contrib;// * std::pow(2.0f, s+t-3.0f));
