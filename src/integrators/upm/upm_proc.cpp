@@ -108,14 +108,14 @@ public:
 // 				radius = std::max(reduceFactor * m_config.initialRadius, 1e-7f);
 // 				iteration += 8;
 // 			}
-			m_pathSampler->gatherLightPaths(false, m_config.useVM, radius, hilbertCurve.getPointCount(), NULL/*exclude light image but not affect MIS*/);
+			m_pathSampler->gatherLightPaths(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr->getImageBlock() /*exclude light image but not affect MIS*/);
 
 			for (size_t i = 0; i < hilbertCurve.getPointCount(); ++i) {
 				if (stop) break;
 
 				Point2i offset = Point2i(hilbertCurve[i]);
 				m_sampler->generate(offset);
- 				m_pathSampler->sampleSplatsUPM(wr, radius, offset, i, *splats);
+				m_pathSampler->sampleSplatsUPM(wr, radius, offset, i, *splats, m_config.useVC, m_config.useVM);
 
 				for (size_t k = 0; k < splats->size(); ++k) {
  					Spectrum value = splats->getValue(k);
