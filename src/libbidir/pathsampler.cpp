@@ -1639,6 +1639,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 	Float squareRadiusPi = M_PI * gatherRadius * gatherRadius;
 	Float invLightPaths = 1.f / (float)nLightPaths;
 
+	PathVertex tempSample, tempEndpoint;
+	PathEdge tempEdge;
 	switch (m_technique) {
 	case EBidirectional: {
 		/* Uniformly sample a scene time */
@@ -1692,9 +1694,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			PathEdge *vsEdge0 = m_pool.allocEdge();
 			size_t lightPathBegin = (cameraPathIndex == 0) ? 0 : m_lightPathEnds[cameraPathIndex - 1];
 			size_t lightPathEnd = m_lightPathEnds[cameraPathIndex];
-			Point2 samplePos(0.0f);
-			PathVertex tempSample, tempEndpoint;
-			PathEdge tempEdge, connectionEdge;
+			Point2 samplePos(0.0f);			
+			PathEdge connectionEdge;
 			for (size_t i = lightPathBegin; i < lightPathEnd + 1; i++){
 				int s = 1;
 				PathVertex* vsPred = NULL, *vs = NULL;
@@ -2030,7 +2031,33 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						itp.setShapePointer(lvertexExt.shape);
 						vs->measure = lvertexExt.measure;
 						vs->type = lvertexExt.type;
-						if (lvertexExt.hasVsPred){
+						if (s == 2 && false){				
+							Spectrum importanceWeight0 = v.importanceWeight;
+							MisState emitterState0 = v.emitterState;
+							vsPred = vsPred0;
+							v.importanceWeight = vs->sampleDirect(m_scene, m_directSampler, &tempEndpoint, &tempEdge, &tempSample, EImportance);
+							if (v.importanceWeight == Spectrum(0.f)) continue;
+							v.importanceWeight = tempEndpoint.weight[EImportance] * tempEdge.weight[EImportance];
+							*vsPred = tempSample;
+							//v.importanceWeight = vsPred->eval(m_scene, &tempEndpoint, vs, EImportance);							
+							EMeasure measure = vsPred->getAbstractEmitter()->getDirectMeasure();
+							Float pconnect = vs->evalPdfDirect(m_scene, vsPred, EImportance, measure == ESolidAngle ? EArea : measure);
+							Float ptrace = tempEndpoint.pdf[EImportance] * tempEdge.pdf[EImportance];
+							Float p1 = vsPred->evalPdf(m_scene, &tempEndpoint, vs, EImportance, measure == ESolidAngle ? EArea : measure);
+							Vector dir = vs->getPosition() - vsPred->getPosition();
+							Float dis = dir.length();
+							dir = normalize(dir);
+							v.emitterState[EVCM] = pconnect / (ptrace * p1);
+							if (measure != EDiscrete){
+								Float geoTerm0 = vsPred->isOnSurface() ? std::abs(dot(dir, vsPred->getGeometricNormal()) / (dis * dis)) : 1;
+								v.emitterState[EVC] = geoTerm0 / (ptrace * p1);
+							}
+							else{
+								v.emitterState[EVC] = 0.f;
+							}
+							v.emitterState[EVM] = v.emitterState[EVC] * misVcWeightFactor;			
+							float fuck = 1.f;
+						}else if (lvertexExt.hasVsPred){
 							vsPred = vsPred0;
 							vsPred->type = lvertexExt.typePred;
 							vsPred->measure = lvertexExt.measPred;
@@ -2042,9 +2069,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 						samplePos = initialSamplePos;
 						if (vtPred->isSensorSample())
-							if (!vtPred->getSamplePosition(vs, samplePos)){
-							continue;
-							}
+							if (!vtPred->getSamplePosition(vs, samplePos))
+								continue;
 
 						// evaluate contribution
 						Spectrum contrib = radianceWeights[t - 1] * v.importanceWeight * invLightPaths;
