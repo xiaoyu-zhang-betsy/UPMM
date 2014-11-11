@@ -226,6 +226,7 @@ public:
 		Vector2i cropSize = film->getCropSize();
 		Assert(cropSize.x > 0 && cropSize.y > 0);
 
+		if (sampleCount < m_config.workUnits) m_config.workUnits = sampleCount;
 		int sampleCountPerCore = int(std::ceilf(float(sampleCount) / float(m_config.workUnits)));
 		if (sampleCountPerCore * m_config.workUnits != sampleCount)
 			Log(EWarn, "Warning: increasing number of samples to %d", sampleCountPerCore * m_config.workUnits);
@@ -251,7 +252,7 @@ public:
 #if UPM_DEBUG == 1
 		fs::path path = scene->getDestinationFile();
 		if (m_config.lightImage)
-			process->getResult()->dump(cropSize.x, cropSize.y, m_config.maxDepth, path.parent_path(), path.stem());
+			process->getResult()->dump(cropSize.x, cropSize.y, m_config.maxDepth, path.parent_path(), path.stem(), m_config.useVC, m_config.useVM);
 #endif
 
 		Statistics::getInstance()->printStats();

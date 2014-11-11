@@ -108,7 +108,8 @@ public:
 // 				radius = std::max(reduceFactor * m_config.initialRadius, 1e-7f);
 // 				iteration += 8;
 // 			}
-			m_pathSampler->gatherLightPaths(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr->getImageBlock() /*exclude light image but not affect MIS*/);
+
+			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr);
 
 			for (size_t i = 0; i < hilbertCurve.getPointCount(); ++i) {
 				if (stop) break;

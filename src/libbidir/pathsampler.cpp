@@ -1179,7 +1179,7 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			Float giInPred = std::abs(vPred->isOnSurface() ? dot(ePred->d, vPred->getGeometricNormal()) : 1) / (ePred->length * ePred->length);
 			Float pi = v->pdf[mode] * e->pdf[mode];
 			Float pir2_w = v->pdf[1 - mode] * ePred->pdf[1 - mode] / giInPred;
-			if (i == 2 && mode == ERadiance){
+			if (i == 2){
 				state[EVC] = giIn / pi * (state[EVCM] + pir2_w * state[EVC]);
 				state[EVM] = giIn / pi * (state[EVCM] * misVcWeightFactor + pir2_w * state[EVM]);
 			}
@@ -1623,6 +1623,105 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 
 
 
+void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
+	const float gatherRadius, const int nsample, UPMWorkResult *wr){
+	const Sensor *sensor = m_scene->getSensor();
+	m_lightPathTree.clear();
+	m_lightVertices.clear();
+	m_lightVerticesExt.clear();
+	m_lightPathEnds.clear();
+
+	PathVertex vtPred, vt;
+	PathEdge vtEdge, connectionEdge;
+
+	Float time = sensor->getShutterOpen();
+	Vector2i filmSize = sensor->getFilm()->getSize();
+	m_lightPathNum = nsample;
+	Float etaVCM = (M_PI * gatherRadius * gatherRadius) * m_lightPathNum;
+	Float invLightPathNum = 1.f / m_lightPathNum;
+	Float misVmWeightFactor = useVM ? etaVCM : 0.f;
+	Float misVcWeightFactor = useVC ? 1.f / etaVCM : 0.f;
+	for (size_t k = 0; k < m_lightPathNum; k++){
+		/* Initialize the path endpoints */
+		m_emitterSubpath.initialize(m_scene, time, EImportance, m_pool);
+
+		/* Perform random walks from the emitter side */
+		m_emitterSubpath.randomWalk(m_scene, m_lightPathSampler, m_emitterDepth,
+			m_rrDepth, EImportance, m_pool);
+
+		// emitter states
+		MisState emitterState, sensorState;
+		Spectrum importanceWeight = Spectrum(1.0f);
+		for (int s = 1; s < (int)m_emitterSubpath.vertexCount(); ++s) {
+			PathVertex
+				*vsPred2 = m_emitterSubpath.vertexOrNull(s - 2),
+				*vsPred = m_emitterSubpath.vertex(s - 1),
+				*vs = m_emitterSubpath.vertex(s);
+			PathEdge
+				*esPred = m_emitterSubpath.edgeOrNull(s - 2),
+				*es = m_emitterSubpath.edgeOrNull(s - 1);
+
+			// Compute the throughput of emitter subpath till this vertex
+			importanceWeight *= vsPred->weight[EImportance] * vsPred->rrWeight * es->weight[EImportance];
+
+			// update mis helper and path type
+			updateMisHelper(s - 1, m_emitterSubpath, emitterState, m_scene, m_lightPathNum, misVcWeightFactor, misVmWeightFactor, EImportance);
+
+			// store light paths												
+			if (s > 1 && vs->measure != EDiscrete && dot(es->d, -vs->getGeometricNormal()) > Epsilon /* don't save backfaced photons */){
+				LightVertex lvertex = LightVertex(vs, vsPred, emitterState, importanceWeight);
+				m_lightVertices.push_back(lvertex);
+				LightVertexExt lvertexExt = LightVertexExt(vs, vsPred, s);
+				m_lightVerticesExt.push_back(lvertexExt);
+				LightPathNode lnode(vs->getPosition(), m_lightVertices.size() - 1, s);
+				m_lightPathTree.push_back(lnode);
+
+				// 				Point2 samplePos(0.0f);
+				// 				vs->sampleDirect(m_scene, m_directSampler, &vtPred, &vtEdge, &vt, ERadiance);
+				// 				vt.getSamplePosition(vs, samplePos);
+				// 				Spectrum value = Spectrum(1.f);
+				// 				lightImage->put(samplePos, &value[0]);
+			}
+
+			// connect to camera
+			if (vs->measure != EDiscrete && wr != NULL && useVC){
+				Spectrum value = importanceWeight * vs->sampleDirect(m_scene, m_directSampler,
+					&vtPred, &vtEdge, &vt, ERadiance);
+				if (value.isZero()) continue;
+
+				value *= vs->eval(m_scene, vsPred, &vt, EImportance);
+				vs->measure = EArea;
+				int interactions = m_maxDepth - s;
+				if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, &vt, &vtEdge, interactions))
+					continue;
+				value *= connectionEdge.evalCached(vs, &vt, PathEdge::ETransmittance | PathEdge::ECosineImp);
+				Float weight = Path::miWeightVC(m_scene, vsPred, vs, &vt, &vtPred,
+					s, 1, m_sampleDirect,
+					emitterState[EVCM], emitterState[EVC],
+					sensorState[EVCM], sensorState[EVC],
+					misVmWeightFactor, m_lightPathNum);
+				value *= weight;
+				if (value.isZero()) continue;
+
+				Point2 samplePos(0.0f);
+				vt.getSamplePosition(vs, samplePos);
+				wr->putSample(samplePos, &value[0]);
+
+#if UPM_DEBUG == 1
+				Spectrum splatValue = value;
+				wr->putDebugSample(s, 1, samplePos, splatValue);
+#endif
+			}
+		}
+		m_lightPathEnds.push_back(m_lightVertices.size());
+	}
+
+	// build kdtree
+	m_lightPathTree.build(true);
+
+	/* Release any used edges and vertices back to the memory pool */
+	m_emitterSubpath.release(m_pool);
+}
 void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 	const float gatherRadius, const Point2i &offset, 
 	const size_t cameraPathIndex, SplatList &list, bool useVC, bool useVM) {
@@ -1750,8 +1849,10 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					}
 
 					/* Determine the pixel sample position when necessary */
-					if (vt->isSensorSample() && !vt->getSamplePosition(vs, samplePos))
-						continue;
+					samplePos = initialSamplePos;
+					if (vt->isSensorSample())
+						if (!vt->getSamplePosition(vs, samplePos))
+							continue;
 
 					RestoreMeasureHelper rmh0(vs), rmh1(vt);
 
@@ -1853,7 +1954,11 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						misVmWeightFactor, nLightPaths);
 					value *= weight;
 
-					if (weight == 0.0f) continue;
+					if (value.isZero()) continue;
+#if UPM_DEBUG == 1
+					Spectrum splatValue = value;// * std::pow(2.0f, s+t-3.0f));
+					wr->putDebugSample(s, t, samplePos, splatValue);
+#endif	
 
 					if (t < 2) {
 						list.append(samplePos, value);
@@ -2002,7 +2107,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					for (int k = 0; k < searchResults.size(); k++){
 						LightPathNode node = m_lightPathTree[searchResults[k]];
 						int s = node.data.depth;
-						if (m_maxDepth != -1 && s + t > m_maxDepth + 2) continue;
+						if (m_maxDepth != -1 && s + t > m_maxDepth + 2 || s <= 2) continue;
 
 						//if (s + t <= 4) continue; // Temporary exclude direct lighting
 
@@ -2083,8 +2188,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						contrib *= connectionEdge.evalCached(vs, vtPred, PathEdge::EGeneralizedGeometricTerm);
 
 						// original approx. connection probability
-						// 					Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
-						// 					contrib *= invpOrig;
+// 						Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
+// 						contrib *= invpOrig;
 
 						if (shareShoot){
 							Float invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
@@ -2097,7 +2202,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							invBrdfIntegral = 1.f / brdfIntegral;
 							size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
 							Float distSquared = gatherRadius * gatherRadius;
-							while (totalShoot < clampThreshold){
+							while (totalShoot < clampThreshold / 10){
 								totalShoot++;
 
 								// restricted sampling evaluation shoots
@@ -2126,12 +2231,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							contrib *= invp;
 						}
 
-
-#if UPM_DEBUG == 1
-						Spectrum splatValue = contrib;// * std::pow(2.0f, s+t-3.0f));
-						wr->putDebugSample(s, t - 1, samplePos, splatValue);
-#endif			
-
 						// MIS weighting
 						Vector wo = v.wo;
 						MisState emitterState = v.emitterState;
@@ -2141,6 +2240,11 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						Float wCamera = sensorState[EVCM] * misVcWeightFactor + ptr2_w * sensorState[EVM];
 						Float weightExt = 1.f / (1.f + wLight + wCamera);
 						contrib *= weightExt;
+
+#if UPM_DEBUG == 1
+						Spectrum splatValue = contrib;// * std::pow(2.0f, s+t-3.0f));
+						wr->putDebugSample(s, t - 1, samplePos, splatValue);
+#endif	
 
 						// accumulate to image
 						if (contrib.isZero()) continue;

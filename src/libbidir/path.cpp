@@ -544,8 +544,8 @@ Float Path::miWeightVC(const Scene *scene,
 		Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
-		Float wLight = psr1 * (misVmWeightFactor + emitterdVCM + psr2_w * emitterdVC);
-		Float wCamera = ptr1 * ((t==2 ? 0.f : misVmWeightFactor) + sensordVCM + ptr2_w * sensordVC);
+		Float wLight = psr1 * ((s == 2 ? 0.f : misVmWeightFactor) + emitterdVCM + psr2_w * emitterdVC);
+		Float wCamera = ptr1 * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + ptr2_w * sensordVC);
 		weight = 1.f / (1.f + wLight + wCamera);		
 	}
 	else if (t == 1 && s > 1){
@@ -580,7 +580,7 @@ Float Path::miWeightVC(const Scene *scene,
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
 		Float wLight = psr1 / pconnect;
-		Float wCamera = ptrace / pconnect * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + ptr2_w * sensordVC);
+		Float wCamera = ptrace / pconnect * (sensordVCM + ptr2_w * sensordVC);
 		//Float wCamera = ptrace / pconnect * (misVmWeightFactor + sensordVCM + ptr2_w * sensordVC); // exclude (1,t) path in upm
 		weight = 1.f / (1.f + wLight + wCamera);		
 	}

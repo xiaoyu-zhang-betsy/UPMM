@@ -284,19 +284,37 @@ public:
 	/* In debug mode, this function allows to dump the contributions of
 	the individual sampling strategies to a series of images */
 	void dump(const int width, const int height, const int maxDepth,
-		const fs::path &prefix, const fs::path &stem) const {
+		const fs::path &prefix, const fs::path &stem,
+		bool useVC, bool useVM) const {
 		Float weight = 1.f / (Float)sampleCount;
+		char* algorithm;
+		if (useVM && useVC) algorithm = "upmc";
+		else if (useVC) algorithm = "bdpt";
+		else if (useVM) algorithm = "upm";
+		else
+			algorithm = "none";
+		Vector2i blockSize = Vector2i(width, height);
+		Bitmap* kmap = new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, blockSize + Vector2i(0), -1);		
 		for (int k = 1; k <= maxDepth; ++k) {
+			kmap->clear();
 			for (int t = 0; t <= k + 1; ++t) {
 				size_t s = k + 1 - t;
 				Bitmap *bitmap = const_cast<Bitmap *>(m_debugBlocks[strategyIndex(s, t)]->getBitmap());
+				if (bitmap->average().isZero()) continue;
+				kmap->accumulate(bitmap);
 				ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat, -1, weight);
 				fs::path filename =
-					prefix / fs::path(formatString("%s_upm_k%02i_s%02i_t%02i.pfm", stem.filename().string().c_str(), k, s, t));
+					prefix / fs::path(formatString("%s_%s_k%02i_s%02i_t%02i.pfm", stem.filename().string().c_str(), algorithm, k, s, t));
 				ref<FileStream> targetFile = new FileStream(filename,
 					FileStream::ETruncReadWrite);
 				ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
 			}
+			ref<Bitmap> ldrBitmap = kmap->convert(Bitmap::ERGB, Bitmap::EFloat, -1, weight);
+			fs::path filename =
+				prefix / fs::path(formatString("%s_%s_k%02i.pfm", stem.filename().string().c_str(), algorithm, k));
+			ref<FileStream> targetFile = new FileStream(filename,
+				FileStream::ETruncReadWrite);
+			ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
 		}
 	}
 
@@ -538,6 +556,7 @@ public:
 	void gatherLightPaths(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, ImageBlock* lightImage = NULL);
 	void sampleSplatsVCM(const bool useVC, const bool useVM, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
 	/// for UPM
+	void gatherLightPathsUPM(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, UPMWorkResult *wr);
 	void sampleSplatsUPM(UPMWorkResult *wr, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list, bool useVC = false, bool useVM = true);
 
 	MTS_DECLARE_CLASS()
