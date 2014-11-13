@@ -498,6 +498,15 @@ public:
 	//! @}
 	// =============================================================
 
+	virtual Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox) const{
+		NotImplementedError("bsdf->gatherAreaPdf");
+		return 0.f;
+	}
+	virtual Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox) const{
+		NotImplementedError("bsdf->sampleGatherArea");
+		return Vector(0.f);
+	}
+
 	MTS_DECLARE_CLASS()
 protected:
 	/// Create a new BSDF instance

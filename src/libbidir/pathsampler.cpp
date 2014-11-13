@@ -2063,42 +2063,42 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					Float invBrdfIntegral = 1.f;
 					bool shareShoot = false;
 					if (searchPos.size() > shareShootThreshold){
-						shareShoot = true;
 						Vector4 smplBBox = Vector4(0.f);
-						Float brdfIntegral = vtPred->samplingDomainPdf(vt->getPosition(), gatherRadius * 2.f, smplBBox);
-						if (brdfIntegral == 0.f) continue;
-						invBrdfIntegral = 1.f / brdfIntegral;
+						Float brdfIntegral = vtPred->gatherAreaPdf(vt->getPosition(), gatherRadius * 2.f, vtPred2, smplBBox);
+						if (brdfIntegral > 0.f){
+							shareShoot = true;
+							invBrdfIntegral = 1.f / brdfIntegral;
+							size_t totalShoot = 0, targetShoot = 1;
+							uint32_t finishCnt = 0;
+							Float distSquared = gatherRadius * gatherRadius;
+							while (finishCnt < searchResults.size() && totalShoot < clampThreshold){
+								totalShoot++;
 
-						size_t totalShoot = 0, targetShoot = 1;
-						uint32_t finishCnt = 0;
-						Float distSquared = gatherRadius * gatherRadius;
-						while (finishCnt < searchResults.size() && totalShoot < clampThreshold){
-							totalShoot++;
+								// restricted sampling evaluation shoots
+								if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f, smplBBox))
+									continue;
 
-							// restricted sampling evaluation shoots
-							if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f, smplBBox))
-								continue;
-
-							Point pshoot = succVertex->getPosition();
-							for (int i = 0; i < searchPos.size(); i++){
-								if (shootCnt[i] > 0) continue;
-								Float pointDistSquared = (succVertex->getPosition() - searchPos[i]).lengthSquared();
-								if (pointDistSquared < distSquared){
-									acceptCnt[i]++;
-									if (acceptCnt[i] == targetShoot){
-										shootCnt[i] = totalShoot;
-										finishCnt++;
+								Point pshoot = succVertex->getPosition();
+								for (int i = 0; i < searchPos.size(); i++){
+									if (shootCnt[i] > 0) continue;
+									Float pointDistSquared = (succVertex->getPosition() - searchPos[i]).lengthSquared();
+									if (pointDistSquared < distSquared){
+										acceptCnt[i]++;
+										if (acceptCnt[i] == targetShoot){
+											shootCnt[i] = totalShoot;
+											finishCnt++;
+										}
 									}
 								}
 							}
-						}
-						avgInvpShoots.incrementBase();
-						avgInvpShoots += totalShoot;
-						maxInvpShoots.recordMaximum(totalShoot);
-						numInvpShoots += totalShoot;
-						numClampShoots.incrementBase(searchResults.size());
-						if (finishCnt < searchResults.size()){
-							numClampShoots += searchResults.size() - finishCnt;
+							avgInvpShoots.incrementBase();
+							avgInvpShoots += totalShoot;
+							maxInvpShoots.recordMaximum(totalShoot);
+							numInvpShoots += totalShoot;
+							numClampShoots.incrementBase(searchResults.size());
+							if (finishCnt < searchResults.size()){
+								numClampShoots += searchResults.size() - finishCnt;
+							}
 						}
 					}
 
@@ -2197,7 +2197,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						}
 						else{
 							Vector4 smplBBox = Vector4(0.f);
-							Float brdfIntegral = vtPred->samplingDomainPdf(searchPos[k], gatherRadius, smplBBox);
+							Float brdfIntegral = vtPred->gatherAreaPdf(searchPos[k], gatherRadius, vtPred2, smplBBox);
 							if (brdfIntegral == 0.f) continue;
 							invBrdfIntegral = 1.f / brdfIntegral;
 							size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;

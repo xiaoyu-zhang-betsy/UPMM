@@ -22,6 +22,10 @@
 
 MTS_NAMESPACE_BEGIN
 
+static StatsCounter uniformShootRatio("Unbiased photon mapping", "Percentage of uniform sampled shoot (phong)", EPercentage);
+static StatsCounter thetaShootRatio("Unbiased photon mapping", "Percentage of theta bounded shoot (phong)", EPercentage);
+static StatsCounter phiShootRatio("Unbiased photon mapping", "Percentage of theta-phi bounded shoot (phong)", EPercentage);
+
 /*!\plugin{phong}{Modified Phong BRDF}
  * \order{14}
  * \parameters{
@@ -290,6 +294,89 @@ public:
 	}
 
 	Shader *createShader(Renderer *renderer) const;
+
+	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox) const{
+		if (Frame::cosTheta(wi) <= 0)
+			return 0.f;
+
+		bbox = Vector4(1.f, 0.f, 0.f, 1.f);		
+		Float dis = wo.length();
+		if (dis < gatherRadius)
+			return 1.f;
+
+		Vector wir = reflect(wi);
+		wo = Frame(wir).toLocal(wo / dis);
+		Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);		
+		Float exponent = m_exponent->getAverage().average();
+
+		Float prob = 0.f;
+		Float theta = acos(wo.z);
+		Float theta0 = theta - dTheta;
+		Float theta1 = theta + dTheta;
+		
+		theta0 = std::max(theta0, 0.f);
+		theta1 = std::min(theta1, 0.5f * M_PI);
+		Float cos0 = pow(cos(theta0), exponent + 1.f);
+		Float cos1 = pow(cos(theta1), exponent + 1.f);
+		bbox.x = cos0; bbox.y = cos1;
+		if (theta0 <= 0.f){
+			// sample the full sphere cap of polar			
+			prob = 1.f - cos1;			
+		}
+		else{
+			// sample the bbox of the cone			
+			Vector dirProj = Vector(wo.x, wo.y, 0.f);
+			Float disProj = dirProj.length() * dis;
+			Float dPhi = acos(sqrt(disProj * disProj - gatherRadius * gatherRadius) / disProj);
+			Float phi = atan2(dirProj.y, dirProj.x);
+			Float inv2Pi = 0.5f / M_PI;
+			bbox.z = (phi - dPhi) * inv2Pi;
+			bbox.w = (phi + dPhi) * inv2Pi;
+
+			Float cos0 = pow(cos(theta0), exponent + 1.f);
+			Float cos1 = pow(cos(theta1), exponent + 1.f);
+			prob = dPhi / M_PI * (cos0 - cos1);
+		}
+		return prob;
+	}
+
+	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox) const{
+		if (Frame::cosTheta(wi) <= 0)
+			return Vector(0.f);
+
+		uniformShootRatio.incrementBase();
+		thetaShootRatio.incrementBase();
+		phiShootRatio.incrementBase();
+
+		if (bbox.x == 1.f && bbox.y == 0.f && bbox.z == 0.f && bbox.w == 1.f)
+			++uniformShootRatio;
+		else if (bbox.z == 0.f && bbox.w == 1.f)
+			++thetaShootRatio;
+		else
+			++phiShootRatio;
+
+		Float exponent = m_exponent->getAverage().average();
+		sample.y = sample.y * (bbox.x - bbox.y) + bbox.y;
+		sample.x = sample.x * (bbox.w - bbox.z) + bbox.z;
+		
+		/* Sample from a Phong lobe centered around (0, 0, 1) */
+		Vector R = reflect(wi);
+		Float sinAlpha = std::sqrt(1 - std::pow(sample.y, 2 / (exponent + 1)));
+		Float cosAlpha = std::pow(sample.y, 1 / (exponent + 1));
+		Float phi = (2.0f * M_PI) * sample.x;
+		Vector localDir = Vector(
+			sinAlpha * std::cos(phi),
+			sinAlpha * std::sin(phi),
+			cosAlpha
+			);
+
+		/* Rotate into the correct coordinate system */
+		wo = Frame(R).toWorld(localDir);
+		if (Frame::cosTheta(wo) <= 0)
+			return Vector(0.0f);
+
+		return wo;
+	}
 
 	MTS_DECLARE_CLASS()
 private:

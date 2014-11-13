@@ -82,7 +82,7 @@ public:
 		midres->clear();
 		const SeedWorkUnit *wu = static_cast<const SeedWorkUnit *>(workUnit);
 		const int workID = wu->getID();
-		SplatList *splats = new SplatList();		
+		SplatList *splats = new SplatList();
 		splats->clear();
 
 		// [UC] for unbiased check

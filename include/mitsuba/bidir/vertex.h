@@ -912,7 +912,7 @@ struct MTS_EXPORT_BIDIR PathVertex {
 	}
 
 	/// For UPM
-	Float samplingDomainPdf(Point p, Float radius, Vector4 &bbox);
+	Float gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector4 &bbox);
 	bool sampleShoot(const Scene *scene, Sampler *sampler,
 		const PathVertex *pred, const PathEdge *predEdge,
 		PathEdge *succEdge, PathVertex *succ,
