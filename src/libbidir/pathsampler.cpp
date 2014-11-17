@@ -1126,7 +1126,7 @@ Float PathSampler::generateSeedsConnection(size_t sampleCount, size_t seedCount,
 *	Tracing kernel for VCM
 */
 void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scene,
-	size_t nLightPaths, Float misVcWeightFactor, Float misVmWeightFactor, ETransportMode mode){
+	size_t nLightPaths, Float misVcWeightFactor, Float misVmWeightFactor, ETransportMode mode, bool isUPM = false){
 	if (i == 0){
 		state[EVCM] = 0.f;
 		state[EVC] = 0.f;
@@ -1179,24 +1179,28 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			Float giInPred = std::abs(vPred->isOnSurface() ? dot(ePred->d, vPred->getGeometricNormal()) : 1) / (ePred->length * ePred->length);
 			Float pi = v->pdf[mode] * e->pdf[mode];
 			Float pir2_w = v->pdf[1 - mode] * ePred->pdf[1 - mode] / giInPred;
-			if (i == 2){
-				state[EVC] = giIn / pi * (state[EVCM] + pir2_w * state[EVC]);
-				state[EVM] = giIn / pi * (state[EVCM] * misVcWeightFactor + pir2_w * state[EVM]);
+			if (i == 2 && isUPM){
+				state[EVC] = giIn * (state[EVCM] + pir2_w * state[EVC]);
+				state[EVM] = giIn * (state[EVCM] * misVcWeightFactor + pir2_w * state[EVM]);
 			}
 			else{
-				state[EVC] = giIn / pi * (state[EVCM] + misVmWeightFactor + pir2_w * state[EVC]);
-				state[EVM] = giIn / pi * (1.f + state[EVCM] * misVcWeightFactor + pir2_w * state[EVM]);
+				state[EVC] = giIn * (state[EVCM] + misVmWeightFactor + pir2_w * state[EVC]);
+				state[EVM] = giIn * (1.f + state[EVCM] * misVcWeightFactor + pir2_w * state[EVM]);
 			}
 			state[EVCM] = 1 / pi;
+			state[EVC] *= state[EVCM];
+			if (mode == EImportance || !isUPM){				
+				state[EVM] *= state[EVCM];
+			}			
 		}
 	}
 }
 void initializeMisHelper(const Path &path, MisState *states, const Scene* scene,
-	size_t nLightPaths, Float misVcWeightFactor, Float misVmWeightFactor, ETransportMode mode){
+	size_t nLightPaths, Float misVcWeightFactor, Float misVmWeightFactor, ETransportMode mode, bool isUPM = false){
 
 	for (int i = 0; i < (int)path.vertexCount() - 1; ++i) {
 		if (i > 0) states[i] = states[i - 1];
-		updateMisHelper(i, path, states[i], scene, nLightPaths, misVcWeightFactor, misVmWeightFactor, mode);
+		updateMisHelper(i, path, states[i], scene, nLightPaths, misVcWeightFactor, misVmWeightFactor, mode, isUPM);
 	}
 }
 void PathSampler::gatherLightPaths(const bool useVC, const bool useVM,
@@ -1665,7 +1669,7 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 			importanceWeight *= vsPred->weight[EImportance] * vsPred->rrWeight * es->weight[EImportance];
 
 			// update mis helper and path type
-			updateMisHelper(s - 1, m_emitterSubpath, emitterState, m_scene, m_lightPathNum, misVcWeightFactor, misVmWeightFactor, EImportance);
+			updateMisHelper(s - 1, m_emitterSubpath, emitterState, m_scene, m_lightPathNum, misVcWeightFactor, misVmWeightFactor, EImportance, true);
 
 			// store light paths												
 			if (s > 1 && vs->measure != EDiscrete && dot(es->d, -vs->getGeometricNormal()) > Epsilon /* don't save backfaced photons */){
@@ -1699,7 +1703,7 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 					s, 1, m_sampleDirect,
 					emitterState[EVCM], emitterState[EVC],
 					sensorState[EVCM], sensorState[EVC],
-					misVmWeightFactor, m_lightPathNum);
+					misVmWeightFactor, m_lightPathNum, true);
 				value *= weight;
 				if (value.isZero()) continue;
 
@@ -1784,7 +1788,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 		// initialize of MIS helper
 		// VCM tech report Eq. 31 - 33		
 		MisState *sensorStates = (MisState *)alloca(m_sensorSubpath.vertexCount() * sizeof(MisState));
-		initializeMisHelper(m_sensorSubpath, sensorStates, m_scene, nLightPaths, misVcWeightFactor, misVmWeightFactor, ERadiance);
+		initializeMisHelper(m_sensorSubpath, sensorStates, m_scene, nLightPaths, misVcWeightFactor, misVmWeightFactor, ERadiance, true);
 
 		// vertex connection	 
 		if (useVC){
@@ -1951,7 +1955,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						s, t, m_sampleDirect,
 						emitterState[EVCM], emitterState[EVC],
 						sensorState[EVCM], sensorState[EVC],
-						misVmWeightFactor, nLightPaths);
+						misVmWeightFactor, nLightPaths, true);
 					value *= weight;
 
 					if (value.isZero()) continue;
@@ -2234,10 +2238,13 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						// MIS weighting
 						Vector wo = v.wo;
 						MisState emitterState = v.emitterState;
-						Float psr2_w = vt->evalPdf(m_scene, wi, wo, ERadiance, ESolidAngle);
-						Float ptr2_w = vt->evalPdf(m_scene, wo, wi, EImportance, ESolidAngle);
+						Float psr2_w = vs->evalPdf(m_scene, wi, wo, ERadiance, ESolidAngle);
+						Float ptr2_w = vs->evalPdf(m_scene, wo, wi, EImportance, ESolidAngle);
+						Float pt = vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance, EArea);
+						if (pt == 0.f) continue;
+						Float invpt = 1.f / pt;
 						Float wLight = emitterState[EVCM] * misVcWeightFactor + psr2_w * emitterState[EVM];
-						Float wCamera = sensorState[EVCM] * misVcWeightFactor + ptr2_w * sensorState[EVM];
+						Float wCamera = invpt * misVcWeightFactor + ptr2_w * sensorState[EVM] * invpt;
 						Float weightExt = 1.f / (1.f + wLight + wCamera);
 						contrib *= weightExt;
 

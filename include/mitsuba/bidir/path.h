@@ -518,7 +518,7 @@ public:
 		int s, int t, bool sampleDirect,
 		float emitterdVCM, float emitterdVC,
 		float sensordVCM, float sensordVC,
-		Float misVmWeightFactor, size_t nLightPaths);
+		Float misVmWeightFactor, size_t nLightPaths, bool isUPM = false);
 
 	//! @}
     /* ==================================================================== */
