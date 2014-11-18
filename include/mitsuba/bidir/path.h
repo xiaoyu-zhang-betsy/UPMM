@@ -510,16 +510,6 @@ public:
 	/// Return a basic string summary of the path
 	std::string summarize() const;
 
-	/// MIS weighting for VCM
-	static Float miWeightVC( 
-		const Scene *scene,
-		const PathVertex *vsPred, const PathVertex *vs,
-		const PathVertex *vt, const PathVertex *vtPred,
-		int s, int t, bool sampleDirect,
-		float emitterdVCM, float emitterdVC,
-		float sensordVCM, float sensordVC,
-		Float misVmWeightFactor, size_t nLightPaths, bool isUPM = false);
-
 	//! @}
     /* ==================================================================== */
 private:

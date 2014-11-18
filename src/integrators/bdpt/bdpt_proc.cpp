@@ -262,6 +262,14 @@ public:
 						scene, vsEdge, vs, vt, vtEdge, interactions))
 					continue;
 
+				/* Determine the pixel sample position when necessary */
+				if (vt->isSensorSample() && !vt->getSamplePosition(vs, samplePos))
+					continue;
+
+				bool watchThread = false;
+				if (t == 1 && samplePos.x > 190 && samplePos.x < 199 && samplePos.y > 56 && samplePos.y < 62)
+					watchThread = true;
+
 				/* Account for the terms of the measurement contribution
 				   function that are coupled to the connection edge */
 				if (!sampleDirect)
@@ -290,11 +298,7 @@ public:
 						sensorSubpath.swapEndpoints(vtPred, vtEdge, vt);
 					else
 						emitterSubpath.swapEndpoints(vsPred, vsEdge, vs);
-				}
-
-				/* Determine the pixel sample position when necessary */
-				if (vt->isSensorSample() && !vt->getSamplePosition(vs, samplePos))
-					continue;
+				}				
 				
 				#if BDPT_DEBUG == 1
 					/* When the debug mode is on, collect samples

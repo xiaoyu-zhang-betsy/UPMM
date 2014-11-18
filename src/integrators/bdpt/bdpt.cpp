@@ -138,7 +138,7 @@ public:
 		m_config.rrDepth = props.getInteger("rrDepth", 5);
 		m_config.lightImage = props.getBoolean("lightImage", true);
 		m_config.sampleDirect = props.getBoolean("sampleDirect", true);
-		m_config.showWeighted = props.getBoolean("showWeighted", false);
+		m_config.showWeighted = props.getBoolean("showWeighted", true);
 
 		#if BDPT_DEBUG == 1
 		if (m_config.maxDepth == -1 || m_config.maxDepth > 6) {

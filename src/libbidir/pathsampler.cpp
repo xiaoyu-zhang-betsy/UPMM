@@ -1125,6 +1125,89 @@ Float PathSampler::generateSeedsConnection(size_t sampleCount, size_t seedCount,
 /*
 *	Tracing kernel for VCM
 */
+inline Float MisHeuristic(Float pdf) {
+	return pdf * pdf;
+}
+Float miWeightVC(const Scene *scene,
+	const PathVertex *vsPred, const PathVertex *vs,
+	const PathVertex *vt, const PathVertex *vtPred,
+	int s, int t, bool sampleDirect,
+	float emitterdVCM, float emitterdVC,
+	float sensordVCM, float sensordVC,
+	Float misVmWeightFactor, size_t nLightPaths, bool isUPM = false){
+
+	Float weight = 0.0f;
+
+	if (s > 1 && t > 1){
+		Float psr2_w = vs->evalPdf(scene, vt, vsPred, ERadiance, ESolidAngle);
+		Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
+		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
+		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
+		Float wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+		Float wCamera = MisHeuristic(ptr1) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+		weight = 1.f / (1.f + wLight + wCamera);
+	}
+	else if (t == 1 && s > 1){
+		// 		const PositionSamplingRecord &pRec = vt->getPositionSamplingRecord();
+		// 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+		// 		Vector d = normalize(vs->getPosition() - vt->getPosition());
+		// 		DirectionSamplingRecord dRec(d);
+		// 		Float ptrace = emitter->pdfDirection(dRec, pRec);
+		// 		Float pconnect = 1.f; //vs->evalPdfDirect(scene, vt, ERadiance, emitter->getDirectMeasure());
+		Float psr2_w = vs->evalPdf(scene, vt, vsPred, ERadiance, ESolidAngle);
+		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
+
+		Float wLight;
+		if (isUPM)
+			wLight = MisHeuristic(psr1) * (emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (s,1) path in upm
+		else
+			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+		weight = 1.f / (1.f + wLight);
+	}
+	else if (s == 1){
+		Vector d = normalize(vt->getPosition() - vs->getPosition());
+		const PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
+		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+		EMeasure measure = emitter->getDirectMeasure();
+		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure);
+		Float ptrace = emitter->pdfPosition(pRec);// vsPred->pdf[EImportance];
+
+		if (vs->getAbstractEmitter()->needsPositionSample()){
+			pconnect *= absDot(d, vs->getGeometricNormal());
+		}
+
+		if (vs->getAbstractEmitter()->needsDirectionSample()){
+			DirectionSamplingRecord dRec(d);
+			ptrace *= emitter->pdfDirection(dRec, pRec) * absDot(d, vt->getGeometricNormal());
+		}
+
+		Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
+		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
+		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
+		Float wLight = psr1 / pconnect;
+		Float wCamera;
+		if (isUPM)
+			wCamera = MisHeuristic(ptrace / pconnect) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+		else
+			wCamera = MisHeuristic(ptrace / pconnect) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
+		weight = 1.f / (1.f + wLight + wCamera);
+	}
+	else if (s == 0){
+		const PositionSamplingRecord &pRec = vt->getPositionSamplingRecord();
+		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+		Float pt_1 = emitter->pdfPosition(pRec);
+		Vector d = normalize(vtPred->getPosition() - vt->getPosition());
+		DirectionSamplingRecord dRec(d);
+		Float pt_2_sigma = emitter->pdfDirection(dRec, pRec);
+
+		Float wCamera = MisHeuristic(pt_1) * sensordVCM + MisHeuristic(pt_1 * pt_2_sigma) * sensordVC;
+		weight = 1.f / (1.f + wCamera);
+	}
+	else{
+		SLog(EError, "Not implemented miweightVC for s = %d, t = %d", s, t);
+	}
+	return weight;
+}
 void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scene,
 	size_t nLightPaths, Float misVcWeightFactor, Float misVmWeightFactor, ETransportMode mode, bool isUPM = false){
 	if (i == 0){
@@ -1146,15 +1229,15 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 		if (mode == ERadiance){
 // 			if (measure == EDiscrete)
 // 				p1 *= (e->length * e->length) / (vNext->isOnSurface() ? std::abs(dot(e->d, vNext->getGeometricNormal())) : 1.f);
-			state[EVCM] = pconnect / (ptrace * p1);
+			state[EVCM] = MisHeuristic(pconnect / (ptrace * p1));
 			state[EVC] = 0.f;
 			state[EVM] = 0.f;
 		}
 		else{
-			state[EVCM] = pconnect / (ptrace * p1);
+			state[EVCM] = MisHeuristic(pconnect / (ptrace * p1));
 			if (measure != EDiscrete){
 				Float geoTerm0 = v->isOnSurface() ? std::abs(dot(e->d, v->getGeometricNormal()) / (e->length * e->length)) : 1;
-				state[EVC] = geoTerm0 / (ptrace * p1);
+				state[EVC] = MisHeuristic(geoTerm0 / (ptrace * p1));
 			}
 			else{
 				state[EVC] = 0.f;
@@ -1168,8 +1251,8 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 		if (v->measure == EDiscrete){
 			PathVertex *vNext = path.vertex(i + 1);
 			state[EVCM] = 0.f;
-			state[EVC] *= std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1);
-			state[EVM] *= std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1);
+			state[EVC] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1));
+			state[EVM] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1));
 		}
 		else{
 			BDAssert(v->measure == EArea);
@@ -1180,14 +1263,14 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			Float pi = v->pdf[mode] * e->pdf[mode];
 			Float pir2_w = v->pdf[1 - mode] * ePred->pdf[1 - mode] / giInPred;
 			if (i == 2 && isUPM){
-				state[EVC] = giIn * (state[EVCM] + pir2_w * state[EVC]);
-				state[EVM] = giIn * (state[EVCM] * misVcWeightFactor + pir2_w * state[EVM]);
+				state[EVC] = MisHeuristic(giIn) * (state[EVCM] + MisHeuristic(pir2_w) * state[EVC]);
+				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
 			}
 			else{
-				state[EVC] = giIn * (state[EVCM] + misVmWeightFactor + pir2_w * state[EVC]);
-				state[EVM] = giIn * (1.f + state[EVCM] * misVcWeightFactor + pir2_w * state[EVM]);
+				state[EVC] = MisHeuristic(giIn) * (state[EVCM] + misVmWeightFactor + MisHeuristic(pir2_w) * state[EVC]);
+				state[EVM] = MisHeuristic(giIn) * (1.f + state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
 			}
-			state[EVCM] = 1 / pi;
+			state[EVCM] = MisHeuristic(1 / pi);
 			state[EVC] *= state[EVCM];
 			if (mode == EImportance || !isUPM){				
 				state[EVM] *= state[EVCM];
@@ -1275,7 +1358,7 @@ void PathSampler::gatherLightPaths(const bool useVC, const bool useVM,
 				if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, &vt, &vtEdge, interactions))
 					continue;
 				value *= connectionEdge.evalCached(vs, &vt, PathEdge::ETransmittance | PathEdge::ECosineImp);
-				Float weight = Path::miWeightVC(m_scene, vsPred, vs, &vt, &vtPred,
+				Float weight = miWeightVC(m_scene, vsPred, vs, &vt, &vtPred,
 					s, 1, m_sampleDirect,
 					emitterState[EVCM], emitterState[EVC],
 					sensorState[EVCM], sensorState[EVC],
@@ -1481,9 +1564,6 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 					be bridged via pathConnect (negative=arbitrarily many) */
 					int remaining = m_maxDepth - depth;					
 
-					// backup original path vertex measure
-					uint8_t vsMeasure0 = vs->measure, vtMeasure0 = vt->measure;
-
 					/* Account for the terms of the measurement contribution
 					function that are coupled to the connection endpoints */
 					if (vt->isSensorSupernode()) {
@@ -1562,7 +1642,7 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 						(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
 
 					MisState sensorState = sensorStates[t - 1];
-					Float weight = Path::miWeightVC(m_scene, vsPred, vs, vt, vtPred,
+					Float weight = miWeightVC(m_scene, vsPred, vs, vt, vtPred,
 						s, t, m_sampleDirect,
 						emitterState[EVCM], emitterState[EVC],
 						sensorState[EVCM], sensorState[EVC],
@@ -1689,9 +1769,14 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 
 			// connect to camera
 			if (vs->measure != EDiscrete && wr != NULL && useVC){
+				Point2 samplePos(0.0f);
 				Spectrum value = importanceWeight * vs->sampleDirect(m_scene, m_directSampler,
 					&vtPred, &vtEdge, &vt, ERadiance);
-				if (value.isZero()) continue;
+				if (value.isZero() || !vt.getSamplePosition(vs, samplePos)) continue;
+
+				bool watchThread = false;
+				if (samplePos.x > 190 && samplePos.x < 199 && samplePos.y > 56 && samplePos.y < 62)
+					watchThread = true;
 
 				value *= vs->eval(m_scene, vsPred, &vt, EImportance);
 				vs->measure = EArea;
@@ -1699,15 +1784,14 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 				if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, &vt, &vtEdge, interactions))
 					continue;
 				value *= connectionEdge.evalCached(vs, &vt, PathEdge::ETransmittance | PathEdge::ECosineImp);
-				Float weight = Path::miWeightVC(m_scene, vsPred, vs, &vt, &vtPred,
+				Float weight = miWeightVC(m_scene, vsPred, vs, &vt, &vtPred,
 					s, 1, m_sampleDirect,
 					emitterState[EVCM], emitterState[EVC],
 					sensorState[EVCM], sensorState[EVC],
 					misVmWeightFactor, m_lightPathNum, true);
 				value *= weight;
 				if (value.isZero()) continue;
-
-				Point2 samplePos(0.0f);
+				
 				vt.getSamplePosition(vs, samplePos);
 				wr->putSample(samplePos, &value[0]);
 
@@ -1780,7 +1864,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			list.append(samplePos, Spectrum(0.0f));
 			initialSamplePos = samplePos;
 
-			if (samplePos.x >= 31 && samplePos.x < 32 && samplePos.y >= 10 && samplePos.y < 11){
+			if (samplePos.x >= 162 && samplePos.x < 163 && samplePos.y >= 115 && samplePos.y < 116){
 				watchThread = true;
 			}
 		}
@@ -1799,8 +1883,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			size_t lightPathEnd = m_lightPathEnds[cameraPathIndex];
 			Point2 samplePos(0.0f);			
 			PathEdge connectionEdge;
-			for (size_t i = lightPathBegin; i < lightPathEnd + 1; i++){
-				int s = 1;
+			for (size_t i = lightPathBegin; i < lightPathEnd + 2; i++){
+				int s = (lightPathEnd + 1) - i;
 				PathVertex* vsPred = NULL, *vs = NULL;
 				PathEdge *vsEdge = NULL;
 				Spectrum importanceWeight = Spectrum(1.0f);
@@ -1842,23 +1926,9 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						*vtEdge = m_sensorSubpath.edgeOrNull(t - 1);
 
 					/* Will receive the path weight of the (s, t)-connection */
-					Spectrum value = Spectrum(0.0f);
+					Spectrum value = Spectrum(0.0f);					
 
-					if (s == 1){
-						value = radianceWeights[t] * vt->sampleDirect(m_scene, m_directSampler,
-							&tempEndpoint, &tempEdge, &tempSample, EImportance);
-						if (value.isZero())
-							continue;
-						vs = &tempSample; vsPred = &tempEndpoint; vsEdge = &tempEdge;
-					}
-
-					/* Determine the pixel sample position when necessary */
-					samplePos = initialSamplePos;
-					if (vt->isSensorSample())
-						if (!vt->getSamplePosition(vs, samplePos))
-							continue;
-
-					RestoreMeasureHelper rmh0(vs), rmh1(vt);
+					RestoreMeasureHelper rmh1(vt);
 
 					/* Will be set to true if direct sampling was used */
 					bool sampleDirect = false;
@@ -1870,50 +1940,28 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					be bridged via pathConnect (negative=arbitrarily many) */
 					int remaining = m_maxDepth - depth;
 
-					// backup original path vertex measure
-					uint8_t vsMeasure0 = vs->measure, vtMeasure0 = vt->measure;
-
 					/* Account for the terms of the measurement contribution
 					function that are coupled to the connection endpoints */
-					if (vt->isSensorSupernode()) {
-						/* If possible, convert 'vs' into an sensor sample */
-						if (!vs->cast(m_scene, PathVertex::ESensorSample) || vs->isDegenerate())
+					if (s == 0){
+						/* If possible, convert 'vt' into an emitter sample */
+						if (!vt->cast(m_scene, PathVertex::EEmitterSample) || vt->isDegenerate())
 							continue;
-
-						/* Make note of the changed pixel sample position */
-						if (!vs->getSamplePosition(vsPred, samplePos))
-							continue;
-
-						value = importanceWeight *
+						vs = vs0;
+						vs->makeEndpoint(m_scene, time, EImportance);
+						value = radianceWeights[t] *
 							vs->eval(m_scene, vsPred, vt, EImportance) *
 							vt->eval(m_scene, vtPred, vs, ERadiance);
-					}
-					else if (m_sampleDirect && ((t == 1 && s > 1) || (s == 1 && t > 1))) {
-						if (s == 1) {
-							if (vt->isDegenerate())
-								continue;
-							/* Generate a position on an emitter using direct sampling */
-							// 							value = radianceWeights[t] * vt->sampleDirect(m_scene, m_directSampler,
-							// 								&tempEndpoint, &tempEdge, &tempSample, EImportance);
-							// 							if (value.isZero())
-							// 								continue;
-							// 							vs = &tempSample; vsPred = &tempEndpoint; vsEdge = &tempEdge;
-							value *= vt->eval(m_scene, vtPred, vs, ERadiance);
-							vt->measure = EArea;
-						}
-						else {
-							/* s==1/t==1 path: use a direct sampling strategy if requested */
-							if (vs->isDegenerate())
-								continue;
-							/* Generate a position on the sensor using direct sampling */
-							value = importanceWeight * vs->sampleDirect(m_scene, m_directSampler,
-								&tempEndpoint, &tempEdge, &tempSample, ERadiance);
-							if (value.isZero())
-								continue;
-							vt = &tempSample; vtPred = &tempEndpoint; vtEdge = &tempEdge;
-							value *= vs->eval(m_scene, vsPred, vt, EImportance);
-							vs->measure = EArea;
-						}
+					}else if (s == 1) {
+						if (vt->isDegenerate())
+							continue;
+						/* Generate a position on an emitter using direct sampling */
+						value = radianceWeights[t] * vt->sampleDirect(m_scene, m_directSampler,
+							&tempEndpoint, &tempEdge, &tempSample, EImportance);
+						if (value.isZero())
+							continue;
+						vs = &tempSample; vsPred = &tempEndpoint; vsEdge = &tempEdge;							
+						value *= vt->eval(m_scene, vtPred, vs, ERadiance);
+						vt->measure = EArea;						
 						sampleDirect = true;
 					}
 					else {
@@ -1933,13 +1981,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					/* Attempt to connect the two endpoints, which could result in
 					the creation of additional vertices (index-matched boundaries etc.) */
 					int interactions = remaining;
-
 					if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vt, vtEdge, interactions))
-						continue;
-
-					depth += interactions;
-
-					if (m_excludeDirectIllum && depth <= 2)
 						continue;
 
 					/* Account for the terms of the measurement contribution
@@ -1951,22 +1993,29 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
 
 					MisState sensorState = sensorStates[t - 1];
-					Float weight = Path::miWeightVC(m_scene, vsPred, vs, vt, vtPred,
+					Float miWeight = miWeightVC(m_scene, vsPred, vs, vt, vtPred,
 						s, t, m_sampleDirect,
 						emitterState[EVCM], emitterState[EVC],
 						sensorState[EVCM], sensorState[EVC],
 						misVmWeightFactor, nLightPaths, true);
-					value *= weight;
+					value *= miWeight;
 
+					/* Determine the pixel sample position when necessary */
+					samplePos = initialSamplePos;
+					if (vt->isSensorSample())
+						if (!vt->getSamplePosition(vs, samplePos))
+							continue;
 					if (value.isZero()) continue;
+
 #if UPM_DEBUG == 1
 					Spectrum splatValue = value;// * std::pow(2.0f, s+t-3.0f));
 					wr->putDebugSample(s, t, samplePos, splatValue);
 #endif	
 
-					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f){
-						float fuck = 1.f;
-					}
+#ifdef UPM_DEBUG_HARD
+					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f)
+						Log(EError, "Invalid sample value %f %f %f", value[0], value[1], value[2]);
+#endif
 
 					if (t < 2) {
 						list.append(samplePos, value);
@@ -2007,29 +2056,29 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 				PathEdge
 					*predEdge = m_sensorSubpath.edge(t - 2);
 
-				{
-					vs = vs0;
-					vs->makeEndpoint(m_scene, time, EImportance);
-					*succVertex = *vt;
-					/* If possible, convert 'vt' into an emitter sample */
-					if (succVertex->cast(m_scene, PathVertex::EEmitterSample) && !succVertex->isDegenerate()){
-						Spectrum contrib = radianceWeights[t] *
-							vs->eval(m_scene, vsPred, succVertex, EImportance) *
-							succVertex->eval(m_scene, vtPred, vs, ERadiance);
-
-						if (t == 2){
-							list.accum(0, contrib);
-						}
-						else{
-							bool isSpecular = true;
-							for (int i = 2; i < t; i++){
-								if (m_sensorSubpath.vertex(i)->measure != EDiscrete) isSpecular = false;
-							}
-							if (isSpecular)
-								list.accum(0, contrib);
-						}
-					}
-				}
+// 				{
+// 					vs = vs0;
+// 					vs->makeEndpoint(m_scene, time, EImportance);
+// 					*succVertex = *vt;
+// 					/* If possible, convert 'vt' into an emitter sample */
+// 					if (succVertex->cast(m_scene, PathVertex::EEmitterSample) && !succVertex->isDegenerate()){
+// 						Spectrum contrib = radianceWeights[t] *
+// 							vs->eval(m_scene, vsPred, succVertex, EImportance) *
+// 							succVertex->eval(m_scene, vtPred, vs, ERadiance);
+// 
+// 						if (t == 2){
+// 							list.accum(0, contrib);
+// 						}
+// 						else{
+// 							bool isSpecular = true;
+// 							for (int i = 2; i < t; i++){
+// 								if (m_sensorSubpath.vertex(i)->measure != EDiscrete) isSpecular = false;
+// 							}
+// 							if (isSpecular)
+// 								list.accum(0, contrib);
+// 						}
+// 					}
+// 				}
 
 				if (!vt->isDegenerate()){
 					BDAssert(vt->type == PathVertex::ESurfaceInteraction);
