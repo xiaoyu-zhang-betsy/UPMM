@@ -1556,7 +1556,7 @@ std::ostream &operator<<(std::ostream &os, PathVertex::EVertexType type) {
 }
 
 
-Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector4 &bbox){
+Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector4 &bbox, Vector4 *bboxd){
 	switch (type) {
 	case ESensorSample: {
 		// Assume perspective camera
@@ -1572,7 +1572,7 @@ Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector
 		Vector wo = p - its.p;
 		Vector wi = normalize(pPred->getPosition() - its.p);
 		const BSDF *bsdf = its.getBSDF();
-		return bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, bbox);
+		return bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, bbox, bboxd);
 	}
 		break;
 
@@ -1586,7 +1586,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 	const PathVertex *pred, const PathEdge *predEdge,
 	PathEdge *succEdge, PathVertex *succ,
 	ETransportMode mode, 
-	Point gatherPosition, Float gatherRadius, Vector4 bbox,
+	Point gatherPosition, Float gatherRadius, Vector4 bbox, Vector4 bboxd,
 	bool russianRoulette, Spectrum *throughput) {
 	Ray ray;
 
@@ -1621,7 +1621,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		Vector wo = gatherPosition - its.p;
 
 		/* Sample the BSDF */
-		Vector dir = bsdf->sampleGatherArea(its.toLocal(wi), its.toLocal(wo), gatherRadius, sampler->next2D(), bbox);
+		Vector dir = bsdf->sampleGatherArea(its.toLocal(wi), its.toLocal(wo), gatherRadius, sampler->next2D(), bbox, bboxd);
 		if (dir == Vector(0.f)) return false;
 		wo = its.toWorld(dir);
 

@@ -183,7 +183,7 @@ public:
 
 	Shader *createShader(Renderer *renderer) const;
 
-	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox) const{
+	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
 		if (Frame::cosTheta(wi) <= 0) return 0.f;
 		bbox = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
 		Vector dir = wo;
@@ -217,7 +217,7 @@ public:
 		return prob;		
 	}
 	
-	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox) const{
+	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
 		if (Frame::cosTheta(wi) <= 0) return Vector(0.f);
 		Vector dir;
 		uniformShootRatio.incrementBase();
@@ -273,6 +273,10 @@ public:
 			++phiShootRatio;
 		}
 		return dir;
+	}
+
+	bool boundedGather() const{
+		return true;
 	}
 
 	MTS_DECLARE_CLASS()

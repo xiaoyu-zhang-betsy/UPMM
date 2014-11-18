@@ -1964,6 +1964,10 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					wr->putDebugSample(s, t, samplePos, splatValue);
 #endif	
 
+					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f){
+						float fuck = 1.f;
+					}
+
 					if (t < 2) {
 						list.append(samplePos, value);
 					}
@@ -2062,13 +2066,17 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					}
 
 					// evaluate sampling domain pdf normalization
+					const Intersection &its = vt->getIntersection();
+					const BSDF *bsdf = its.getBSDF();
+					bool boundedGather = bsdf->boundedGather();
 					int shareShootThreshold = 32;
-					int clampThreshold = 1000;
+					int clampThreshold = 10000000;
 					Float invBrdfIntegral = 1.f;
 					bool shareShoot = false;
 					if (searchPos.size() > shareShootThreshold){
 						Vector4 smplBBox = Vector4(0.f);
-						Float brdfIntegral = vtPred->gatherAreaPdf(vt->getPosition(), gatherRadius * 2.f, vtPred2, smplBBox);
+						Vector4 smplBBoxDiff = Vector4(0.f);
+						Float brdfIntegral = vtPred->gatherAreaPdf(vt->getPosition(), gatherRadius * 2.f, vtPred2, smplBBox, &smplBBoxDiff);
 						if (brdfIntegral > 0.f){
 							shareShoot = true;
 							invBrdfIntegral = 1.f / brdfIntegral;
@@ -2079,7 +2087,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 								totalShoot++;
 
 								// restricted sampling evaluation shoots
-								if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f, smplBBox))
+								if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f, smplBBox, smplBBoxDiff))
 									continue;
 
 								Point pshoot = succVertex->getPosition();
@@ -2201,7 +2209,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						}
 						else{
 							Vector4 smplBBox = Vector4(0.f);
-							Float brdfIntegral = vtPred->gatherAreaPdf(searchPos[k], gatherRadius, vtPred2, smplBBox);
+							Vector4 smplBBoxDiff = Vector4(0.f);
+							Float brdfIntegral = vtPred->gatherAreaPdf(searchPos[k], gatherRadius, vtPred2, smplBBox, &smplBBoxDiff);
 							if (brdfIntegral == 0.f) continue;
 							invBrdfIntegral = 1.f / brdfIntegral;
 							size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
@@ -2210,7 +2219,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 								totalShoot++;
 
 								// restricted sampling evaluation shoots
-								if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, searchPos[k], gatherRadius, smplBBox))
+								if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, searchPos[k], gatherRadius, smplBBox, smplBBoxDiff))
 									continue;
 
 								Point pshoot = succVertex->getPosition();
@@ -2228,7 +2237,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							numInvpShoots += totalShoot;
 
 							numClampShoots.incrementBase();
-							if (totalShoot >= clampThreshold)
+							if (totalShoot >= clampThreshold / 10)
 								++numClampShoots;
 
 							Float invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
@@ -2243,6 +2252,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						Float pt = vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance, EArea);
 						if (pt == 0.f) continue;
 						Float invpt = 1.f / pt;
+						if (!_finite(invpt)) continue;
 						Float wLight = emitterState[EVCM] * misVcWeightFactor + psr2_w * emitterState[EVM];
 						Float wCamera = invpt * misVcWeightFactor + ptr2_w * sensorState[EVM] * invpt;
 						Float weightExt = 1.f / (1.f + wLight + wCamera);
@@ -2254,6 +2264,9 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 #endif	
 
 						// accumulate to image
+						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
+							float fuck = 1.f;
+						}
 						if (contrib.isZero()) continue;
 						if (t == 2) {
 							list.append(samplePos, contrib);

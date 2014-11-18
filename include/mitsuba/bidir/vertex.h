@@ -912,12 +912,12 @@ struct MTS_EXPORT_BIDIR PathVertex {
 	}
 
 	/// For UPM
-	Float gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector4 &bbox);
+	Float gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector4 &bbox, Vector4 *bboxd);
 	bool sampleShoot(const Scene *scene, Sampler *sampler,
 		const PathVertex *pred, const PathEdge *predEdge,
 		PathEdge *succEdge, PathVertex *succ,
 		ETransportMode mode, 
-		Point gatherPosition, Float gatherRadius, Vector4 bbox,
+		Point gatherPosition, Float gatherRadius, Vector4 bbox, Vector4 bboxd,
 		bool russianRoulette = false, Spectrum *throughput = NULL);
 
 	//! @}

@@ -102,6 +102,12 @@ public:
 			  sAvg = m_specularReflectance->getAverage().getLuminance();
 		m_specularSamplingWeight = sAvg / (dAvg + sAvg);
 
+		//hack to force single component
+		if (m_specularSamplingWeight < 0.5f)
+			m_specularSamplingWeight = 0.f;
+		else
+			m_specularSamplingWeight = 1.f;
+
 		m_usesRayDifferentials =
 			m_diffuseReflectance->usesRayDifferentials() ||
 			m_specularReflectance->usesRayDifferentials() ||
@@ -295,52 +301,87 @@ public:
 
 	Shader *createShader(Renderer *renderer) const;
 
-	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox) const{
+	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
 		if (Frame::cosTheta(wi) <= 0)
 			return 0.f;
 
-		bbox = Vector4(1.f, 0.f, 0.f, 1.f);		
+		bbox = Vector4(1.f, 0.f, 0.f, 1.f);
+		*bboxd = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
 		Float dis = wo.length();
 		if (dis < gatherRadius)
 			return 1.f;
 
-		Vector wir = reflect(wi);
-		wo = Frame(wir).toLocal(wo / dis);
-		Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);		
-		Float exponent = m_exponent->getAverage().average();
+		Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);
 
-		Float prob = 0.f;
-		Float theta = acos(wo.z);
+		// specular component
+		Vector wir = reflect(wi);
+		Vector dir = Frame(wir).toLocal(wo / dis);		
+		Float exponent = m_exponent->getAverage().average();		
+		Float theta = acos(dir.z);
 		Float theta0 = theta - dTheta;
-		Float theta1 = theta + dTheta;
-		
+		Float theta1 = theta + dTheta;		
 		theta0 = std::max(theta0, 0.f);
 		theta1 = std::min(theta1, 0.5f * M_PI);
-		Float cos0 = pow(cos(theta0), exponent + 1.f);
-		Float cos1 = pow(cos(theta1), exponent + 1.f);
+		Float cos0 = std::max(0.f, std::min(1.f, pow(cos(theta0), exponent + 1.f)));
+		Float cos1 = std::max(0.f, std::min(1.f, pow(cos(theta1), exponent + 1.f)));		
+
+		Vector dirProj = Vector(dir.x, dir.y, 0.f);
+		Float disProj = dirProj.length() * dis;
+		Float sqrDisTangent = disProj * disProj - gatherRadius * gatherRadius;
+		Float probSpec = 1.f;	
 		bbox.x = cos0; bbox.y = cos1;
-		if (theta0 <= 0.f){
-			// sample the full sphere cap of polar			
-			prob = 1.f - cos1;			
-		}
-		else{
-			// sample the bbox of the cone			
-			Vector dirProj = Vector(wo.x, wo.y, 0.f);
-			Float disProj = dirProj.length() * dis;
-			Float dPhi = acos(sqrt(disProj * disProj - gatherRadius * gatherRadius) / disProj);
+		if (sqrDisTangent >= 0.f){
+			// sample the bbox of the cone				
+			Float cosdPhi = sqrt(sqrDisTangent) / disProj;
+			Float dPhi = acos(cosdPhi);
 			Float phi = atan2(dirProj.y, dirProj.x);
 			Float inv2Pi = 0.5f / M_PI;
 			bbox.z = (phi - dPhi) * inv2Pi;
 			bbox.w = (phi + dPhi) * inv2Pi;
+			probSpec = dPhi / M_PI * (cos0 - cos1);
+			if (probSpec < 0.f){
+				float fuck = 1.f;
+			}
+		}
+		else{
+			// sample the full sphere cap of polar			
+			probSpec = 1.f - cos1;
+		}
 
-			Float cos0 = pow(cos(theta0), exponent + 1.f);
-			Float cos1 = pow(cos(theta1), exponent + 1.f);
-			prob = dPhi / M_PI * (cos0 - cos1);
+		// diffuse component
+		dir = wo / dis;
+		theta = acos(dir.z);
+		theta0 = theta - dTheta;
+		theta1 = std::min(0.5f * M_PI, theta + dTheta);		
+		dirProj = Vector(dir.x, dir.y, 0.f);
+		disProj = dirProj.length() * dis;
+		sqrDisTangent = disProj * disProj - gatherRadius * gatherRadius;
+		Float probDiff = 1.f;		
+		bboxd->x = theta0; bboxd->y = theta1;
+		if (sqrDisTangent >= 0.f){
+			// sample the bbox of the cone			
+			Float cosdPhi = sqrt(sqrDisTangent) / disProj;
+			Float dPhi = acos(cosdPhi);
+			Float phi = atan2(dirProj.y, dirProj.x);
+			cos0 = cos(2.f * theta0);
+			cos1 = cos(2.f * theta1);
+			probDiff = 0.5f * dPhi * (cos0 - cos1) / M_PI;
+			bboxd->z = phi - dPhi; bboxd->w = phi + dPhi;
+		} else {
+			// sample the full sphere cap of polar
+			cos0 = cos(2.f * theta0);
+			cos1 = cos(2.f * theta1);
+			probDiff = 0.5f * (cos0 - cos1);
+		}
+
+		Float prob = probSpec * m_specularSamplingWeight + probDiff * (1.f - m_specularSamplingWeight);
+		if (prob < 0.f){
+			float fuck = 1.f;
 		}
 		return prob;
 	}
 
-	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox) const{
+	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
 		if (Frame::cosTheta(wi) <= 0)
 			return Vector(0.f);
 
@@ -348,34 +389,98 @@ public:
 		thetaShootRatio.incrementBase();
 		phiShootRatio.incrementBase();
 
-		if (bbox.x == 1.f && bbox.y == 0.f && bbox.z == 0.f && bbox.w == 1.f)
-			++uniformShootRatio;
-		else if (bbox.z == 0.f && bbox.w == 1.f)
-			++thetaShootRatio;
-		else
-			++phiShootRatio;
+		bool choseSpecular = true;
+		if (sample.x <= m_specularSamplingWeight) {
+			sample.x /= m_specularSamplingWeight;
+		}
+		else {
+			sample.x = (sample.x - m_specularSamplingWeight)
+				/ (1 - m_specularSamplingWeight);
+			choseSpecular = false;
+		}
 
-		Float exponent = m_exponent->getAverage().average();
-		sample.y = sample.y * (bbox.x - bbox.y) + bbox.y;
-		sample.x = sample.x * (bbox.w - bbox.z) + bbox.z;
-		
-		/* Sample from a Phong lobe centered around (0, 0, 1) */
-		Vector R = reflect(wi);
-		Float sinAlpha = std::sqrt(1 - std::pow(sample.y, 2 / (exponent + 1)));
-		Float cosAlpha = std::pow(sample.y, 1 / (exponent + 1));
-		Float phi = (2.0f * M_PI) * sample.x;
-		Vector localDir = Vector(
-			sinAlpha * std::cos(phi),
-			sinAlpha * std::sin(phi),
-			cosAlpha
-			);
-
-		/* Rotate into the correct coordinate system */
-		wo = Frame(R).toWorld(localDir);
-		if (Frame::cosTheta(wo) <= 0)
-			return Vector(0.0f);
+		if (choseSpecular){
+			/* Update statistics */
+			if (bbox.x == 1.f && bbox.y == 0.f && bbox.z == 0.f && bbox.w == 1.f)
+				++uniformShootRatio;
+			else if (bbox.z == 0.f && bbox.w == 1.f)
+				++thetaShootRatio;
+			else
+				++phiShootRatio;
+			/* Sample from a Phong lobe centered around (0, 0, 1) */
+			Float exponent = m_exponent->getAverage().average();
+			sample.y = sample.y * (bbox.x - bbox.y) + bbox.y;
+			sample.x = sample.x * (bbox.w - bbox.z) + bbox.z;
+			Vector R = reflect(wi);
+			Float sinAlpha = std::sqrt(1 - std::pow(sample.y, 2 / (exponent + 1)));
+			Float cosAlpha = std::pow(sample.y, 1 / (exponent + 1));
+			Float phi = (2.0f * M_PI) * sample.x;
+			Vector localDir = Vector(
+				sinAlpha * std::cos(phi),
+				sinAlpha * std::sin(phi),
+				cosAlpha
+				);
+			/* Rotate into the correct coordinate system */
+			wo = Frame(R).toWorld(localDir);
+			if (Frame::cosTheta(wo) <= 0)
+				return Vector(0.0f);
+		}
+		else{
+			if (bboxd.x == 0.f && bboxd.y == 0.5f * M_PI && bboxd.z == 0.f && bboxd.w == 2.f * M_PI){
+				// uniform sampling
+				wo = Warp::squareToCosineHemisphere(sample);
+				++uniformShootRatio;
+			}
+			else if (bboxd.z == 0.f && bboxd.w == 2.f * M_PI){
+				// Sampling the whole sphere cap
+				Point2 smp = sample;
+				Float r0 = sin(std::max(0.f, bboxd.x));
+				Float r1 = sin(bboxd.y);
+				smp.x = smp.x * 2.f - 1.f;
+				smp.y = smp.y * 2.f - 1.f;
+				Float baser = r0;
+				if (smp.x * smp.x > smp.y * smp.y){
+					Float r2r1 = smp.y / smp.x;
+					if (smp.x < 0.f) baser = -baser;
+					smp.x = smp.x * (r1 - r0) + baser;
+					smp.y = r2r1 * smp.x;
+				}
+				else{
+					Float r1r2 = smp.x / smp.y;
+					if (smp.y < 0.f) baser = -baser;
+					smp.y = smp.y * (r1 - r0) + baser;
+					smp.x = r1r2 * smp.y;
+				}
+				smp.x = (smp.x + 1.f) * 0.5f;
+				smp.y = (smp.y + 1.f) * 0.5f;
+				wo = Warp::squareToCosineHemisphere(smp);
+				++thetaShootRatio;
+			}
+			else{
+				// sampling a bbox in theta-phi space
+				Float sin0 = sin(std::max(0.f, bboxd.x));
+				Float sin1 = sin(bboxd.y);
+				Float phi0 = bboxd.z;
+				Float phi1 = bboxd.w;
+				Point2 smp = sample;
+				Float isin = smp.x * (sin1 - sin0) + sin0;
+				Float iphi = smp.y * (phi1 - phi0) + phi0;
+				Float r = isin;
+				Float z = sqrt(1.f - isin * isin);
+				Float cosPhi, sinPhi;
+				math::sincos(iphi, &sinPhi, &cosPhi);
+				if (EXPECT_NOT_TAKEN(z == 0))
+					z = 1e-10f;
+				wo = Vector(r * cosPhi, r* sinPhi, z);
+				++phiShootRatio;
+			}
+		}
 
 		return wo;
+	}
+
+	bool boundedGather() const{
+		return (m_specularSamplingWeight == 0.f || m_specularSamplingWeight == 1.f);
 	}
 
 	MTS_DECLARE_CLASS()
