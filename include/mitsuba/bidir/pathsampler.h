@@ -232,12 +232,20 @@ public:
 #if UPM_DEBUG == 1
 		m_debugBlocks.resize(
 			maxDepth*(5 + maxDepth) / 2);
+		m_debugBlocksM.resize(
+			maxDepth*(5 + maxDepth) / 2);
 
 		for (size_t i = 0; i<m_debugBlocks.size(); ++i) {
 			m_debugBlocks[i] = new ImageBlock(
 				Bitmap::ESpectrum, blockSize, rfilter);
 			m_debugBlocks[i]->setOffset(Point2i(0, 0));
 			m_debugBlocks[i]->setSize(blockSize);
+		}
+		for (size_t i = 0; i < m_debugBlocksM.size(); ++i) {
+			m_debugBlocksM[i] = new ImageBlock(
+				Bitmap::ESpectrum, blockSize, rfilter);
+			m_debugBlocksM[i]->setOffset(Point2i(0, 0));
+			m_debugBlocksM[i]->setSize(blockSize);
 		}
 #endif
 		sampleCount = 0;
@@ -248,6 +256,8 @@ public:
 #if UPM_DEBUG == 1
 		for (size_t i = 0; i < m_debugBlocks.size(); ++i)
 			m_debugBlocks[i]->clear();
+		for (size_t i = 0; i < m_debugBlocksM.size(); ++i)
+			m_debugBlocksM[i]->clear();
 #endif
 		m_block->clear();
 		sampleCount = 0;
@@ -258,6 +268,8 @@ public:
 #if UPM_DEBUG == 1
 		for (size_t i = 0; i < m_debugBlocks.size(); ++i)
 			m_debugBlocks[i]->load(stream);
+		for (size_t i = 0; i < m_debugBlocksM.size(); ++i)
+			m_debugBlocksM[i]->load(stream);
 #endif
 		m_block->load(stream);
 	}
@@ -267,6 +279,8 @@ public:
 #if UPM_DEBUG == 1
 		for (size_t i = 0; i < m_debugBlocks.size(); ++i)
 			m_debugBlocks[i]->save(stream);
+		for (size_t i = 0; i < m_debugBlocksM.size(); ++i)
+			m_debugBlocksM[i]->save(stream);
 #endif
 		m_block->save(stream);
 	}
@@ -276,6 +290,8 @@ public:
 #if UPM_DEBUG == 1
 		for (size_t i = 0; i < m_debugBlocks.size(); ++i)
 			m_debugBlocks[i]->put(workResult->m_debugBlocks[i].get());
+		for (size_t i = 0; i < m_debugBlocksM.size(); ++i)
+			m_debugBlocksM[i]->put(workResult->m_debugBlocksM[i].get());
 #endif
 		m_block->put(workResult->m_block.get());
 		sampleCount += workResult->getSampleCount();
@@ -290,7 +306,7 @@ public:
 		Float weight = 1.f / (Float)sampleCount;
 		char* algorithm;
 		if (useVM && useVC) algorithm = "upmc";
-		else if (useVC) algorithm = "bdpt";
+		else if (useVC) algorithm = "vc";
 		else if (useVM) algorithm = "upm";
 		else
 			algorithm = "none";
@@ -313,15 +329,28 @@ public:
 			ref<Bitmap> ldrBitmap = kmap->convert(Bitmap::ERGB, Bitmap::EFloat, -1, weight);
 			fs::path filename =
 				prefix / fs::path(formatString("%s_%s_k%02i.pfm", stem.filename().string().c_str(), algorithm, k));
-			ref<FileStream> targetFile = new FileStream(filename,
-				FileStream::ETruncReadWrite);
+			ref<FileStream> targetFile = new FileStream(filename, FileStream::ETruncReadWrite);
 			ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
+
+			for (int t = 0; t <= k + 1; ++t) {
+				size_t s = k + 1 - t;
+				Bitmap *bitmap = const_cast<Bitmap *>(m_debugBlocksM[strategyIndex(s, t)]->getBitmap());
+				if (bitmap->average().isZero()) continue;
+				ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat, -1, weight);
+				fs::path filename =
+					prefix / fs::path(formatString("%s_%s_nm_k%02i_s%02i_t%02i.pfm", stem.filename().string().c_str(), algorithm, k, s, t));
+				ref<FileStream> targetFile = new FileStream(filename,
+					FileStream::ETruncReadWrite);
+				ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
+			}
 		}
 	}
 
-	inline void putDebugSample(int s, int t, const Point2 &sample,
-		const Spectrum &spec) {
+	inline void putDebugSample(int s, int t, const Point2 &sample, const Spectrum &spec) {
 		m_debugBlocks[strategyIndex(s, t)]->put(sample, (const Float *)&spec);
+	}
+	inline void putDebugSampleM(int s, int t, const Point2 &sample, const Spectrum &spec) {
+		m_debugBlocksM[strategyIndex(s, t)]->put(sample, (const Float *)&spec);
 	}
 #endif
 
@@ -376,6 +405,7 @@ protected:
 protected:
 #if UPM_DEBUG == 1
 	ref_vector<ImageBlock> m_debugBlocks;
+	ref_vector<ImageBlock> m_debugBlocksM;
 #endif
 	size_t sampleCount;
 	ref<ImageBlock> m_block; // , m_lightImage;

@@ -1126,7 +1126,7 @@ Float PathSampler::generateSeedsConnection(size_t sampleCount, size_t seedCount,
 *	Tracing kernel for VCM
 */
 inline Float MisHeuristic(Float pdf) {
-	return pdf;
+	return pdf * pdf;
 }
 Float miWeightVC(const Scene *scene,
 	const PathVertex *vsPred, const PathVertex *vs,
@@ -1922,14 +1922,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 				if (!vt->isDegenerate()){
 					BDAssert(vt->type == PathVertex::ESurfaceInteraction);
 
-					// 				Vector wi = normalize(vtPred->getPosition() - vt->getPosition());
-					// 				Vector wiPred = (t == 2) ? Vector(-1.f, -1.f, -1.f) : normalize(vtPred2->getPosition() - vtPred->getPosition());
-					// 				VertexMergingQuery query(m_scene, vt, vtPred, wi, wiPred, radianceWeights[t], m_lightVertices,
-					// 					t, m_maxDepth, misVcWeightFactor, vmNormalization, sensorStates[t - 1]);
-					// 				m_lightPathTree.executeQuery(vt->getPosition(), gatherRadius, query);
-					// 				if (!query.result.isZero())
-					// 					list.accum(0, query.result);
-
 					searchResults.clear();
 					m_lightPathTree.search(vt->getPosition(), gatherRadius, searchResults);
 					avgGatherPoints.incrementBase();
@@ -2009,23 +2001,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						int s = node.data.depth;
 						if (m_maxDepth != -1 && s + t > m_maxDepth + 2 || s <= 2) continue;
 
-						//if (s + t <= 4) continue; // Temporary exclude direct lighting
-
 						size_t vertexIndex = node.data.vertexIndex;
 						LightVertex v = m_lightVertices[vertexIndex];
-
-						// 					Vector wo = v.wo;
-						// 					MisState emitterState = v.emitterState;
-						// 					Spectrum bsdfFactor = vt->eval(m_scene, wi, wo, ERadiance);
-						// 					Spectrum val = v.importanceWeight * radianceWeights[t] * bsdfFactor;
-						// 					if (val.isZero()) continue;
-						// 					Float weightExt = 0.f;
-						// 					Float psr2_w = vt->evalPdf(m_scene, wi, wo, ERadiance, ESolidAngle);
-						// 					Float ptr2_w = vt->evalPdf(m_scene, wo, wi, EImportance, ESolidAngle);
-						// 					Float wLight = emitterState[EVCM] * misVcWeightFactor + psr2_w * emitterState[EVM];
-						// 					Float wCamera = sensorState[EVCM] * misVcWeightFactor + ptr2_w * sensorState[EVM];
-						// 					weightExt = 1.f / (1.f + wLight + wCamera);
-						// 					Spectrum contrib = val * weightExt * vmNormalization;
 
 						LightVertexExt lvertexExt = m_lightVerticesExt[vertexIndex];
 						vs = vs0;
@@ -2140,20 +2117,18 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							emitterState[EVCM], emitterState[EVM],
 							sensorState[EVCM], sensorState[EVM],
 							misVcWeightFactor);
-						contrib *= miWeight;
-
-						if (contrib.isZero()) continue;
 
 #if UPM_DEBUG == 1
-						Spectrum splatValue = contrib;// * std::pow(2.0f, s+t-3.0f));
-						wr->putDebugSample(s, t - 1, samplePos, splatValue);
-#endif	
+						wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
+						wr->putDebugSampleM(s, t - 1, samplePos, contrib);
+#endif
+						contrib *= miWeight;
 
 						// accumulate to image
+						if (contrib.isZero()) continue;						
 						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
 							float fuck = 1.f;
 						}
-						
 						if (t == 2) {
 							list.append(samplePos, contrib);
 						}
@@ -2280,6 +2255,12 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vt, vtEdge, interactions))
 						continue;
 
+					/* Determine the pixel sample position when necessary */
+					samplePos = initialSamplePos;
+					if (vt->isSensorSample())
+						if (!vt->getSamplePosition(vs, samplePos))
+							continue;
+
 					/* Account for the terms of the measurement contribution
 					function that are coupled to the connection edge */
 					if (!sampleDirect)
@@ -2294,19 +2275,15 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						emitterState[EVCM], emitterState[EVC],
 						sensorState[EVCM], sensorState[EVC],
 						misVmWeightFactor, true);
-					value *= miWeight;
-
-					/* Determine the pixel sample position when necessary */
-					samplePos = initialSamplePos;
-					if (vt->isSensorSample())
-						if (!vt->getSamplePosition(vs, samplePos))
-							continue;
-					if (value.isZero()) continue;
 
 #if UPM_DEBUG == 1
-					Spectrum splatValue = value;// * std::pow(2.0f, s+t-3.0f));
-					wr->putDebugSample(s, t, samplePos, splatValue);
+					wr->putDebugSample(s, t, samplePos, value * miWeight);
+					wr->putDebugSampleM(s, t, samplePos, value);
 #endif	
+
+					value *= miWeight;
+
+					if (value.isZero()) continue;
 
 #ifdef UPM_DEBUG_HARD
 					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f)

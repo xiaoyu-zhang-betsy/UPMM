@@ -61,6 +61,11 @@ public:
 			const Spectrum &spec) {
 		m_debugBlocks[strategyIndex(s, t)]->put(sample, (const Float *) &spec);
 	}
+
+	inline void putDebugSampleM(int s, int t, const Point2 &sample,
+		const Spectrum &spec) {
+		m_debugBlocksM[strategyIndex(s, t)]->put(sample, (const Float *)&spec);
+	}
 #endif
 
 	inline void putSample(const Point2 &sample, const Spectrum &spec) {
@@ -102,6 +107,7 @@ protected:
 protected:
 #if BDPT_DEBUG == 1
 	ref_vector<ImageBlock> m_debugBlocks;
+	ref_vector<ImageBlock> m_debugBlocksM;
 #endif
 	ref<ImageBlock> m_block, m_lightImage;
 };

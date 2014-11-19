@@ -308,6 +308,7 @@ public:
 					Spectrum splatValue = value * (m_config.showWeighted
  						? miWeight : 1.0f);// * std::pow(2.0f, s+t-3.0f));
 					wr->putDebugSample(s, t, samplePos, splatValue);
+					wr->putDebugSampleM(s, t, samplePos, value);
 				#endif			
 
 				value *= miWeight;
