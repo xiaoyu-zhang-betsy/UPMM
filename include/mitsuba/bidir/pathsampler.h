@@ -319,14 +319,14 @@ public:
 				Bitmap *bitmap = const_cast<Bitmap *>(m_debugBlocks[strategyIndex(s, t)]->getBitmap());
 				if (bitmap->average().isZero()) continue;
 				kmap->accumulate(bitmap);
-				ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat, -1, weight);
+				ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, -1, weight);
 				fs::path filename =
 					prefix / fs::path(formatString("%s_%s_k%02i_s%02i_t%02i.pfm", stem.filename().string().c_str(), algorithm, k, s, t));
 				ref<FileStream> targetFile = new FileStream(filename,
 					FileStream::ETruncReadWrite);
 				ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
 			}
-			ref<Bitmap> ldrBitmap = kmap->convert(Bitmap::ERGB, Bitmap::EFloat, -1, weight);
+			ref<Bitmap> ldrBitmap = kmap->convert(Bitmap::ERGB, Bitmap::EFloat32, -1, weight);
 			fs::path filename =
 				prefix / fs::path(formatString("%s_%s_k%02i.pfm", stem.filename().string().c_str(), algorithm, k));
 			ref<FileStream> targetFile = new FileStream(filename, FileStream::ETruncReadWrite);
@@ -336,7 +336,7 @@ public:
 				size_t s = k + 1 - t;
 				Bitmap *bitmap = const_cast<Bitmap *>(m_debugBlocksM[strategyIndex(s, t)]->getBitmap());
 				if (bitmap->average().isZero()) continue;
-				ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat, -1, weight);
+				ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, -1, weight);
 				fs::path filename =
 					prefix / fs::path(formatString("%s_%s_nm_k%02i_s%02i_t%02i.pfm", stem.filename().string().c_str(), algorithm, k, s, t));
 				ref<FileStream> targetFile = new FileStream(filename,
