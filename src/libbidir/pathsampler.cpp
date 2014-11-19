@@ -1211,9 +1211,8 @@ Float miWeightVC(const Scene *scene,
 }
 Float miWeightVM(const Scene *scene, const PathVertex *vs,
 	const PathVertex *vtPred, const PathVertex *vtPred2,
-	Vector wi, Vector wo,
-	float emitterdVCM, float emitterdVM,
-	float sensordVCM, float sensordVM,
+	const Vector wi, const Vector wo,
+	MisState emitterState, MisState sensorState,	
 	Float misVcWeightFactor){
 
 	Float psr2_w = vs->evalPdf(scene, wi, wo, ERadiance, ESolidAngle);
@@ -1222,8 +1221,12 @@ Float miWeightVM(const Scene *scene, const PathVertex *vs,
 	Float invpt = (pt > 0.f) ?1.f / pt : 0.f;
 	if (!_finite(invpt) || invpt == 0.f)
 		return 0.f;
-	Float wLight = emitterdVCM * misVcWeightFactor + MisHeuristic(psr2_w) * emitterdVM;
-	Float wCamera = MisHeuristic(invpt) * misVcWeightFactor + MisHeuristic(ptr2_w * invpt) * sensordVM;
+	Float ePred2_length = (vtPred->getPosition() - vtPred2->getPosition()).length();
+	Vector ePred2_d = normalize(vtPred->getPosition() - vtPred2->getPosition());
+	Float giInPred2 = std::abs(vtPred2->isOnSurface() ? dot(ePred2_d, vtPred2->getGeometricNormal()) : 1) / (ePred2_length * ePred2_length);
+	Float pir2Pred_w = vtPred2->pdf[EImportance] / giInPred2;
+	Float wLight = emitterState[EVCM] * misVcWeightFactor + MisHeuristic(psr2_w) * emitterState[EVM];
+	Float wCamera = MisHeuristic(invpt) * misVcWeightFactor + MisHeuristic(ptr2_w * invpt) * (sensorState[EVM] + MisHeuristic(pir2Pred_w) * sensorState[EVMB]);
 	Float miWeight = 1.f / (1.f + wLight + wCamera);
 	return miWeight;
 }
@@ -1291,15 +1294,24 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			Float giIn = std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / (e->length * e->length);
 			Float giInPred = std::abs(vPred->isOnSurface() ? dot(ePred->d, vPred->getGeometricNormal()) : 1) / (ePred->length * ePred->length);
 			Float pi = v->pdf[mode] * e->pdf[mode];
-			Float piPred = vPred->pdf[mode] * e->pdf[mode];
 			Float pir2_w = v->pdf[1 - mode] * ePred->pdf[1 - mode] / giInPred;
 			Float invpi = 1.f / pi;
-			if (isUPM){				
+			if (isUPM){
 				state[EVC] = MisHeuristic(giIn * invpi) * (state[EVCM] + MisHeuristic(pir2_w) * state[EVC]);
 				if (mode == EImportance)
 					state[EVM] = MisHeuristic(giIn * invpi) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
-				else
-					state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w / piPred) * state[EVM]);					
+				else{
+					Float piPred = vPred->pdf[mode] * e->pdf[mode];
+					Float pir2Pred_w = 0.f;
+					if (i > 2){
+						PathVertex *vPred2 = path.vertex(i - 2);
+						PathEdge * ePred2 = path.edge(i - 2);
+						Float giInPred2 = std::abs(vPred2->isOnSurface() ? dot(ePred2->d, vPred2->getGeometricNormal()) : 1) / (ePred2->length * ePred2->length);
+						pir2Pred_w = vPred->pdf[1 - mode] * e->pdf[1 - mode] / giInPred2;
+					}
+					state[EVMB] = MisHeuristic(giIn / piPred) * (state[EVM] + MisHeuristic(pir2Pred_w) * state[EVMB]);//state[EVM]
+					state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor);					
+				}
 				if (i > 2){
 					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
 					if (mode == EImportance)
@@ -2122,9 +2134,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						Vector wi = normalize(vtPred->getPosition() - vs->getPosition());
 						MisState emitterState = v.emitterState;
 						Float miWeight = miWeightVM(m_scene, vs, vtPred, vtPred2, wi, wo,
-							emitterState[EVCM], emitterState[EVM],
-							sensorState[EVCM], sensorState[EVM],
-							misVcWeightFactor);
+							emitterState, sensorState, misVcWeightFactor);
 
 #if UPM_DEBUG == 1
 						wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
