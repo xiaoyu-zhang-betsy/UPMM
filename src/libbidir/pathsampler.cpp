@@ -1266,6 +1266,7 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			}
 			else{
 				state[EVM] = state[EVC] * misVcWeightFactor * MisHeuristic(p1);
+				state[EVMB] = 0.f;
 			}
 		}
 	}
@@ -1278,8 +1279,10 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			state[EVC] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1));
 			if (mode == EImportance || !isUPM)
 				state[EVM] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1));
-			else
+			else{
 				state[EVM] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1));
+				state[EVMB] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1));
+			}
 		}
 		else{
 			BDAssert(v->measure == EArea);
@@ -1292,11 +1295,11 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			Float pir2_w = v->pdf[1 - mode] * ePred->pdf[1 - mode] / giInPred;
 			Float invpi = 1.f / pi;
 			if (isUPM){				
-				state[EVC] += MisHeuristic(giIn * invpi) * (state[EVCM] + MisHeuristic(pir2_w) * state[EVC]);
+				state[EVC] = MisHeuristic(giIn * invpi) * (state[EVCM] + MisHeuristic(pir2_w) * state[EVC]);
 				if (mode == EImportance)
-					state[EVM] += MisHeuristic(giIn * invpi) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
+					state[EVM] = MisHeuristic(giIn * invpi) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
 				else
-					state[EVM] += MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w / piPred) * state[EVM]);					
+					state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w / piPred) * state[EVM]);					
 				if (i > 2){
 					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
 					if (mode == EImportance)
