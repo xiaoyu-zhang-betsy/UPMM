@@ -1261,7 +1261,12 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			else{
 				state[EVC] = 0.f;
 			}
-			state[EVM] = state[EVC] * misVcWeightFactor;
+			if (!isUPM){
+				state[EVM] = state[EVC] * misVcWeightFactor;
+			}
+			else{
+				state[EVM] = state[EVC] * misVcWeightFactor * MisHeuristic(p1);
+			}
 		}
 	}
 	else{
@@ -1271,7 +1276,10 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			PathVertex *vNext = path.vertex(i + 1);
 			state[EVCM] = 0.f;
 			state[EVC] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1));
-			state[EVM] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1));
+			if (mode == EImportance || !isUPM)
+				state[EVM] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1));
+			else
+				state[EVM] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1));
 		}
 		else{
 			BDAssert(v->measure == EArea);
@@ -1280,20 +1288,43 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			Float giIn = std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / (e->length * e->length);
 			Float giInPred = std::abs(vPred->isOnSurface() ? dot(ePred->d, vPred->getGeometricNormal()) : 1) / (ePred->length * ePred->length);
 			Float pi = v->pdf[mode] * e->pdf[mode];
+			Float piPred = vPred->pdf[mode] * e->pdf[mode];
 			Float pir2_w = v->pdf[1 - mode] * ePred->pdf[1 - mode] / giInPred;
-			if (i == 2 && isUPM){
-				state[EVC] = MisHeuristic(giIn) * (state[EVCM] + MisHeuristic(pir2_w) * state[EVC]);
-				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
+			Float invpi = 1.f / pi;
+			if (isUPM){				
+				state[EVC] += MisHeuristic(giIn * invpi) * (state[EVCM] + MisHeuristic(pir2_w) * state[EVC]);
+				if (mode == EImportance)
+					state[EVM] += MisHeuristic(giIn * invpi) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
+				else
+					state[EVM] += MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w / piPred) * state[EVM]);					
+				if (i > 2){
+					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
+					if (mode == EImportance)
+						state[EVM] += MisHeuristic(giIn * invpi);
+					else
+						state[EVM] += MisHeuristic(giIn);
+				}
+				state[EVCM] = MisHeuristic(invpi);
 			}
-			else{
-				state[EVC] = MisHeuristic(giIn) * (state[EVCM] + misVmWeightFactor + MisHeuristic(pir2_w) * state[EVC]);
-				state[EVM] = MisHeuristic(giIn) * (1.f + state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
-			}
-			state[EVCM] = MisHeuristic(1 / pi);
-			state[EVC] *= state[EVCM];
-			if (mode == EImportance || !isUPM){				
-				state[EVM] *= state[EVCM];
+			else{				
+				state[EVC] = MisHeuristic(giIn * invpi) * (state[EVCM] + misVmWeightFactor + MisHeuristic(pir2_w) * state[EVC]);
+				state[EVM] = MisHeuristic(giIn * invpi) * (1.f + state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
+				state[EVCM] = MisHeuristic(invpi);
 			}			
+
+// 			if (i == 2 && isUPM){
+// 				state[EVC] = MisHeuristic(giIn) * (state[EVCM] + MisHeuristic(pir2_w) * state[EVC]);
+// 				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
+// 			}
+// 			else{
+// 				state[EVC] = MisHeuristic(giIn) * (state[EVCM] + misVmWeightFactor + MisHeuristic(pir2_w) * state[EVC]);
+// 				state[EVM] = MisHeuristic(giIn) * (1.f + state[EVCM] * misVcWeightFactor + MisHeuristic(pir2_w) * state[EVM]);
+// 			}
+// 			state[EVCM] = MisHeuristic(1 / pi);
+// 			state[EVC] *= state[EVCM];
+// 			if (mode == EImportance || !isUPM){
+// 				state[EVM] *= state[EVCM];
+// 			}
 		}
 	}
 }
@@ -1951,7 +1982,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					const BSDF *bsdf = its.getBSDF();
 					bool boundedGather = bsdf->boundedGather();
 					int shareShootThreshold = 32;
-					int clampThreshold = 10000000;
+					int clampThreshold = 1000;
 					Float invBrdfIntegral = 1.f;
 					bool shareShoot = false;
 					if (searchPos.size() > shareShootThreshold){
