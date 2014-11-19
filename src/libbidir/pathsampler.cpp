@@ -1126,7 +1126,7 @@ Float PathSampler::generateSeedsConnection(size_t sampleCount, size_t seedCount,
 *	Tracing kernel for VCM
 */
 inline Float MisHeuristic(Float pdf) {
-	return pdf * pdf;
+	return pdf;
 }
 Float miWeightVC(const Scene *scene,
 	const PathVertex *vsPred, const PathVertex *vs,
@@ -1321,8 +1321,8 @@ void PathSampler::gatherLightPaths(const bool useVC, const bool useVM,
 	m_lightPathNum = nsample;
 	Float etaVCM = (M_PI * gatherRadius * gatherRadius) * m_lightPathNum;
 	Float invLightPathNum = 1.f / m_lightPathNum;
-	Float misVmWeightFactor = useVM ? etaVCM : 0.f;
-	Float misVcWeightFactor = useVC ? 1.f / etaVCM : 0.f;
+	Float misVmWeightFactor = useVM ? MisHeuristic(etaVCM) : 0.f;
+	Float misVcWeightFactor = useVC ? MisHeuristic(1.f / etaVCM) : 0.f;
 	for (size_t k = 0; k < m_lightPathNum; k++){
 		/* Initialize the path endpoints */
 		m_emitterSubpath.initialize(m_scene, time, EImportance, m_pool);
@@ -1427,8 +1427,8 @@ struct VertexMergingQuery {
 		Float weightExt = 0.f;
 		Float psr2_w = vt->evalPdf(scene, wi, wo, ERadiance, ESolidAngle);
 		Float ptr2_w = vt->evalPdf(scene, wo, wi, EImportance, ESolidAngle);
-		Float wLight = emitterState[EVCM] * misVcWeightFactor + psr2_w * emitterState[EVM];
-		Float wCamera = sensorState[EVCM] * misVcWeightFactor + ptr2_w * sensorState[EVM];
+		Float wLight = emitterState[EVCM] * misVcWeightFactor + MisHeuristic(psr2_w) * emitterState[EVM];
+		Float wCamera = sensorState[EVCM] * misVcWeightFactor + MisHeuristic(ptr2_w) * sensorState[EVM];
 		weightExt = 1.f / (1.f + wLight + wCamera);
 
 		result += val * weightExt * vmNormalization;
@@ -1451,8 +1451,8 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 	size_t nLightPaths = m_lightPathNum;
 	const float etaVCM = (M_PI * gatherRadius * gatherRadius) * nLightPaths;
 	Float vmNormalization = 1.f / etaVCM;
-	Float misVmWeightFactor = useVM ? etaVCM : 0.f;
-	Float misVcWeightFactor = useVC ? 1.f / etaVCM : 0.f;	
+	Float misVmWeightFactor = useVM ? MisHeuristic(etaVCM) : 0.f;
+	Float misVcWeightFactor = useVC ? MisHeuristic(1.f / etaVCM) : 0.f;
 	Vector2i filmSize = sensor->getFilm()->getSize();
 
 	switch (m_technique) {
@@ -1742,8 +1742,8 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 	m_lightPathNum = nsample;
 	Float etaVCM = (M_PI * gatherRadius * gatherRadius) * m_lightPathNum;
 	Float invLightPathNum = 1.f / m_lightPathNum;
-	Float misVmWeightFactor = useVM ? etaVCM : 0.f;
-	Float misVcWeightFactor = useVC ? 1.f / etaVCM : 0.f;
+	Float misVmWeightFactor = useVM ? MisHeuristic(etaVCM) : 0.f;
+	Float misVcWeightFactor = useVC ? MisHeuristic(1.f / etaVCM) : 0.f;
 	for (size_t k = 0; k < m_lightPathNum; k++){
 		/* Initialize the path endpoints */
 		m_emitterSubpath.initialize(m_scene, time, EImportance, m_pool);
@@ -1808,16 +1808,17 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 					emitterState[EVCM], emitterState[EVC],
 					sensorState[EVCM], sensorState[EVC],
 					misVmWeightFactor, true);
+
+#if UPM_DEBUG == 1
+				wr->putDebugSample(s, 1, samplePos, value * weight);
+				wr->putDebugSampleM(s, 1, samplePos, value);
+#endif
+
 				value *= weight;
 				if (value.isZero()) continue;
 				
 				vt.getSamplePosition(vs, samplePos);
 				wr->putSample(samplePos, &value[0]);
-
-#if UPM_DEBUG == 1
-				Spectrum splatValue = value;
-				wr->putDebugSample(s, 1, samplePos, splatValue);
-#endif
 			}
 		}
 		m_lightPathEnds.push_back(m_lightVertices.size());
@@ -1838,8 +1839,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 	size_t nLightPaths = m_lightPathNum;
 	const float etaVCM = (M_PI * gatherRadius * gatherRadius) * nLightPaths;
 	Float vmNormalization = 1.f / etaVCM;
-	Float misVmWeightFactor = useVM ? etaVCM : 0.f;
-	Float misVcWeightFactor = useVC ? 1.f / etaVCM : 0.f;
+	Float misVmWeightFactor = useVM ? MisHeuristic(etaVCM) : 0.f;
+	Float misVcWeightFactor = useVC ? MisHeuristic(1.f / etaVCM) : 0.f;
 	Vector2i filmSize = sensor->getFilm()->getSize();
 
 	Float squareRadiusPi = M_PI * gatherRadius * gatherRadius;
@@ -1995,7 +1996,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					}
 
 					MisState sensorState = sensorStates[t - 1];
-					Vector wi = normalize(vtPred->getPosition() - vt->getPosition());
 					for (int k = 0; k < searchResults.size(); k++){
 						LightPathNode node = m_lightPathTree[searchResults[k]];
 						int s = node.data.depth;
@@ -2013,34 +2013,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						itp.setShapePointer(lvertexExt.shape);
 						vs->measure = lvertexExt.measure;
 						vs->type = lvertexExt.type;
-						if (s == 2 && false){
-							Spectrum importanceWeight0 = v.importanceWeight;
-							MisState emitterState0 = v.emitterState;
-							vsPred = vsPred0;
-							v.importanceWeight = vs->sampleDirect(m_scene, m_directSampler, &tempEndpoint, &tempEdge, &tempSample, EImportance);
-							if (v.importanceWeight == Spectrum(0.f)) continue;
-							v.importanceWeight = tempEndpoint.weight[EImportance] * tempEdge.weight[EImportance];
-							*vsPred = tempSample;
-							//v.importanceWeight = vsPred->eval(m_scene, &tempEndpoint, vs, EImportance);							
-							EMeasure measure = vsPred->getAbstractEmitter()->getDirectMeasure();
-							Float pconnect = vs->evalPdfDirect(m_scene, vsPred, EImportance, measure == ESolidAngle ? EArea : measure);
-							Float ptrace = tempEndpoint.pdf[EImportance] * tempEdge.pdf[EImportance];
-							Float p1 = vsPred->evalPdf(m_scene, &tempEndpoint, vs, EImportance, measure == ESolidAngle ? EArea : measure);
-							Vector dir = vs->getPosition() - vsPred->getPosition();
-							Float dis = dir.length();
-							dir = normalize(dir);
-							v.emitterState[EVCM] = pconnect / (ptrace * p1);
-							if (measure != EDiscrete){
-								Float geoTerm0 = vsPred->isOnSurface() ? std::abs(dot(dir, vsPred->getGeometricNormal()) / (dis * dis)) : 1;
-								v.emitterState[EVC] = geoTerm0 / (ptrace * p1);
-							}
-							else{
-								v.emitterState[EVC] = 0.f;
-							}
-							v.emitterState[EVM] = v.emitterState[EVC] * misVcWeightFactor;
-							float fuck = 1.f;
-						}
-						else if (lvertexExt.hasVsPred){
+						if (lvertexExt.hasVsPred){
 							vsPred = vsPred0;
 							vsPred->type = lvertexExt.typePred;
 							vsPred->measure = lvertexExt.measPred;
@@ -2112,6 +2085,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 						// MIS weighting
 						Vector wo = v.wo;
+						Vector wi = normalize(vtPred->getPosition() - vs->getPosition());
 						MisState emitterState = v.emitterState;
 						Float miWeight = miWeightVM(m_scene, vs, vtPred, vtPred2, wi, wo,
 							emitterState[EVCM], emitterState[EVM],

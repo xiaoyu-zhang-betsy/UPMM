@@ -519,10 +519,10 @@ public:
 		yb = m_cameraToSample(yb);
 		yl = m_cameraToSample(yl);
 
-		Float xmin = std::max(0.f, std::min(xb.x, xl.x));
-		Float xmax = std::min(1.f, std::max(xb.x, xl.x));
-		Float ymin = std::max(0.f, std::min(yb.y, yl.y));
-		Float ymax = std::min(1.f, std::max(yb.y, yl.y));
+		Float xmin = std::max((Float)0.f, std::min(xb.x, xl.x));
+		Float xmax = std::min((Float)1.f, std::max(xb.x, xl.x));
+		Float ymin = std::max((Float)0.f, std::min(yb.y, yl.y));
+		Float ymax = std::min((Float)1.f, std::max(yb.y, yl.y));
 
 		return Vector4(xmin, xmax, ymin, ymax);
 	}

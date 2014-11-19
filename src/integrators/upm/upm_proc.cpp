@@ -103,11 +103,11 @@ public:
 		float radius = m_config.initialRadius;
 		ref<Timer> timer = new Timer();
 		for (actualSampleCount = 0; actualSampleCount < m_config.sampleCount || (wu->getTimeout() > 0 && (int)timer->getMilliseconds() < wu->getTimeout()); actualSampleCount++) {
-// 			if (m_config.initialRadius > 0.0f){
-// 				float reduceFactor = 1.f / std::pow(float(iteration + 1), 0.5f * (1 - 0.75f/*radiusAlpha*/));
-// 				radius = std::max(reduceFactor * m_config.initialRadius, 1e-7f);
-// 				iteration += 8;
-// 			}
+//			if (m_config.initialRadius > 0.0f){
+//				Float reduceFactor = 1.0 / std::pow((Float)(iteration + 1), (Float)(0.5 * (1 - 0.75/*radiusAlpha*/)));
+//				radius = std::max(reduceFactor * m_config.initialRadius, (Float)1e-7);
+//				iteration += 8;
+//			}
 
 			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr);
 

@@ -320,10 +320,10 @@ public:
 		Float theta = acos(dir.z);
 		Float theta0 = theta - dTheta;
 		Float theta1 = theta + dTheta;		
-		theta0 = std::max(theta0, 0.f);
-		theta1 = std::min(theta1, 0.5f * M_PI);
-		Float cos0 = std::max(0.f, std::min(1.f, pow(cos(theta0), exponent + 1.f)));
-		Float cos1 = std::max(0.f, std::min(1.f, pow(cos(theta1), exponent + 1.f)));		
+		theta0 = std::max(theta0, (Float)0.0);
+		theta1 = std::min(theta1, (Float)(0.5 * M_PI));
+		Float cos0 = std::max((Float)0.0, std::min((Float)1.0, pow(cos(theta0), exponent + 1.f)));
+		Float cos1 = std::max((Float)0.0, std::min((Float)1.0, pow(cos(theta1), exponent + 1.f)));
 
 		Vector dirProj = Vector(dir.x, dir.y, 0.f);
 		Float disProj = dirProj.length() * dis;
@@ -352,7 +352,7 @@ public:
 		dir = wo / dis;
 		theta = acos(dir.z);
 		theta0 = theta - dTheta;
-		theta1 = std::min(0.5f * M_PI, theta + dTheta);		
+		theta1 = std::min((Float)(0.5 * M_PI), theta + dTheta);
 		dirProj = Vector(dir.x, dir.y, 0.f);
 		disProj = dirProj.length() * dis;
 		sqrDisTangent = disProj * disProj - gatherRadius * gatherRadius;
@@ -434,7 +434,7 @@ public:
 			else if (bboxd.z == 0.f && bboxd.w == 2.f * M_PI){
 				// Sampling the whole sphere cap
 				Point2 smp = sample;
-				Float r0 = sin(std::max(0.f, bboxd.x));
+				Float r0 = sin(std::max((Float)0.0, bboxd.x));
 				Float r1 = sin(bboxd.y);
 				smp.x = smp.x * 2.f - 1.f;
 				smp.y = smp.y * 2.f - 1.f;
@@ -458,7 +458,7 @@ public:
 			}
 			else{
 				// sampling a bbox in theta-phi space
-				Float sin0 = sin(std::max(0.f, bboxd.x));
+				Float sin0 = sin(std::max((Float)0.0, bboxd.x));
 				Float sin1 = sin(bboxd.y);
 				Float phi0 = bboxd.z;
 				Float phi1 = bboxd.w;

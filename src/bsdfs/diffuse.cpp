@@ -232,7 +232,7 @@ public:
 		else if (bbox.z == 0.f && bbox.w == 2.f * M_PI){
 			// Sampling the whole sphere cap
 			Point2 smp = sample;
-			Float r0 = sin(std::max(0.f, bbox.x));
+			Float r0 = sin(std::max((Float)0.0, bbox.x));
 			Float r1 = sin(bbox.y);
 			smp.x = smp.x * 2.f - 1.f;
 			smp.y = smp.y * 2.f - 1.f;
@@ -256,7 +256,7 @@ public:
 		}
 		else{
 			// sampling a bbox in theta-phi space
-			Float sin0 = sin(std::max(0.f, bbox.x));
+			Float sin0 = sin(std::max((Float)0.0, bbox.x));
 			Float sin1 = sin(bbox.y);
 			Float phi0 = bbox.z;
 			Float phi1 = bbox.w;
