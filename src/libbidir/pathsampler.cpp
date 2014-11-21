@@ -1228,6 +1228,12 @@ Float miWeightVM(const Scene *scene, const PathVertex *vs,
 	Float wLight = emitterState[EVCM] * misVcWeightFactor + MisHeuristic(psr2_w) * emitterState[EVM];
 	Float wCamera = MisHeuristic(invpt) * misVcWeightFactor + MisHeuristic(ptr2_w * invpt) * (sensorState[EVM] + MisHeuristic(pir2Pred_w) * sensorState[EVMB]);
 	Float miWeight = 1.f / (1.f + wLight + wCamera);
+
+	if (miWeight < 0.f){
+		SLog(EInfo, "miWeight = %f, wLight = %f, wCamera = %f, light.dvcm = %f, light.dvm = %f, cam.dvm = %f, cam.dvmb = %f",
+			miWeight, wLight, wCamera, emitterState[EVCM], emitterState[EVM], sensorState[EVM], sensorState[EVMB]);
+	}
+
 	return miWeight;
 }
 void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scene,
@@ -1236,11 +1242,13 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 		state[EVCM] = 0.f;
 		state[EVC] = 0.f;
 		state[EVM] = 0.f;
+		state[EVMB] = 0.f;
 	}
 	else if (i == 1){
 		state[EVCM] = 0.f;
 		state[EVC] = 0.f;
 		state[EVM] = 0.f;
+		state[EVMB] = 0.f;
 		PathVertex *v = path.vertex(1);
 		PathEdge *e = path.edge(1);
 		PathVertex *vNext = path.vertex(2);
@@ -1269,7 +1277,6 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			}
 			else{
 				state[EVM] = state[EVC] * misVcWeightFactor * MisHeuristic(p1);
-				state[EVMB] = 0.f;
 			}
 		}
 	}
@@ -2088,8 +2095,9 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						// 						Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * squareRadiusPi);
 						// 						contrib *= invpOrig;
 
+						Float invp = 0.f;
 						if (shareShoot){
-							Float invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
+							invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
 							contrib *= invp;
 						}
 						else{
@@ -2125,9 +2133,12 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							if (totalShoot >= clampThreshold / 10)
 								++numClampShoots;
 
-							Float invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
+							invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
 							contrib *= invp;
 						}
+
+						// accumulate to image
+						if (contrib.isZero()) continue;
 
 						// MIS weighting
 						Vector wo = v.wo;
@@ -2140,13 +2151,15 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
 						wr->putDebugSampleM(s, t - 1, samplePos, contrib);
 #endif
-						contrib *= miWeight;
 
-						// accumulate to image
-						if (contrib.isZero()) continue;						
+						contrib *= miWeight;
+						
+#ifdef UPM_DEBUG_HARD
 						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
-							float fuck = 1.f;
+							Log(EError, "Invalid sample value[UPM]: %f %f %f, invp = %f, miWeight = %f", 
+								contrib[0], contrib[1], contrib[2], invp, miWeight);
 						}
+#endif
 						if (t == 2) {
 							list.append(samplePos, contrib);
 						}
@@ -2297,7 +2310,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 #if UPM_DEBUG == 1
 					wr->putDebugSample(s, t, samplePos, value * miWeight);
 					wr->putDebugSampleM(s, t, samplePos, value);
-#endif	
+#endif
 
 					value *= miWeight;
 
@@ -2305,7 +2318,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 #ifdef UPM_DEBUG_HARD
 					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f)
-						Log(EError, "Invalid sample value %f %f %f", value[0], value[1], value[2]);
+						Log(EError, "Invalid sample value[VC]: %f %f %f", value[0], value[1], value[2]);
 #endif
 
 					if (t < 2) {
