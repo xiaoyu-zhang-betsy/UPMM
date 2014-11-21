@@ -2156,8 +2156,9 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						
 #ifdef UPM_DEBUG_HARD
 						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
-							Log(EError, "Invalid sample value[UPM]: %f %f %f, invp = %f, miWeight = %f", 
+							Log(EWarn, "Invalid sample value[UPM]: %f %f %f, invp = %f, miWeight = %f", 
 								contrib[0], contrib[1], contrib[2], invp, miWeight);
+							continue;
 						}
 #endif
 						if (t == 2) {
@@ -2317,8 +2318,10 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					if (value.isZero()) continue;
 
 #ifdef UPM_DEBUG_HARD
-					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f)
-						Log(EError, "Invalid sample value[VC]: %f %f %f", value[0], value[1], value[2]);
+					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f){
+						Log(EWarn, "Invalid sample value[VC]: %f %f %f", value[0], value[1], value[2]);
+						continue;
+					}
 #endif
 
 					if (t < 2) {

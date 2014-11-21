@@ -500,11 +500,11 @@ public:
 	// =============================================================
 
 	virtual Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
-		NotImplementedError("bsdf->gatherAreaPdf");
+		SLog(EWarn, "Not implment bsdf->gatherAreaPdf");
 		return 0.f;
 	}
 	virtual Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
-		NotImplementedError("bsdf->sampleGatherArea");
+		SLog(EWarn, "Not implment bsdf->sampleGatherArea");
 		return Vector(0.f);
 	}
 	virtual bool boundedGather() const{

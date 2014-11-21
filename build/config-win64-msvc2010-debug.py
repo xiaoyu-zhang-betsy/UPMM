@@ -2,7 +2,7 @@ BUILDDIR        = '#build/debug'
 DISTDIR         = '#dist'
 CXX             = 'cl'
 CC              = 'cl'
-CXXFLAGS        = ['/nologo', '/Od', '/Z7', '/fp:fast', '/D', 'WIN32', '/D', 'WIN64', '/W3', '/EHsc', '/GS-', '/GL', '/MD', '/D', 'MTS_DEBUG', '/D', 'SINGLE_PRECISION', '/D', 'SPECTRUM_SAMPLES=3', '/D', 'MTS_SSE', '/D', 'MTS_HAS_COHERENT_RT', '/D', '_CONSOLE', '/D', 'DEBUG', '/D', 'OPENEXR_DLL', '/openmp']
+CXXFLAGS        = ['/nologo', '/Od', '/Z7', '/fp:fast', '/D', 'WIN32', '/D', 'WIN64', '/W3', '/EHsc', '/GS-', '/GL', '/MD', '/D', 'MTS_DEBUG', '/D', 'DOUBLE_PRECISION', '/D', 'SPECTRUM_SAMPLES=3', '/D', '_CONSOLE', '/D', 'DEBUG', '/D', 'OPENEXR_DLL', '/openmp']
 SHCXXFLAGS      = CXXFLAGS
 TARGET_ARCH     = 'x86_64'
 MSVC_VERSION    = '10.0'
