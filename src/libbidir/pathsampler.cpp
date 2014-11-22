@@ -1180,11 +1180,14 @@ Float miWeightVC(const Scene *scene,
 		if (vs->getAbstractEmitter()->needsDirectionSample()){
 			DirectionSamplingRecord dRec(d);
 			ptrace *= emitter->pdfDirection(dRec, pRec) * absDot(d, vt->getGeometricNormal());
+			if (!vs->getAbstractEmitter()->needsPositionSample()){
+				Float dis = (vt->getPosition() - vs->getPosition()).length();
+				ptrace /= dis * dis;
+			}
 		}
 
 		Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
-		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
 		Float wLight = (measure == EDiscrete) ? 0.f : psr1 / pconnect;
 		Float wCamera;
 		if (isUPM)

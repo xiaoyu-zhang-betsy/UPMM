@@ -103,10 +103,14 @@ public:
 		m_specularSamplingWeight = sAvg / (dAvg + sAvg);
 
 		//hack to force single component
-		if (m_specularSamplingWeight < 0.5f)
+		if (m_specularSamplingWeight < 0.5f){
 			m_specularSamplingWeight = 0.f;
-		else
+			m_specularReflectance = new ConstantSpectrumTexture(Spectrum(0.f));
+		}
+		else{
 			m_specularSamplingWeight = 1.f;
+			m_diffuseReflectance = new ConstantSpectrumTexture(Spectrum(0.f));
+		}
 
 		m_usesRayDifferentials =
 			m_diffuseReflectance->usesRayDifferentials() ||
