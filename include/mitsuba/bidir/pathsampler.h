@@ -59,43 +59,40 @@ struct LightVertex{
 	inline  LightVertex(const PathVertex *vs, const PathVertex *vsPred,
 		const MisState &state, Spectrum _wgt) :
 		emitterState(state), importanceWeight(_wgt){
-		wo = normalize(vsPred->getPosition() - vs->getPosition());
+		if (vs->isSurfaceInteraction())
+			wo = normalize(vsPred->getPosition() - vs->getPosition());
 	}
 };
 struct LightVertexExt{
 	int depth;
 	const Shape *shape;
 	Point3 position;
-	Frame shFrame;
-	Frame geoFrame;
+	Vector shFrameN;
+	Vector shFrameS;
+	Vector geoFrameN;
 	uint8_t measure;
 	uint8_t type;
-
-	bool hasVsPred;
-	Point3 posPred;
-	Float pdfPred;
-	uint8_t typePred;
-	uint8_t measPred;
-
 	inline LightVertexExt(const PathVertex *vs, const PathVertex *vsPred, int _depth){
 		const Intersection &its = vs->getIntersection();
 		depth = _depth;
 		shape = its.shape;
 		position = its.p;
-		shFrame = its.shFrame;
-		geoFrame = its.geoFrame;
+		shFrameS = its.shFrame.s;
+		shFrameN = its.shFrame.n;
+		geoFrameN = its.geoFrame.n;
 		measure = vs->measure;
 		type = vs->type;
-		if (vsPred != NULL){
-			hasVsPred = true;
-			posPred = vsPred->getPosition();
-			pdfPred = vsPred->pdf[EImportance];
-			typePred = vsPred->type;
-			measPred = vsPred->measure;
-		}
-		else{
-			hasVsPred = false;
-		}
+	}
+	void expand(PathVertex* vs){
+		Intersection &itp = vs->getIntersection();
+		itp.p = position;
+		itp.shFrame.s = shFrameS;
+		itp.shFrame.n = shFrameN;
+		itp.shFrame.t = cross(itp.shFrame.n, itp.shFrame.s);
+		itp.geoFrame = Frame(geoFrameN);
+		itp.setShapePointer(shape);
+		vs->measure = measure;
+		vs->type = type;
 	}
 };
 struct LightPathNodeData{
