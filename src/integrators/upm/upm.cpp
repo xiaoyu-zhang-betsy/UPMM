@@ -145,7 +145,7 @@ public:
 		if (m_config.maxDepth <= 0 && m_config.maxDepth != -1)
 			Log(EError, "'maxDepth' must be set to -1 (infinite) or a value greater than zero!");
 
-		m_config.workUnits = props.getInteger("workUnits", -1); // QH: temprorily hard coded
+		m_config.workUnits = props.getInteger("workUnits", -1);
 		/* Stop MLT after X seconds -- useful for equal-time comparisons */
 		m_config.timeout = props.getInteger("timeout", 0);
 		/* initial gather radius for vertex merging paths, same as Mitsuba */

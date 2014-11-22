@@ -1596,23 +1596,23 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 	size_t totalSmpl = 0, clampThreshold = 10000000;
 
 	switch (type) {
-// 	case ESensorSample: {
-// 		BDAssert(mode == ERadiance && pred->type == ESensorSupernode);
-// 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
-// 		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
-// 		DirectionSamplingRecord dRec;
-// 
-// 		/* Sample the image plane */
-// 		Point2 smp = sampler->next2D();
-// 		smp.x = (bbox.y - bbox.x) * smp.x + bbox.x;
-// 		smp.y = (bbox.w - bbox.z) * smp.y + bbox.z;
-// 		Spectrum result = sensor->sampleDirection(dRec, pRec, smp);
-// 
-// 		ray.time = pRec.time;
-// 		ray.setOrigin(pRec.p);
-// 		ray.setDirection(dRec.d);
-// 	}
-// 		break;
+	case ESensorSample: {
+		BDAssert(mode == ERadiance && pred->type == ESensorSupernode);
+		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+		DirectionSamplingRecord dRec;
+
+		/* Sample the image plane */
+		Point2 smp = sampler->next2D();
+		smp.x = (bbox.y - bbox.x) * smp.x + bbox.x;
+		smp.y = (bbox.w - bbox.z) * smp.y + bbox.z;
+		Spectrum result = sensor->sampleDirection(dRec, pRec, smp);
+
+		ray.time = pRec.time;
+		ray.setOrigin(pRec.p);
+		ray.setDirection(dRec.d);
+	}
+		break;
 
 	case ESurfaceInteraction: {
 		const Intersection &its = getIntersection();

@@ -469,7 +469,8 @@ bool PathEdge::pathConnectAndCollapse(const Scene *scene, const PathEdge *predEd
 
 		Intersection its;
 		Float remaining = length;
-		medium = vt->getTargetMedium(succEdge, d);
+		
+		medium = (succEdge != NULL) ? vt->getTargetMedium(succEdge, d) : NULL;
 
 		while (true) {
 			bool surface = scene->rayIntersectAll(ray, its);

@@ -73,26 +73,42 @@ struct LightVertexExt{
 	uint8_t measure;
 	uint8_t type;
 	inline LightVertexExt(const PathVertex *vs, const PathVertex *vsPred, int _depth){
-		const Intersection &its = vs->getIntersection();
+		if (vs->isEmitterSample()){
+			const PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
+			shape = (const Shape*)pRec.object;
+			geoFrameN = pRec.n;
+			position = pRec.p;
+		}
+		else{
+			const Intersection &its = vs->getIntersection();			
+			shape = its.shape;
+			position = its.p;
+			shFrameS = its.shFrame.s;
+			shFrameN = its.shFrame.n;
+			geoFrameN = its.geoFrame.n;			
+		}		
 		depth = _depth;
-		shape = its.shape;
-		position = its.p;
-		shFrameS = its.shFrame.s;
-		shFrameN = its.shFrame.n;
-		geoFrameN = its.geoFrame.n;
 		measure = vs->measure;
 		type = vs->type;
 	}
 	void expand(PathVertex* vs){
-		Intersection &itp = vs->getIntersection();
-		itp.p = position;
-		itp.shFrame.s = shFrameS;
-		itp.shFrame.n = shFrameN;
-		itp.shFrame.t = cross(itp.shFrame.n, itp.shFrame.s);
-		itp.geoFrame = Frame(geoFrameN);
-		itp.setShapePointer(shape);
-		vs->measure = measure;
 		vs->type = type;
+		vs->measure = measure;
+		if (vs -> type == PathVertex::EEmitterSample){
+			PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
+			pRec.object = (const ConfigurableObject *)shape;
+			pRec.p = position;
+			pRec.n = geoFrameN;
+		}
+		else{
+			Intersection &itp = vs->getIntersection();
+			itp.p = position;
+			itp.shFrame.s = shFrameS;
+			itp.shFrame.n = shFrameN;
+			itp.shFrame.t = cross(itp.shFrame.n, itp.shFrame.s);
+			itp.geoFrame = Frame(geoFrameN);
+			itp.setShapePointer(shape);
+		}		
 	}
 };
 struct LightPathNodeData{
