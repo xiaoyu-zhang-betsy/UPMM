@@ -1159,10 +1159,10 @@ Float miWeightVC(const Scene *scene,
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 
 		Float wLight;
-// 		if (isUPM)
-// 			wLight = MisHeuristic(psr1) * (emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (s,1) path in upm
-// 		else
-		wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+		if (isUPM)
+			wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
+		else
+			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
 		weight = 1.f / (1.f + wLight);
 	}
 	else if (s == 1){
@@ -1949,7 +1949,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			PathEdge *succEdge = m_pool.allocEdge();
 			Point2 samplePos(0.0f);
 			std::vector<uint32_t> searchResults;
-			std::vector<Point> searchPos;
+			//std::vector<Point> searchPos;
 			std::vector<uint32_t> acceptCnt;
 			std::vector<size_t> shootCnt;
 			int minT = 2, maxT = (int)m_sensorSubpath.vertexCount() - 1;
@@ -1977,16 +1977,16 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						continue;
 					}
 
-					searchPos.resize(searchResults.size());
+					//searchPos.resize(searchResults.size());
 					acceptCnt.resize(searchResults.size());
 					shootCnt.resize(searchResults.size());
 					for (int i = 0; i < searchResults.size(); i++){
 						acceptCnt[i] = 0;
 						shootCnt[i] = 0;
-						LightPathNode node = m_lightPathTree[searchResults[i]];
-						size_t vertexIndex = node.data.vertexIndex;
-						LightVertexExt lvertexExt = m_lightVerticesExt[vertexIndex];
-						searchPos[i] = lvertexExt.position;
+// 						LightPathNode node = m_lightPathTree[searchResults[i]];
+// 						size_t vertexIndex = node.data.vertexIndex;
+// 						LightVertexExt lvertexExt = m_lightVerticesExt[vertexIndex];
+// 						searchPos[i] = lvertexExt.position;
 					}
 
 					// evaluate sampling domain pdf normalization
@@ -2105,17 +2105,19 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 								totalShoot++;
 
 								// restricted sampling evaluation shoots
+								Float pointDistSquared;
 								if (cameraDirConnection){
-									if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, searchPos[k], gatherRadius, smplBBox, smplBBoxDiff))
+									if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, smplBBox, smplBBoxDiff))
 										continue;
+									pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
 								}
 								else{
 									if (!vsPred->sampleShoot(m_scene, m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, smplBBox, smplBBoxDiff))
 										continue;
+									pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
 								}
 
 								Point pshoot = succVertex->getPosition();
-								Float pointDistSquared = (succVertex->getPosition() - searchPos[k]).lengthSquared();
 								if (pointDistSquared < distSquared){
 									acceptedShoot++;
 									if (acceptedShoot == targetShoot){
@@ -2144,8 +2146,14 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							emitterState, sensorState, misVcWeightFactor, cameraDirConnection);
 
 #if UPM_DEBUG == 1
-						wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
-						wr->putDebugSampleM(s, t - 1, samplePos, contrib);
+						if (cameraDirConnection){
+							wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
+							wr->putDebugSampleM(s, t - 1, samplePos, contrib);
+						}
+						else{
+							wr->putDebugSample(s - 1, t, samplePos, contrib * miWeight);
+							wr->putDebugSampleM(s - 1, t, samplePos, contrib);
+						}
 #endif
 
 						contrib *= miWeight;
