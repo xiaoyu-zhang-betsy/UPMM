@@ -603,6 +603,19 @@ public:
 	 */
 	virtual Emitter *getElement(size_t index);
 
+
+	virtual Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
+		SLog(EWarn, "Not implment emitter->gatherAreaPdf");
+		return 1.f;
+	}
+	virtual Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
+		SLog(EWarn, "Not implment emitter->sampleGatherArea");
+		Spectrum ret = sampleDirection(dRec, pRec, sample);
+		if (ret.isZero())
+			dRec.d = Vector(0.f);
+		return dRec.d;
+	}
+
 	//! @}
 	// =============================================================
 

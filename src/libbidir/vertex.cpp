@@ -1567,7 +1567,6 @@ Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector
 	}
 		break;
 	case ESurfaceInteraction: {
-		// Assume diffuse BRDF for now
 		const Intersection &its = getIntersection();
 		Vector wo = p - its.p;
 		Vector wi = normalize(pPred->getPosition() - its.p);
@@ -1575,6 +1574,12 @@ Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector
 		return bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, bbox, bboxd);
 	}
 		break;
+
+	case EEmitterSample: {
+		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+		return emitter->gatherAreaPdf(pRec, p, radius, bbox);
+	}
 
 	default:
 		SLog(EError, "PathVertex::sampsamplingProbabilityleNext(): Encountered an "
@@ -1628,6 +1633,20 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		ray.time = its.time;
 		ray.setOrigin(its.p);
 		ray.setDirection(wo);
+	}
+		break;
+
+	case EEmitterSample: {
+		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+		DirectionSamplingRecord dRec;
+
+		Vector dir = emitter->sampleGatherArea(dRec, pRec, gatherPosition, gatherRadius, sampler->next2D(), bbox, bboxd);
+		if (dir == Vector(0.f)) return false;
+
+		ray.time = pRec.time;
+		ray.setOrigin(pRec.p);
+		ray.setDirection(dir);
 	}
 		break;
 

@@ -270,7 +270,6 @@ void PathSampler::sampleSplats(const Point2i &offset, SplatList &list) {
 						if (vt->isSensorSample() && !vt->getSamplePosition(vs, samplePos))
 							continue;
 
-
 						if (t < 2) {
 							list.append(samplePos, value);
 						} else {
@@ -1143,7 +1142,8 @@ Float miWeightVC(const Scene *scene,
 		Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
-		Float wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+		//Float wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+		Float wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
 		//Float wCamera = MisHeuristic(ptr1) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		Float wCamera = MisHeuristic(ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		weight = 1.f / (1.f + wLight + wCamera);
@@ -1159,7 +1159,7 @@ Float miWeightVC(const Scene *scene,
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 
 		Float wLight;
-		if (isUPM)
+		if (isUPM && false)
 			wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
 		else
 			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
@@ -1191,7 +1191,7 @@ Float miWeightVC(const Scene *scene,
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float wLight = (measure == EDiscrete) ? 0.f : psr1 / pconnect;
 		Float wCamera;
-		if (isUPM)
+		if (isUPM && false)
 			wCamera = MisHeuristic(ptrace / pconnect) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		else
 			wCamera = MisHeuristic(ptrace / pconnect) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
@@ -1336,10 +1336,10 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 				}
 				state[EVMB] = MisHeuristic(giIn / piPred) * (state[EVM] + MisHeuristic(pir2Pred_w) * state[EVMB]);//state[EVM]
 				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor);					
-				if (i > 2 || mode == ERadiance){
-					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
-					state[EVM] += MisHeuristic(giIn);
-				}
+				//if (i > 2 || mode == ERadiance){
+				state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
+				state[EVM] += MisHeuristic(giIn);
+				//}
 				state[EVCM] = MisHeuristic(invpi);
 			}
 			else{				
@@ -1991,7 +1991,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 					// evaluate sampling domain pdf normalization
 					int shareShootThreshold = 32;
-					int clampThreshold = 1000;
+					int clampThreshold = 10000000;
 					Float invBrdfIntegral = 1.f;
 					bool shareShoot = false;
 // 					if (searchPos.size() > shareShootThreshold){
@@ -2039,28 +2039,36 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					for (int k = 0; k < searchResults.size(); k++){
 						LightPathNode node = m_lightPathTree[searchResults[k]];
 						int s = node.data.depth;
-						if (m_maxDepth != -1 && s + t > m_maxDepth + 2 || s <= 2) continue;
+						if (m_maxDepth != -1 && s + t > m_maxDepth + 2) continue;
 
 						size_t vertexIndex = node.data.vertexIndex;
 						LightVertex vi = m_lightVertices[vertexIndex];
 						LightVertex viPred = m_lightVertices[vertexIndex - 1];
+						MisState emitterState = vi.emitterState;
 						vs = vs0;
 						m_lightVerticesExt[vertexIndex].expand(vs);
 						vsPred = vsPred0;
 						m_lightVerticesExt[vertexIndex - 1].expand(vsPred);
 						vsPred2 = vsPred20;
-						m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
-						MisState emitterState = vi.emitterState;
+						if (s > 2)
+							m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
+						else
+							vsPred2->makeEndpoint(m_scene, time, EImportance);
 
 						// decide the direction to do connection
 						bool cameraDirConnection = true;
-						if (t == 2)
+						//if (t == 2 && s > 2)
+						if (t == 2 || s == 2)
 							cameraDirConnection = false;
 
 						samplePos = initialSamplePos;
 						if (vtPred->isSensorSample()){
 							if (!vtPred->getSamplePosition(cameraDirConnection ? vs : vt, samplePos))
 								continue;
+						}
+
+						if (t == 2 && s == 2){
+							float fuck = 1.f;
 						}
 
 						// evaluate contribution
@@ -2080,6 +2088,10 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							if (contrib.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vt, vsPred, NULL, interactions))
 								continue;
 							contrib *= connectionEdge.evalCached(vt, vsPred, PathEdge::EGeneralizedGeometricTerm);
+						}
+
+						if (t == 2 && s == 2){
+							float fuck = 1.f;
 						}
 
 						Float invp = 0.f;
