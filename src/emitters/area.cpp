@@ -224,25 +224,15 @@ public:
 	Shader *createShader(Renderer *renderer) const;
 
 	Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
-		Vector local = Warp::squareToCosineHemisphere(sample);
-		dRec.d = Frame(pRec.n).toWorld(local);
-		dRec.pdf = Warp::squareToCosineHemispherePdf(local);
-		dRec.measure = ESolidAngle;
-		return Spectrum(1.0f);
+// 		Vector local = Warp::squareToCosineHemisphere(sample);
+// 		dRec.d = Frame(pRec.n).toWorld(local);
+// 		dRec.pdf = Warp::squareToCosineHemispherePdf(local);
+// 		dRec.measure = ESolidAngle;
+// 		return Spectrum(1.0f);
 
-		return 1.f;
-	}
-	Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
-		SLog(EWarn, "Not implment emitter->sampleGatherArea");
-		Spectrum ret = sampleDirection(dRec, pRec, sample);
-		if (ret.isZero())
-			dRec.d = Vector(0.f);
-		return dRec.d;
-	}
-
-	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
-		if (Frame::cosTheta(wi) <= 0) return 0.f;
 		bbox = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
+
+		Vector wo = Frame(pRec.n).toLocal(gatherPosition - pRec.p);		
 		Vector dir = wo;
 		Float dis = dir.length();
 		if (dis < gatherRadius) return 1.f;
@@ -273,18 +263,11 @@ public:
 		}
 		return prob;
 	}
-
-	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
-		if (Frame::cosTheta(wi) <= 0) return Vector(0.f);
+	Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
 		Vector dir;
-		uniformShootRatio.incrementBase();
-		thetaShootRatio.incrementBase();
-		phiShootRatio.incrementBase();
-
 		if (bbox.x == 0.f && bbox.y == 0.5f * M_PI && bbox.z == 0.f && bbox.w == 2.f * M_PI){
 			// uniform sampling
 			dir = Warp::squareToCosineHemisphere(sample);
-			++uniformShootRatio;
 		}
 		else if (bbox.z == 0.f && bbox.w == 2.f * M_PI){
 			// Sampling the whole sphere cap
@@ -309,7 +292,6 @@ public:
 			smp.x = (smp.x + 1.f) * 0.5f;
 			smp.y = (smp.y + 1.f) * 0.5f;
 			dir = Warp::squareToCosineHemisphere(smp);
-			++thetaShootRatio;
 		}
 		else{
 			// sampling a bbox in theta-phi space
@@ -327,9 +309,17 @@ public:
 			if (EXPECT_NOT_TAKEN(z == 0))
 				z = 1e-10f;
 			dir = Vector(r * cosPhi, r* sinPhi, z);
-			++phiShootRatio;
 		}
+		dir = Frame(pRec.n).toWorld(dir);
 		return dir;
+	}
+
+	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
+		
+	}
+
+	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
+		
 	}
 
 	MTS_DECLARE_CLASS()

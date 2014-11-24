@@ -1578,7 +1578,7 @@ Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector
 	case EEmitterSample: {
 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
-		return emitter->gatherAreaPdf(pRec, p, radius, bbox);
+		return emitter->gatherAreaPdf(pRec, p, radius, bbox, bboxd);
 	}
 
 	default:
