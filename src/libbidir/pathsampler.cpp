@@ -2058,8 +2058,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						// decide the direction to do connection
 						bool cameraDirConnection = true;
 						//if (t == 2 && s > 2)
-						if (t == 2 || s == 2)
-							cameraDirConnection = false;
+// 						if (t == 2 || s == 2)
+// 							cameraDirConnection = false;
 
 						samplePos = initialSamplePos;
 						if (vtPred->isSensorSample()){
