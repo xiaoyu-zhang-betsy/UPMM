@@ -30,6 +30,9 @@ MTS_NAMESPACE_BEGIN
 #define UPM_DEBUG 1
 #define UPM_DEBUG_HARD
 
+//#define ENABLE_CAMERA_PRIMARY_RAY 1
+//#define ENABLE_LIGHT_PRIMARY_RAY 1
+
 /*
 *	Misc for VCM
 */
