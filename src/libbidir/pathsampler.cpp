@@ -1156,13 +1156,7 @@ Float miWeightVC(const Scene *scene,
 		
 		weight = 1.f / (1.f + wLight + wCamera);
 	}
-	else if (t == 1 && s > 1){
-		// 		const PositionSamplingRecord &pRec = vt->getPositionSamplingRecord();
-		// 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
-		// 		Vector d = normalize(vs->getPosition() - vt->getPosition());
-		// 		DirectionSamplingRecord dRec(d);
-		// 		Float ptrace = emitter->pdfDirection(dRec, pRec);
-		// 		Float pconnect = 1.f; //vs->evalPdfDirect(scene, vt, ERadiance, emitter->getDirectMeasure());
+	else if (t == 1 && s > 1){		
 		Float psr2_w = vs->evalPdf(scene, vt, vsPred, ERadiance, ESolidAngle);
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 
@@ -1246,7 +1240,6 @@ Float miWeightVM(const Scene *scene, int s, int t,
 			Float pconnect = vs->evalPdfDirect(scene, vtPred, ERadiance, measure == ESolidAngle ? EArea : measure);
 			Float ptrace = vtPred2->evalPdf(scene, NULL, vtPred, ERadiance, measure == ESolidAngle ? EArea : measure);
 			pt *= ptrace / pconnect;
-
 			if (ptrace / pconnect != 1.f){
 				float fuck = 1.f;
 			}
@@ -1268,6 +1261,15 @@ Float miWeightVM(const Scene *scene, int s, int t,
 	}
 	else{
 		Float pt = vsPred->evalPdf(scene, vsPred2, vt, EImportance, EArea);
+		if (s == 2){
+			EMeasure measure = vsPred->getAbstractEmitter()->getDirectMeasure();
+			Float pconnect = vt->evalPdfDirect(scene, vsPred, EImportance, measure == ESolidAngle ? EArea : measure);
+			Float ptrace = vsPred2->evalPdf(scene, NULL, vsPred, EImportance, measure == ESolidAngle ? EArea : measure);
+			pt *= ptrace / pconnect;
+			if (ptrace / pconnect != 1.f){
+				float fuck = 1.f;
+			}
+		}
 		Float invpt = (pt > 0.f) ? 1.f / pt : 0.f;
 		if (!_finite(invpt) || invpt == 0.f)
 			return 0.f;
