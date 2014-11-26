@@ -1143,17 +1143,8 @@ Float miWeightVC(const Scene *scene,
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
 
-#if ENABLE_CAMERA_PRIMARY_RAY == 1
 		Float wCamera = MisHeuristic(ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);		
-#else		
-		Float wCamera = MisHeuristic(ptr1) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);		
-#endif
-#if ENABLE_LIGHT_PRIMARY_RAY == 1
 		Float wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
-#else
-		Float wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);				
-#endif
-		
 		weight = 1.f / (1.f + wLight + wCamera);
 	}
 	else if (t == 1 && s > 1){		
@@ -1162,12 +1153,7 @@ Float miWeightVC(const Scene *scene,
 
 		Float wLight;
 		if (isUPM){
-
-#if ENABLE_LIGHT_PRIMARY_RAY == 1
-			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
-#else
-			wLight = MisHeuristic(psr1) * (emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
-#endif
+			wLight = MisHeuristic(psr1) * ((misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
 		}
 		else
 			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
@@ -1181,6 +1167,8 @@ Float miWeightVC(const Scene *scene,
 		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure);
 		//Float ptrace = emitter->pdfPosition(pRec);
 		Float ptrace = vsPred->pdf[EImportance];
+
+		//Float ptrace = vsPred->evalPdf(scene, NULL, vs, EImportance, measure);
 
 		if (vs->getAbstractEmitter()->needsPositionSample() && vs->getAbstractEmitter()->needsDirectionSample()){
 			pconnect *= absDot(d, vs->getGeometricNormal());
@@ -1199,13 +1187,8 @@ Float miWeightVC(const Scene *scene,
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float wLight = (measure == EDiscrete) ? 0.f : psr1 / pconnect;
 		Float wCamera;
-		if (isUPM){
-#if ENABLE_CAMERA_PRIMARY_RAY == 1
-			wCamera = MisHeuristic(ptrace / pconnect) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
-#else	
-			wCamera = MisHeuristic(ptrace / pconnect) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
-#endif
-		}
+		if (isUPM)
+			wCamera = MisHeuristic(ptrace / pconnect) * ((misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		else
 			wCamera = MisHeuristic(ptrace / pconnect) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
 		weight = 1.f / (1.f + wLight + wCamera);
@@ -1365,22 +1348,10 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 				state[EVMB] = MisHeuristic(giIn / piPred) * (state[EVM] + MisHeuristic(pir2Pred_w) * state[EVMB]);//state[EVM]
 				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor);		
 
-				if (i > 2){
-					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
-					state[EVM] += MisHeuristic(giIn);
-				}
-#if ENABLE_CAMERA_PRIMARY_RAY == 1
-				if (i == 2 && mode == ERadiance){
-					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
-					state[EVM] += MisHeuristic(giIn);
-				}
-#endif
-#if ENABLE_LIGHT_PRIMARY_RAY == 1
-				if (i == 2 && mode == EImportance){
-					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
-					state[EVM] += MisHeuristic(giIn);
-				}
-#endif
+				//if (i > 2){
+				state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
+				state[EVM] += MisHeuristic(giIn);
+				//}				
 				state[EVCM] = MisHeuristic(invpi);
 			}
 			else{				
@@ -1966,10 +1937,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			m_sensorSubpath.vertex(1)->getSamplePosition(m_sensorSubpath.vertex(2), samplePos);
 			list.append(samplePos, Spectrum(0.0f));
 			initialSamplePos = samplePos;
-
-			if (samplePos.x >= 162 && samplePos.x < 163 && samplePos.y >= 115 && samplePos.y < 116){
-				watchThread = true;
-			}
 		}
 
 		// initialize of MIS helper
@@ -1982,9 +1949,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			PathVertex *vs0 = m_pool.allocVertex();
 			PathVertex *vsPred0 = m_pool.allocVertex();
 			PathVertex *vsPred20 = m_pool.allocVertex();
-			PathEdge *vsEdge0 = m_pool.allocEdge();
 			PathVertex *vs = NULL, *vsPred = NULL, *vsPred2 = NULL;
-			PathEdge *vsEdge = NULL;
 			PathEdge connectionEdge;
 			PathVertex *succVertex = m_pool.allocVertex();
 			PathEdge *succEdge = m_pool.allocEdge();
@@ -1994,11 +1959,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			std::vector<uint32_t> acceptCnt;
 			std::vector<size_t> shootCnt;
 
-#if ENABLE_CAMERA_PRIMARY_RAY == 1
 			int minT = 2;
-#else
-			int minT = 3;
-#endif
 			int maxT = (int)m_sensorSubpath.vertexCount() - 1;
 			if (m_maxDepth != -1)
 				maxT = std::min(maxT, m_maxDepth);
@@ -2087,20 +2048,16 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						LightPathNode node = m_lightPathTree[searchResults[k]];
 						int s = node.data.depth;
 						if (m_maxDepth != -1 && s + t > m_maxDepth + 2) continue;
-
-#if ENABLE_LIGHT_PRIMARY_RAY != 1
-						if (s == 2) continue;
-#endif
+						//if (s == 2 && t == 2) continue;
 
 						size_t vertexIndex = node.data.vertexIndex;
 						LightVertex vi = m_lightVertices[vertexIndex];
 						LightVertex viPred = m_lightVertices[vertexIndex - 1];
 						MisState emitterState = vi.emitterState;
-						vs = vs0;
-						m_lightVerticesExt[vertexIndex].expand(vs);
-						vsPred = vsPred0;
-						m_lightVerticesExt[vertexIndex - 1].expand(vsPred);
-						vsPred2 = vsPred20;
+
+						vs = vs0; vsPred = vsPred0; vsPred2 = vsPred20;
+						m_lightVerticesExt[vertexIndex].expand(vs);						
+						m_lightVerticesExt[vertexIndex - 1].expand(vsPred);						
 						if (s > 2)
 							m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
 						else
@@ -2109,7 +2066,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						// decide the direction to do connection
 						bool cameraDirConnection = true;
 						//if (t == 2 && s > 2)
- 						if (t == 2 || s == 2)
+ 						if (t == 2 && s > 2 || s == 2 && t > 2)
  							cameraDirConnection = false;
 
 						samplePos = initialSamplePos;
@@ -2240,7 +2197,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			m_pool.release(vs0);
 			m_pool.release(vsPred0);
 			m_pool.release(vsPred20);			
-			m_pool.release(vsEdge0);
 			m_pool.release(succVertex);
 			m_pool.release(succEdge);
 		}
@@ -2249,28 +2205,27 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 		if (useVC){
 			PathVertex *vs0 = m_pool.allocVertex();
 			PathVertex *vsPred0 = m_pool.allocVertex();
-			PathEdge *vsEdge0 = m_pool.allocEdge();
 			size_t lightPathBegin = (cameraPathIndex == 0) ? 0 : m_lightPathEnds[cameraPathIndex - 1];
 			size_t lightPathEnd = m_lightPathEnds[cameraPathIndex];
 			Point2 samplePos(0.0f);			
 			PathEdge connectionEdge;
-			for (size_t i = lightPathBegin; i < lightPathEnd + 1; i++){
-				int s = lightPathEnd - i;
-				PathVertex* vsPred = NULL, *vs = NULL;
-				PathEdge *vsEdge = NULL;
+			for (size_t i = lightPathBegin; i < lightPathEnd + 2; i++){
+				int s = lightPathEnd + 1 - i;
+				PathVertex* vsPred = vsPred0, *vs = vs0;
 				Spectrum importanceWeight = Spectrum(1.0f);
 				MisState emitterState;
 
+				memset(vsPred, 0, sizeof(PathVertex));
+				memset(vs, 0, sizeof(PathVertex));
 				if (i < lightPathEnd){
 					LightVertex lvertex = m_lightVertices[i];
 					importanceWeight = lvertex.importanceWeight;
 					emitterState = lvertex.emitterState;
 					s = m_lightVerticesExt[i].depth;
-					vs = vs0;
+					if (s == 1) continue;
+
 					m_lightVerticesExt[i].expand(vs);
-					vsPred = vsPred0;
-					if (s > 1)
-						m_lightVerticesExt[i - 1].expand(vsPred);
+					m_lightVerticesExt[i - 1].expand(vsPred);
 				}
 
 				int minT = 2, maxT = (int)m_sensorSubpath.vertexCount() - 1;
@@ -2317,7 +2272,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							&tempEndpoint, &tempEdge, &tempSample, EImportance);
 						if (value.isZero())
 							continue;
-						vs = &tempSample; vsPred = &tempEndpoint; vsEdge = &tempEdge;							
+						vs = &tempSample; vsPred = &tempEndpoint; 
 						value *= vt->eval(m_scene, vtPred, vs, ERadiance);
 						vt->measure = EArea;						
 						sampleDirect = true;
@@ -2339,7 +2294,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					/* Attempt to connect the two endpoints, which could result in
 					the creation of additional vertices (index-matched boundaries etc.) */
 					int interactions = remaining;
-					if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vt, vtEdge, interactions))
+					if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vt, NULL, interactions))
 						continue;
 
 					/* Determine the pixel sample position when necessary */
@@ -2389,7 +2344,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			}
 			m_pool.release(vs0);
 			m_pool.release(vsPred0);
-			m_pool.release(vsEdge0);
 		}		
 
 		/* Release any used edges and vertices back to the memory pool */
