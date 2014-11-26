@@ -1153,7 +1153,7 @@ Float miWeightVC(const Scene *scene,
 
 		Float wLight;
 		if (isUPM){
-			wLight = MisHeuristic(psr1) * ((misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
+			wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
 		}
 		else
 			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
@@ -1188,7 +1188,7 @@ Float miWeightVC(const Scene *scene,
 		Float wLight = (measure == EDiscrete) ? 0.f : psr1 / pconnect;
 		Float wCamera;
 		if (isUPM)
-			wCamera = MisHeuristic(ptrace / pconnect) * ((misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+			wCamera = MisHeuristic(ptrace / pconnect) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		else
 			wCamera = MisHeuristic(ptrace / pconnect) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
 		weight = 1.f / (1.f + wLight + wCamera);
@@ -2048,7 +2048,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						LightPathNode node = m_lightPathTree[searchResults[k]];
 						int s = node.data.depth;
 						if (m_maxDepth != -1 && s + t > m_maxDepth + 2) continue;
-						//if (s == 2 && t == 2) continue;
+						if (s == 2 && t == 2) continue;
 
 						size_t vertexIndex = node.data.vertexIndex;
 						LightVertex vi = m_lightVertices[vertexIndex];
@@ -2066,7 +2066,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						// decide the direction to do connection
 						bool cameraDirConnection = true;
 						//if (t == 2 && s > 2)
- 						if (t == 2 && s > 2 || s == 2 && t > 2)
+ 						if (t == 2 || s == 2)
  							cameraDirConnection = false;
 
 						samplePos = initialSamplePos;
