@@ -275,8 +275,8 @@ public:
 		return dir;
 	}
 
-	bool boundedGather() const{
-		return true;
+	Float getBandwidth() const{
+		return 0.f;
 	}
 
 	MTS_DECLARE_CLASS()

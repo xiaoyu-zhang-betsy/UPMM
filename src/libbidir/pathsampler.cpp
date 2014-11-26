@@ -1153,7 +1153,8 @@ Float miWeightVC(const Scene *scene,
 
 		Float wLight;
 		if (isUPM){
-			wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
+			wLight = MisHeuristic(psr1) * ((misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
+			//wLight = MisHeuristic(psr1) * (emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
 		}
 		else
 			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
@@ -1187,8 +1188,10 @@ Float miWeightVC(const Scene *scene,
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float wLight = (measure == EDiscrete) ? 0.f : psr1 / pconnect;
 		Float wCamera;
-		if (isUPM)
-			wCamera = MisHeuristic(ptrace / pconnect) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+		if (isUPM){
+			wCamera = MisHeuristic(ptrace / pconnect) * ((misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+			//wCamera = MisHeuristic(ptrace / pconnect) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
+		}
 		else
 			wCamera = MisHeuristic(ptrace / pconnect) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
 		weight = 1.f / (1.f + wLight + wCamera);
@@ -1349,8 +1352,8 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor);		
 
 				//if (i > 2){
-				state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
-				state[EVM] += MisHeuristic(giIn);
+					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
+					state[EVM] += MisHeuristic(giIn);
 				//}				
 				state[EVCM] = MisHeuristic(invpi);
 			}
@@ -1959,7 +1962,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			std::vector<uint32_t> acceptCnt;
 			std::vector<size_t> shootCnt;
 
-			int minT = 2;
+			int minT = 2; int minS = 2;
+
 			int maxT = (int)m_sensorSubpath.vertexCount() - 1;
 			if (m_maxDepth != -1)
 				maxT = std::min(maxT, m_maxDepth);
@@ -1999,7 +2003,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 					// evaluate sampling domain pdf normalization
 					int shareShootThreshold = 32;
-					int clampThreshold = 10000000;
+					int clampThreshold = 1000;
 					Float invBrdfIntegral = 1.f;
 					bool shareShoot = false;
 // 					if (searchPos.size() > shareShootThreshold){
@@ -2047,8 +2051,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					for (int k = 0; k < searchResults.size(); k++){
 						LightPathNode node = m_lightPathTree[searchResults[k]];
 						int s = node.data.depth;
-						if (m_maxDepth != -1 && s + t > m_maxDepth + 2) continue;
-						if (s == 2 && t == 2) continue;
+						if (m_maxDepth != -1 && s + t > m_maxDepth + 2 || s < minS) continue;						
+						//if (s == 2 && t == 2) continue;
 
 						size_t vertexIndex = node.data.vertexIndex;
 						LightVertex vi = m_lightVertices[vertexIndex];
@@ -2066,17 +2070,57 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						// decide the direction to do connection
 						bool cameraDirConnection = true;
 						//if (t == 2 && s > 2)
- 						if (t == 2 || s == 2)
- 							cameraDirConnection = false;
+//  						if (t == 2 || s == 2)
+// 						if (s == 2)
+//   							cameraDirConnection = false;
+
+						
+						Float sBandwidth = 0.f, tBandwidth = 0.f;
+						if (vtPred->isSensorSample()){
+							tBandwidth = 10000.f;
+						}
+						else{
+							BDAssert(vtPred->isSurfaceInteraction());
+							const Intersection &its = vtPred->getIntersection();
+							const BSDF *bsdf = its.getBSDF();
+							tBandwidth = bsdf->getBandwidth();
+						}
+						if (vsPred->isEmitterSample()){
+							PositionSamplingRecord &pRec = vsPred->getPositionSamplingRecord();
+							const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+							if (!emitter->needsDirectionSample())
+								sBandwidth = 99999.f;
+							else
+								sBandwidth = 0.f;
+						}
+						else{
+							BDAssert(vsPred->isSurfaceInteraction());
+							const Intersection &its = vsPred->getIntersection();
+							const BSDF *bsdf = its.getBSDF();
+							sBandwidth = bsdf->getBandwidth();
+						}
+						if (sBandwidth < tBandwidth)
+							cameraDirConnection = false;
+						
+
+// 						EMeasure sMeasure = (EMeasure)vsPred->measure;
+// 						EMeasure tMeasure = (EMeasure)vtPred->measure;
+// 						Float sProb = vsPred->evalPdf(m_scene, vsPred2, vt, EImportance, sMeasure == ESolidAngle ? EArea : sMeasure);
+// 						Float tProb = vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance, tMeasure == ESolidAngle ? EArea : tMeasure);
+// 						if (sMeasure == EDiscrete){
+// 							cameraDirConnection = true;
+// 						}
+// 						else if (t == 2){
+// 							cameraDirConnection = false;
+// 						}
+// 						else{
+// 							cameraDirConnection = (sProb < tProb);
+// 						}
 
 						samplePos = initialSamplePos;
 						if (vtPred->isSensorSample()){
 							if (!vtPred->getSamplePosition(cameraDirConnection ? vs : vt, samplePos))
 								continue;
-						}
-
-						if (t == 2 && s == 2){
-							float fuck = 1.f;
 						}
 
 						// evaluate contribution

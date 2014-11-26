@@ -507,8 +507,8 @@ public:
 		SLog(EWarn, "Not implment bsdf->sampleGatherArea");
 		return Vector(0.f);
 	}
-	virtual bool boundedGather() const{
-		return false;
+	virtual Float getBandwidth() const{
+		return 0.f;
 	}
 
 	MTS_DECLARE_CLASS()

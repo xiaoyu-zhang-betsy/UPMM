@@ -483,8 +483,12 @@ public:
 		return wo;
 	}
 
-	bool boundedGather() const{
-		return (m_specularSamplingWeight == 0.f || m_specularSamplingWeight == 1.f);
+	Float getBandwidth() const{
+		if (m_specularSamplingWeight == 0.f)
+			return 0.f;
+		else{
+			return m_exponent->getAverage().average();;
+		}
 	}
 
 	MTS_DECLARE_CLASS()
