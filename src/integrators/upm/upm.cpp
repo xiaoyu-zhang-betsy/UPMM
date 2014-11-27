@@ -153,6 +153,8 @@ public:
 		/* exposed scale parameter for gather radius, which user could adjust it*/
 		m_config.radiusScale = props.getFloat("radiusScale", 1.0f);
 
+		m_config.radiusAlpha = props.getFloat("radiusAlpha", 1.0f);
+
 		m_config.useVM = props.getBoolean("useVM", true);
 		m_config.useVC = props.getBoolean("useVC", true);
 	}

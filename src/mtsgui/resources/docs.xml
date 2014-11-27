@@ -661,6 +661,9 @@
 			disable vertex merging sampling technique and fall back to original pssmlt, 1.0 
 			will use a default guess of the radius based on the scene size.
 		</param>
+		<param name="radiusAlpha" readableName="Scale of progressive radius shrink?" type="float" default="1.0" importance="1">
+			Reduce speed for progressive radius reduction.
+		</param>
 		<param name="useVC" readableName="Use vertex connection" type="boolean" default="true">
 			Use vertex connection
 		</param>

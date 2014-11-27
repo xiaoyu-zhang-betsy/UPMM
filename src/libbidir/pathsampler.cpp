@@ -1288,7 +1288,7 @@ Float miWeightVM(const Scene *scene, int s, int t,
 		Float psr2_w = vsPred->evalPdf(scene, vt, vsPred2, ERadiance, ESolidAngle);
 		Float ptr2_w = vtPred->evalPdf(scene, vt, vtPred2, EImportance, ESolidAngle);		
 
-		Float wLight = MisHeuristic(dVCM * invpt) * misVcWeightFactor + MisHeuristic(psr1_w * invps) * (emitterState[EVM] + MisHeuristic(psr2_w) * emitterState[EVMB]);
+		Float wLight = MisHeuristic(dVCM * invps) * misVcWeightFactor + MisHeuristic(psr1_w * invps) * (emitterState[EVM] + MisHeuristic(psr2_w) * emitterState[EVMB]);
 		Float wCamera = sensorState[EVCM] * misVcWeightFactor + MisHeuristic(ptr1_w * invpt) * (sensorState[EVM] + MisHeuristic(ptr2_w) * sensorState[EVMB]);
 		miWeight = 1.f / (1.f + wLight + wCamera);
 	}
