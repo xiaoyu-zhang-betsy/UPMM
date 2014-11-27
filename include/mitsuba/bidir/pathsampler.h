@@ -691,6 +691,7 @@ public:
 		m_id = static_cast<const SeedWorkUnit *>(wu)->m_id;
 		m_seed = static_cast<const SeedWorkUnit *>(wu)->m_seed;
 		m_timeout = static_cast<const SeedWorkUnit *>(wu)->m_timeout;
+		m_worknum = static_cast<const SeedWorkUnit *>(wu)->m_worknum;
 	}	
 
 	inline const PathSeed &getSeed() const {
@@ -730,9 +731,17 @@ public:
 		m_id = id;
 	}
 
+	inline const int getTotalWorkNum() const{
+		return m_worknum;
+	}
+	inline void setTotalWorkNum(int num){
+		m_worknum = num;
+	}
+
 	MTS_DECLARE_CLASS()
 private:
 	int m_id;
+	int m_worknum;
 	PathSeed m_seed;
 	int m_timeout;
 };

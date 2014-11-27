@@ -1160,51 +1160,70 @@ Float miWeightVC(const Scene *scene,
 			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
 		weight = 1.f / (1.f + wLight);
 	}
-	else if (s == 1){
-		Vector d = normalize(vt->getPosition() - vs->getPosition());
+	else if (s == 1 && t > 1){		
 		const PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
 		EMeasure measure = emitter->getDirectMeasure();
-		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure);
-		//Float ptrace = emitter->pdfPosition(pRec);
-		Float ptrace = vsPred->pdf[EImportance];
 
-		//Float ptrace = vsPred->evalPdf(scene, NULL, vs, EImportance, measure);
-
-		if (vs->getAbstractEmitter()->needsPositionSample() && vs->getAbstractEmitter()->needsDirectionSample()){
-			pconnect *= absDot(d, vs->getGeometricNormal());
-		}
-
-		if (vs->getAbstractEmitter()->needsDirectionSample()){
-			DirectionSamplingRecord dRec(d);
-			ptrace *= emitter->pdfDirection(dRec, pRec) * absDot(d, vt->getGeometricNormal());
-			if (!vs->getAbstractEmitter()->needsPositionSample()){
-				Float dis = (vt->getPosition() - vs->getPosition()).length();
-				ptrace /= dis * dis;
-			}
-		}
+//		Vector d = normalize(vt->getPosition() - vs->getPosition());
+// 		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure);		
+// 		Float ptrace = vsPred->pdf[EImportance];
+// 		if (vs->getAbstractEmitter()->needsPositionSample() && vs->getAbstractEmitter()->needsDirectionSample()){
+// 			pconnect *= absDot(d, vs->getGeometricNormal());
+// 		}
+// 
+// 		if (vs->getAbstractEmitter()->needsDirectionSample()){
+// 			DirectionSamplingRecord dRec(d);
+// 			ptrace *= emitter->pdfDirection(dRec, pRec) * absDot(d, vt->getGeometricNormal());
+// 			if (!vs->getAbstractEmitter()->needsPositionSample()){
+// 				Float dis = (vt->getPosition() - vs->getPosition()).length();
+// 				ptrace /= dis * dis;
+// 			}
+// 		}
+// 		Float porig = ptrace / pconnect;
+		
+		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure == ESolidAngle ? EArea : measure);
+		Float ptrace = vsPred->evalPdf(scene, NULL, vs, EImportance, measure == ESolidAngle ? EArea : measure);
+		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
 
 		Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float wLight = (measure == EDiscrete) ? 0.f : psr1 / pconnect;
 		Float wCamera;
 		if (isUPM){
-			wCamera = MisHeuristic(ptrace / pconnect) * ((misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * ((misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 			//wCamera = MisHeuristic(ptrace / pconnect) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
 		}
 		else
-			wCamera = MisHeuristic(ptrace / pconnect) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
+			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
 		weight = 1.f / (1.f + wLight + wCamera);
+	}
+	else if (s == 1 && t == 1){
+		const PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
+		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+		EMeasure measure = emitter->getDirectMeasure();
+		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure == ESolidAngle ? EArea : measure);
+		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
+		Float wLight = (measure == EDiscrete) ? 0.f : psr1 / pconnect;
+		weight = 1.f / (1.f + wLight);
 	}
 	else if (s == 0){
 		const PositionSamplingRecord &pRec = vt->getPositionSamplingRecord();
 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
-		Float pt_1 = emitter->pdfPosition(pRec);
-		Vector d = normalize(vtPred->getPosition() - vt->getPosition());
-		DirectionSamplingRecord dRec(d);
-		Float pt_2_sigma = emitter->pdfDirection(dRec, pRec);
+// 		Float pt_1 = emitter->pdfPosition(pRec);
+// 		Vector d = normalize(vtPred->getPosition() - vt->getPosition());
+// 		DirectionSamplingRecord dRec(d);
+// 		Float pt_2_sigma = emitter->pdfDirection(dRec, pRec);
+// 		Float wCamera = MisHeuristic(pt_1) * sensordVCM + MisHeuristic(pt_1 * pt_2_sigma) * sensordVC;
 
-		Float wCamera = MisHeuristic(pt_1) * sensordVCM + MisHeuristic(pt_1 * pt_2_sigma) * sensordVC;
+		PathVertex vsTemp;
+		vsTemp.makeEndpoint(scene, 0, EImportance);
+		EMeasure measure = vt->getAbstractEmitter()->getDirectMeasure();
+		Float pconnect = vtPred->evalPdfDirect(scene, vt, EImportance, measure == ESolidAngle ? EArea : measure);
+		Float ptrace = vsTemp.evalPdf(scene, NULL, vt, EImportance, measure == ESolidAngle ? EArea : measure);
+		Float ptr1_w = vt->evalPdf(scene, &vsTemp, vtPred, EImportance, ESolidAngle);
+		Float wCamera = pconnect * sensordVCM + ptrace * ptr1_w * sensordVC;
+		
 		weight = 1.f / (1.f + wCamera);
 	}
 	else{
@@ -1220,55 +1239,57 @@ Float miWeightVM(const Scene *scene, int s, int t,
 
 	Float miWeight;
 	if (cameraDirConnection){
-		Float pt = vtPred->evalPdf(scene, vtPred2, vs, ERadiance, EArea);
+		Float pt = vtPred->evalPdf(scene, vtPred2, vs, ERadiance, EArea);				
+		Float ps = vsPred->evalPdf(scene, vsPred2, vs, EImportance, EArea);
+		Float invpt = (pt > 0.f) ? 1.f / pt : 0.f;
+		Float invps = (ps > 0.f) ? 1.f / ps : 0.f;
+		if (!_finite(invpt) || invpt == 0.f || !_finite(invps) || invps == 0.f)
+			return 0.f;
+
+		Float dVCM = 1.f;
 		if (t == 2){
 			EMeasure measure = vtPred->getAbstractEmitter()->getDirectMeasure();
 			Float pconnect = vs->evalPdfDirect(scene, vtPred, ERadiance, measure == ESolidAngle ? EArea : measure);
 			Float ptrace = vtPred2->evalPdf(scene, NULL, vtPred, ERadiance, measure == ESolidAngle ? EArea : measure);
-			pt *= ptrace / pconnect;
-			if (ptrace / pconnect != 1.f){
-				float fuck = 1.f;
-			}
+			dVCM = pconnect / ptrace;
 		}
-		Float invpt = (pt > 0.f) ? 1.f / pt : 0.f;
-		if (!_finite(invpt) || invpt == 0.f)
-			return 0.f;
 
 		Vector wi = normalize(vtPred->getPosition() - vs->getPosition());
 		Vector wo = normalize(vsPred->getPosition() - vs->getPosition());		
-		Float psr2_w = vs->evalPdf(scene, wi, wo, ERadiance, ESolidAngle);
-		Float ptr2_w = vs->evalPdf(scene, wo, wi, EImportance, ESolidAngle);
-		Float pir2Pred_w = vtPred->evalPdf(scene, vs, vtPred2, EImportance, ESolidAngle);
-		Float pir2Succ_w = vsPred->evalPdf(scene, vs, vsPred2, ERadiance, ESolidAngle);
+		Float psr1_w = vs->evalPdf(scene, wi, wo, ERadiance, ESolidAngle);
+		Float ptr1_w = vs->evalPdf(scene, wo, wi, EImportance, ESolidAngle);		
+		Float psr2_w = vsPred->evalPdf(scene, vs, vsPred2, ERadiance, ESolidAngle);
+		Float ptr2_w = vtPred->evalPdf(scene, vs, vtPred2, EImportance, ESolidAngle);
 
-		Float wLight = emitterState[EVCM] * misVcWeightFactor + emitterState[EVCM] * MisHeuristic(psr2_w) * (emitterState[EVM] + MisHeuristic(pir2Succ_w) * emitterState[EVMB]);
-		Float wCamera = MisHeuristic(invpt) * misVcWeightFactor + MisHeuristic(ptr2_w * invpt) * (sensorState[EVM] + MisHeuristic(pir2Pred_w) * sensorState[EVMB]);
+		Float wLight = emitterState[EVCM] * misVcWeightFactor + MisHeuristic(psr1_w * invps) * (emitterState[EVM] + MisHeuristic(psr2_w) * emitterState[EVMB]);
+		Float wCamera = MisHeuristic(dVCM * invpt) * misVcWeightFactor + MisHeuristic(ptr1_w * invpt) * (sensorState[EVM] + MisHeuristic(ptr2_w) * sensorState[EVMB]);
 		miWeight = 1.f / (1.f + wLight + wCamera);
 	}
 	else{
-		Float pt = vsPred->evalPdf(scene, vsPred2, vt, EImportance, EArea);
+		Float ps = vsPred->evalPdf(scene, vsPred2, vt, EImportance, EArea);
+		Float pt = vtPred->evalPdf(scene, vtPred2, vt, ERadiance, EArea);		
+		Float invps = (ps > 0.f) ? 1.f / ps : 0.f;
+		Float invpt = (pt > 0.f) ? 1.f / pt : 0.f;
+		if (!_finite(invps) || invps == 0.f || !_finite(invpt) || invpt == 0.f)
+			return 0.f;
+
+		Float dVCM = 1.f;
 		if (s == 2){
 			EMeasure measure = vsPred->getAbstractEmitter()->getDirectMeasure();
 			Float pconnect = vt->evalPdfDirect(scene, vsPred, EImportance, measure == ESolidAngle ? EArea : measure);
 			Float ptrace = vsPred2->evalPdf(scene, NULL, vsPred, EImportance, measure == ESolidAngle ? EArea : measure);
-			pt *= ptrace / pconnect;
-			if (ptrace / pconnect != 1.f){
-				float fuck = 1.f;
-			}
+			dVCM = pconnect / ptrace;
 		}
-		Float invpt = (pt > 0.f) ? 1.f / pt : 0.f;
-		if (!_finite(invpt) || invpt == 0.f)
-			return 0.f;
 
 		Vector wi = normalize(vtPred->getPosition() - vt->getPosition());
 		Vector wo = normalize(vsPred->getPosition() - vt->getPosition());		
-		Float psr2_w = vt->evalPdf(scene, wi, wo, ERadiance, ESolidAngle);
-		Float ptr2_w = vt->evalPdf(scene, wo, wi, EImportance, ESolidAngle);
-		Float pir2Pred_w = vtPred->evalPdf(scene, vt, vtPred2, EImportance, ESolidAngle);
-		Float pir2Succ_w = vsPred->evalPdf(scene, vt, vsPred2, ERadiance, ESolidAngle);
+		Float psr1_w = vt->evalPdf(scene, wi, wo, ERadiance, ESolidAngle);
+		Float ptr1_w = vt->evalPdf(scene, wo, wi, EImportance, ESolidAngle);
+		Float psr2_w = vsPred->evalPdf(scene, vt, vsPred2, ERadiance, ESolidAngle);
+		Float ptr2_w = vtPred->evalPdf(scene, vt, vtPred2, EImportance, ESolidAngle);		
 
-		Float wLight = MisHeuristic(invpt) * misVcWeightFactor + MisHeuristic(psr2_w * invpt) * (emitterState[EVM] + MisHeuristic(pir2Succ_w) * emitterState[EVMB]);
-		Float wCamera = sensorState[EVCM] * misVcWeightFactor + sensorState[EVCM] * MisHeuristic(ptr2_w) * (sensorState[EVM] + MisHeuristic(pir2Pred_w) * sensorState[EVMB]);
+		Float wLight = MisHeuristic(dVCM * invpt) * misVcWeightFactor + MisHeuristic(psr1_w * invps) * (emitterState[EVM] + MisHeuristic(psr2_w) * emitterState[EVMB]);
+		Float wCamera = sensorState[EVCM] * misVcWeightFactor + MisHeuristic(ptr1_w * invpt) * (sensorState[EVM] + MisHeuristic(ptr2_w) * sensorState[EVMB]);
 		miWeight = 1.f / (1.f + wLight + wCamera);
 	}
 	return miWeight;
@@ -1292,7 +1313,8 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 		EMeasure measure = v->getAbstractEmitter()->getDirectMeasure();
 		Float pconnect = vNext->evalPdfDirect(scene, v, mode, measure == ESolidAngle ? EArea : measure);
 		Float ptrace = path.vertex(0)->pdf[mode] * path.edge(0)->pdf[mode];		
-		Float p1 = v->pdf[mode] * e->pdf[mode];		
+		Float p1 = v->pdf[mode];
+
 		if (mode == ERadiance){
 			state[EVCM] = MisHeuristic(pconnect / (ptrace * p1));
 			state[EVC] = 0.f;
@@ -1335,12 +1357,12 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			PathEdge * ePred = path.edge(i - 1);
 			Float giIn = std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / (e->length * e->length);
 			Float giInPred = std::abs(vPred->isOnSurface() ? dot(ePred->d, vPred->getGeometricNormal()) : 1) / (ePred->length * ePred->length);
-			Float pi = v->pdf[mode] * e->pdf[mode];
-			Float pir2_w = v->pdf[1 - mode] * ePred->pdf[1 - mode] / giInPred;
+			Float pi = v->pdf[mode];
+			Float pir2_w = v->pdf[1 - mode] / giInPred;
 			Float invpi = 1.f / pi;
 			if (isUPM){
 				state[EVC] = MisHeuristic(giIn * invpi) * (state[EVCM] + MisHeuristic(pir2_w) * state[EVC]);
-				Float piPred = vPred->pdf[mode] * ePred->pdf[mode];
+				Float piPred = vPred->pdf[mode];
 				Float pir2Pred_w = 0.f;
 				if (i > 2){
 					PathVertex *vPred2 = path.vertex(i - 2);
@@ -2181,7 +2203,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 									pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
 								}
 
-								Point pshoot = succVertex->getPosition();
 								if (pointDistSquared < distSquared){
 									acceptedShoot++;
 									if (acceptedShoot == targetShoot){
@@ -2306,7 +2327,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						vs = vs0;
 						vs->makeEndpoint(m_scene, time, EImportance);
 						value = radianceWeights[t] *
-							vs->eval(m_scene, vsPred, vt, EImportance) *
+							vs->eval(m_scene, NULL, vt, EImportance) *
 							vt->eval(m_scene, vtPred, vs, ERadiance);
 					}else if (s == 1) {
 						if (vt->isDegenerate())

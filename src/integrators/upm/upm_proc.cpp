@@ -82,6 +82,7 @@ public:
 		midres->clear();
 		const SeedWorkUnit *wu = static_cast<const SeedWorkUnit *>(workUnit);
 		const int workID = wu->getID();
+		const int numWork = wu->getTotalWorkNum();
 		SplatList *splats = new SplatList();
 		splats->clear();
 
@@ -103,11 +104,11 @@ public:
 		float radius = m_config.initialRadius;
 		ref<Timer> timer = new Timer();
 		for (actualSampleCount = 0; actualSampleCount < m_config.sampleCount || (wu->getTimeout() > 0 && (int)timer->getMilliseconds() < wu->getTimeout()); actualSampleCount++) {
-//			if (m_config.initialRadius > 0.0f){
-//				Float reduceFactor = 1.0 / std::pow((Float)(iteration + 1), (Float)(0.5 * (1 - 0.75/*radiusAlpha*/)));
-//				radius = std::max(reduceFactor * m_config.initialRadius, (Float)1e-7);
-//				iteration += 8;
-//			}
+// 			if (m_config.initialRadius > 0.0f){
+// 				Float reduceFactor = 1.0 / std::pow((Float)(iteration + 1), (Float)(0.5 * (1 - 0.75/*radiusAlpha*/)));
+// 				radius = std::max(reduceFactor * m_config.initialRadius, (Float)1e-7);
+// 				iteration += numWork;
+// 			}
 
 			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr);
 
@@ -219,6 +220,7 @@ ParallelProcess::EStatus UPMProcess::generateWork(WorkUnit *unit, int worker) {
 
 	SeedWorkUnit *workUnit = static_cast<SeedWorkUnit *>(unit);
 	workUnit->setID(m_workCounter++);
+	workUnit->setTotalWorkNum(m_config.workUnits);
 	workUnit->setTimeout(timeout);
 	return ESuccess;
 }
