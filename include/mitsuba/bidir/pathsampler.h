@@ -72,6 +72,7 @@ struct LightVertexExt{
 	Vector geoFrameN;
 	uint8_t measure;
 	uint8_t type;
+	Float pdfImp;
 	inline LightVertexExt(const PathVertex *vs, const PathVertex *vsPred, int _depth){
 		if (vs->isEmitterSample()){
 			const PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
@@ -90,11 +91,13 @@ struct LightVertexExt{
 		depth = _depth;
 		measure = vs->measure;
 		type = vs->type;
+		pdfImp = vs->pdf[EImportance];
 	}
 	void expand(PathVertex* vs){
 		memset(vs, 0, sizeof(PathVertex));
 		vs->type = type;
 		vs->measure = measure;
+		vs->pdf[EImportance] = pdfImp;
 		if (vs -> type == PathVertex::EEmitterSample){
 			PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
 			pRec.object = (const ConfigurableObject *)shape;

@@ -1165,26 +1165,27 @@ Float miWeightVC(const Scene *scene,
 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
 		EMeasure measure = emitter->getDirectMeasure();
 
-//		Vector d = normalize(vt->getPosition() - vs->getPosition());
-// 		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure);		
-// 		Float ptrace = vsPred->pdf[EImportance];
+// 		Vector d = normalize(vt->getPosition() - vs->getPosition());
+// 		Float pconnect2 = vt->evalPdfDirect(scene, vs, EImportance, measure);		
+// 		Float ptrace2 = vsPred->pdf[EImportance];
 // 		if (vs->getAbstractEmitter()->needsPositionSample() && vs->getAbstractEmitter()->needsDirectionSample()){
-// 			pconnect *= absDot(d, vs->getGeometricNormal());
+// 			pconnect2 *= absDot(d, vs->getGeometricNormal());
 // 		}
 // 
 // 		if (vs->getAbstractEmitter()->needsDirectionSample()){
 // 			DirectionSamplingRecord dRec(d);
-// 			ptrace *= emitter->pdfDirection(dRec, pRec) * absDot(d, vt->getGeometricNormal());
+// 			ptrace2 *= emitter->pdfDirection(dRec, pRec) * absDot(d, vt->getGeometricNormal());
 // 			if (!vs->getAbstractEmitter()->needsPositionSample()){
 // 				Float dis = (vt->getPosition() - vs->getPosition()).length();
-// 				ptrace /= dis * dis;
+// 				ptrace2 /= dis * dis;
 // 			}
 // 		}
-// 		Float porig = ptrace / pconnect;
+// 		Float porig = ptrace2 / pconnect2;
 		
 		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure == ESolidAngle ? EArea : measure);
-		Float ptrace = vsPred->evalPdf(scene, NULL, vs, EImportance, measure == ESolidAngle ? EArea : measure);
-		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
+		Float ptrace = vsPred->pdf[EImportance];  //vsPred->evalPdf(scene, NULL, vs, EImportance, measure == ESolidAngle ? EArea : measure);
+		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, measure == ESolidAngle ? EArea : measure);
+		Float pnew = ptrace / pconnect * ptr1;
 
 		Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
@@ -1240,7 +1241,8 @@ Float miWeightVM(const Scene *scene, int s, int t,
 	Float miWeight;
 	if (cameraDirConnection){
 		Float pt = vtPred->evalPdf(scene, vtPred2, vs, ERadiance, EArea);				
-		Float ps = vsPred->evalPdf(scene, vsPred2, vs, EImportance, EArea);
+		//Float ps = vsPred->evalPdf(scene, vsPred2, vs, EImportance, EArea);
+		Float ps = vsPred->pdf[EImportance];
 		Float invpt = (pt > 0.f) ? 1.f / pt : 0.f;
 		Float invps = (ps > 0.f) ? 1.f / ps : 0.f;
 		if (!_finite(invpt) || invpt == 0.f || !_finite(invps) || invps == 0.f)
@@ -1267,7 +1269,7 @@ Float miWeightVM(const Scene *scene, int s, int t,
 	}
 	else{
 		Float ps = vsPred->evalPdf(scene, vsPred2, vt, EImportance, EArea);
-		Float pt = vtPred->evalPdf(scene, vtPred2, vt, ERadiance, EArea);		
+		Float pt = vtPred->pdf[ERadiance]; // evalPdf(scene, vtPred2, vt, ERadiance, EArea);
 		Float invps = (ps > 0.f) ? 1.f / ps : 0.f;
 		Float invpt = (pt > 0.f) ? 1.f / pt : 0.f;
 		if (!_finite(invps) || invps == 0.f || !_finite(invpt) || invpt == 0.f)
@@ -2090,13 +2092,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							vsPred2->makeEndpoint(m_scene, time, EImportance);
 
 						// decide the direction to do connection
-						bool cameraDirConnection = true;
-						//if (t == 2 && s > 2)
-//  						if (t == 2 || s == 2)
-// 						if (s == 2)
-//   							cameraDirConnection = false;
-
-						
+						bool cameraDirConnection = true;						
 						Float sBandwidth = 0.f, tBandwidth = 0.f;
 						if (vtPred->isSensorSample()){
 							tBandwidth = 10000.f;
@@ -2123,21 +2119,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						}
 						if (sBandwidth < tBandwidth)
 							cameraDirConnection = false;
-						
-
-// 						EMeasure sMeasure = (EMeasure)vsPred->measure;
-// 						EMeasure tMeasure = (EMeasure)vtPred->measure;
-// 						Float sProb = vsPred->evalPdf(m_scene, vsPred2, vt, EImportance, sMeasure == ESolidAngle ? EArea : sMeasure);
-// 						Float tProb = vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance, tMeasure == ESolidAngle ? EArea : tMeasure);
-// 						if (sMeasure == EDiscrete){
-// 							cameraDirConnection = true;
-// 						}
-// 						else if (t == 2){
-// 							cameraDirConnection = false;
-// 						}
-// 						else{
-// 							cameraDirConnection = (sProb < tProb);
-// 						}
 
 						samplePos = initialSamplePos;
 						if (vtPred->isSensorSample()){
