@@ -1182,18 +1182,12 @@ Float miWeightVC(const Scene *scene,
 // 		}
 // 		Float porig = ptrace2 / pconnect2;
 
-		EMeasure measureTrace;
-		if (emitter->needsPositionSample() && emitter->needsDirectionSample()){
-			measureTrace = EArea;
-		}
-		else if (emitter->needsDirectionSample()){
-			measureTrace = ESolidAngle;
-		}
-		else{
+		EMeasure measureTrace = EArea;
+		if (emitter->needsPositionSample() && !emitter->needsDirectionSample()){ // directional light
 			measureTrace = EDiscrete;
 		}
 		
-		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measureTrace);// measure == ESolidAngle ? EArea : measure);
+		Float pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure == ESolidAngle ? EArea : measure);
 		Float ptrace = vsPred->pdf[EImportance]; 
 		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, measureTrace); // measure == ESolidAngle ? EArea : measure);
 		Float pnew = ptrace / pconnect * ptr1;
