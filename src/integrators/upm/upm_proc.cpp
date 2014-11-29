@@ -103,7 +103,7 @@ public:
 		size_t actualSampleCount;
 		float radius = m_config.initialRadius;
 		ref<Timer> timer = new Timer();
-		for (actualSampleCount = 0; actualSampleCount < m_config.sampleCount || (wu->getTimeout() > 0 && (int)timer->getMilliseconds() < wu->getTimeout()); actualSampleCount++) {
+		for (actualSampleCount = 0; actualSampleCount < m_config.sampleCount || (wu->getTimeout() > 0 && timer->getSeconds() < wu->getTimeout()); actualSampleCount++) {
 			if (m_config.initialRadius > 0.0f){
 				Float reduceFactor = 1.0 / std::pow((Float)(iteration + 1), (Float)(0.5 * (1 - m_config.radiusAlpha/*radiusAlpha*/)));
 				radius = std::max(reduceFactor * m_config.initialRadius, (Float)1e-7);
@@ -209,10 +209,10 @@ void UPMProcess::processResult(const WorkResult *workResult, bool cancelled) {
 }
 
 ParallelProcess::EStatus UPMProcess::generateWork(WorkUnit *unit, int worker) {
-	int timeout = 0;
+	size_t timeout = 0;
 	if (m_config.timeout > 0) {
-		timeout = static_cast<int>(static_cast<int64_t>(m_config.timeout*1000) -
-		          static_cast<int64_t>(m_timeoutTimer->getMilliseconds()));
+		timeout = static_cast<size_t>(static_cast<int64_t>(m_config.timeout) -
+		          static_cast<int64_t>(m_timeoutTimer->getSeconds()));
 	}
 
 	if (m_workCounter >= m_config.workUnits || timeout < 0)

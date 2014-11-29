@@ -164,6 +164,47 @@ public:
 		return oss.str();
 	}
 
+	virtual Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
+		Vector dir = gatherPosition - pRec.p;
+		Float dis = dir.length();
+		if (dis < gatherRadius) return 1.f;
+		dir /= dis;
+		Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);
+		
+		// sample the full sphere cap of polar
+		Float prob = 0.5f * (1.f - cos(dTheta));
+		bbox.x = 0.f; bbox.y = dTheta;
+
+		return prob;		
+	}
+	virtual Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
+
+// 		Float z = 1.0f - 2.0f * sample.y;
+// 		Float r = math::safe_sqrt(1.0f - z*z);
+// 		Float sinPhi, cosPhi;
+// 		math::sincos(2.0f * M_PI * sample.x, &sinPhi, &cosPhi);
+// 		return Vector(r * cosPhi, r * sinPhi, z);
+
+		Vector dir =  normalize(gatherPosition - pRec.p);
+// 		Float sin0 = 0.f;
+// 		Float sin1 = sin(bbox.y);
+// 		Float isin = sample.x * sin1;
+// 		Float iphi = sample.y * 2.f * M_PI;
+// 		Float r = isin;
+// 		Float z = sqrt(1.f - isin * isin);
+		Float z0 = 1.f;
+		Float z1 = cos(bbox.y);
+		Float z = (z0 - z1) * sample.x + z1;
+		Float r = math::safe_sqrt(1.0f - z*z);
+		Float cosPhi, sinPhi;
+		math::sincos(sample.y * 2.f * M_PI, &sinPhi, &cosPhi);
+		Vector wo = Vector(r * cosPhi, r* sinPhi, z);
+
+		wo = Frame(dir).toWorld(wo);
+
+		return wo;
+	}
+
 	Shader *createShader(Renderer *renderer) const;
 
 	MTS_DECLARE_CLASS()

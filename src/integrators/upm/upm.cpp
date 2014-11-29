@@ -147,7 +147,7 @@ public:
 
 		m_config.workUnits = props.getInteger("workUnits", -1);
 		/* Stop MLT after X seconds -- useful for equal-time comparisons */
-		m_config.timeout = props.getInteger("timeout", 0);
+		m_config.timeout = props.getSize("timeout", 0);
 		/* initial gather radius for vertex merging paths, same as Mitsuba */
 		m_config.initialRadius = props.getFloat("initialRadius", 0.0f);
 		/* exposed scale parameter for gather radius, which user could adjust it*/

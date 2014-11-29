@@ -705,22 +705,22 @@ public:
 		m_seed = seed;
 	}
 
-	inline int getTimeout() const {
+	inline size_t getTimeout() const {
 		return m_timeout;
 	}
 
-	inline void setTimeout(int timeout) {
+	inline void setTimeout(size_t timeout) {
 		m_timeout = timeout;
 	}
 
 	inline void load(Stream *stream) {
 		m_seed = PathSeed(stream);
-		m_timeout = stream->readInt();
+		m_timeout = stream->readSize();
 	}
 
 	inline void save(Stream *stream) const {
 		m_seed.serialize(stream);
-		stream->writeInt(m_timeout);
+		stream->writeSize(m_timeout);
 	}
 
 	inline std::string toString() const {
@@ -746,7 +746,7 @@ private:
 	int m_id;
 	int m_worknum;
 	PathSeed m_seed;
-	int m_timeout;
+	size_t m_timeout;
 };
 
 /**
