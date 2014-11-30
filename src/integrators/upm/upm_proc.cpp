@@ -110,14 +110,15 @@ public:
 				iteration += numWork;
 			}
 
-			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr);
+
+			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr, m_config.rejectionProb);
 
 			for (size_t i = 0; i < hilbertCurve.getPointCount(); ++i) {
 				if (stop) break;
 
 				Point2i offset = Point2i(hilbertCurve[i]);
 				m_sampler->generate(offset);
-				m_pathSampler->sampleSplatsUPM(wr, radius, offset, i, *splats, m_config.useVC, m_config.useVM);
+				m_pathSampler->sampleSplatsUPM(wr, radius, offset, i, *splats, m_config.useVC, m_config.useVM, m_config.rejectionProb);
 
 				for (size_t k = 0; k < splats->size(); ++k) {
  					Spectrum value = splats->getValue(k);
@@ -209,10 +210,9 @@ void UPMProcess::processResult(const WorkResult *workResult, bool cancelled) {
 }
 
 ParallelProcess::EStatus UPMProcess::generateWork(WorkUnit *unit, int worker) {
-	size_t timeout = 0;
+	int64_t timeout = 0;
 	if (m_config.timeout > 0) {
-		timeout = static_cast<size_t>(static_cast<int64_t>(m_config.timeout) -
-		          static_cast<int64_t>(m_timeoutTimer->getSeconds()));
+		timeout = static_cast<int64_t>(m_config.timeout) - static_cast<int64_t>(m_timeoutTimer->getSeconds());
 	}
 
 	if (m_workCounter >= m_config.workUnits || timeout < 0)

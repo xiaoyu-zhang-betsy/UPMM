@@ -1817,10 +1817,8 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 	}
 }
 
-
-
 void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
-	const float gatherRadius, const int nsample, UPMWorkResult *wr){
+	const float gatherRadius, const int nsample, UPMWorkResult *wr, Float rejectionProb){
 	const Sensor *sensor = m_scene->getSensor();
 	m_lightPathTree.clear();
 	m_lightVertices.clear();
@@ -1833,7 +1831,7 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 	Float time = sensor->getShutterOpen();
 	Vector2i filmSize = sensor->getFilm()->getSize();
 	m_lightPathNum = nsample;
-	Float etaVCM = (M_PI * gatherRadius * gatherRadius) * m_lightPathNum;
+	Float etaVCM = (M_PI * gatherRadius * gatherRadius) * m_lightPathNum * (1.f - rejectionProb);
 	Float invLightPathNum = 1.f / m_lightPathNum;
 	Float misVmWeightFactor = useVM ? MisHeuristic(etaVCM) : 0.f;
 	Float misVcWeightFactor = useVC ? MisHeuristic(1.f / etaVCM) : 0.f;
@@ -1918,12 +1916,12 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 }
 void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 	const float gatherRadius, const Point2i &offset, 
-	const size_t cameraPathIndex, SplatList &list, bool useVC, bool useVM) {
+	const size_t cameraPathIndex, SplatList &list, bool useVC, bool useVM, Float rejectionProb) {
 	list.clear();
 
 	const Sensor *sensor = m_scene->getSensor();
 	size_t nLightPaths = m_lightPathNum;
-	const float etaVCM = (M_PI * gatherRadius * gatherRadius) * nLightPaths;
+	const float etaVCM = (M_PI * gatherRadius * gatherRadius) * nLightPaths * (1.f - rejectionProb);
 	Float vmNormalization = 1.f / etaVCM;
 	Float misVmWeightFactor = useVM ? MisHeuristic(etaVCM) : 0.f;
 	Float misVcWeightFactor = useVC ? MisHeuristic(1.f / etaVCM) : 0.f;
@@ -2074,7 +2072,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 // 								numClampShoots += searchResults.size() - finishCnt;
 // 							}
 // 						}
-// 					}
+// 					}					
 
 					MisState sensorState = sensorStates[t - 1];
 					for (int k = 0; k < searchResults.size(); k++){
@@ -2082,6 +2080,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						int s = node.data.depth;
 						if (m_maxDepth != -1 && s + t > m_maxDepth + 2 || s < minS) continue;						
 						//if (s == 2 && t == 2) continue;
+
+						if (m_sensorSampler->next1D() < rejectionProb) continue;
 
 						size_t vertexIndex = node.data.vertexIndex;
 						LightVertex vi = m_lightVertices[vertexIndex];
@@ -2149,6 +2149,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 								continue;
 							contrib *= connectionEdge.evalCached(vt, vsPred, PathEdge::EGeneralizedGeometricTerm);
 						}
+
+						contrib /= (1.f - rejectionProb);
 
 						if (t == 2 && s == 2){
 							float fuck = 1.f;

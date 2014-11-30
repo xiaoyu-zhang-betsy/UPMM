@@ -664,6 +664,9 @@
 		<param name="radiusAlpha" readableName="Scale of progressive radius shrink?" type="float" default="1.0" importance="1">
 			Reduce speed for progressive radius reduction.
 		</param>
+		<param name="rejectionProb" readableName="Probability of uniform rejection for radius search" type="float" default="0.0" importance="1">
+			Uniform rejection of samples with radius search
+		</param>
 		<param name="useVC" readableName="Use vertex connection" type="boolean" default="true">
 			Use vertex connection
 		</param>

@@ -46,6 +46,7 @@ struct UPMConfiguration {
 	Float initialRadius;
 	Float radiusScale;
 	Float radiusAlpha;
+	Float rejectionProb;
 
 	bool useVM;
 	bool useVC;
@@ -64,6 +65,7 @@ struct UPMConfiguration {
 		initialRadius = stream->readFloat();
 		radiusScale = stream->readFloat();
 		radiusAlpha = stream->readFloat();
+		rejectionProb = stream->readFloat();
 		workUnits = stream->readInt();
 		timeout = stream->readSize();
 		useVC = stream->readBool();
@@ -81,7 +83,8 @@ struct UPMConfiguration {
 		stream->writeInt(rrDepth);
 		stream->writeFloat(initialRadius);
 		stream->writeFloat(radiusScale);
-		stream->writeFloat(radiusAlpha);
+		stream->writeFloat(radiusAlpha);		
+		stream->writeFloat(rejectionProb);
 		stream->writeInt(workUnits);
 		stream->writeSize(timeout);
 		stream->writeBool(useVC);
@@ -103,6 +106,7 @@ struct UPMConfiguration {
 		SLog(EDebug, "   Initial radius of vertex merging:   %f", initialRadius);
 		SLog(EDebug, "   Scale of initial radius for gathering:	%f", radiusScale);
 		SLog(EDebug, "   Radius alpha for progressive shrink:	%f", radiusAlpha);
+		SLog(EDebug, "   Probability of uniform rejection of radius search:	%f", rejectionProb);
 		SLog(EDebug, "   Total number of work units  : %i", workUnits);
 		SLog(EDebug, "   Timeout                     : " SIZE_T_FMT, timeout);
 	}
