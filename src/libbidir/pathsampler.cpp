@@ -1143,8 +1143,8 @@ Float miWeightVC(const Scene *scene,
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
 
-		Float wCamera = MisHeuristic(ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);		
-		Float wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+		Float wCamera = MisHeuristic(ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+		Float wLight = MisHeuristic(psr1) * (((s == 2) ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
 		weight = 1.f / (1.f + wLight + wCamera);
 	}
 	else if (t == 1 && s > 1){		
@@ -1153,8 +1153,7 @@ Float miWeightVC(const Scene *scene,
 
 		Float wLight;
 		if (isUPM){
-			wLight = MisHeuristic(psr1) * ((misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
-			//wLight = MisHeuristic(psr1) * (emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+			wLight = MisHeuristic(psr1) * (((s == 2) ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
 		}
 		else
 			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
@@ -1197,8 +1196,7 @@ Float miWeightVC(const Scene *scene,
 		Float wLight = (measure == EDiscrete) ? 0.f : psr1 / pconnect;
 		Float wCamera;
 		if (isUPM){
-			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * ((misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
-			//wCamera = MisHeuristic(ptrace / pconnect) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
+			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		}
 		else
 			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
@@ -1228,7 +1226,16 @@ Float miWeightVC(const Scene *scene,
 		Float pconnect = vtPred->evalPdfDirect(scene, vt, EImportance, measure == ESolidAngle ? EArea : measure);
 		Float ptrace = vsTemp.evalPdf(scene, NULL, vt, EImportance, measure == ESolidAngle ? EArea : measure);
 		Float ptr1_w = vt->evalPdf(scene, &vsTemp, vtPred, EImportance, ESolidAngle);
-		Float wCamera = pconnect * sensordVCM + ptrace * ptr1_w * sensordVC;
+
+		if (t >= 3){
+			Vector edir = normalize(vt->getPosition() - vtPred->getPosition());
+			Float elen = (vt->getPosition() - vtPred->getPosition()).length();
+			Float giIn = std::abs(vtPred->isOnSurface() ? dot(edir, vtPred->getGeometricNormal()) : 1) / (elen * elen);
+			Float invpi = 1.f / vtPred->pdf[ERadiance];
+			sensordVC -= MisHeuristic(giIn * invpi) * misVmWeightFactor;
+		}
+
+		Float wCamera = pconnect * sensordVCM + ptrace * ptr1_w * sensordVC;	
 		
 		weight = 1.f / (1.f + wCamera);
 	}
@@ -1380,10 +1387,10 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 				state[EVMB] = MisHeuristic(giIn / piPred) * (state[EVM] + MisHeuristic(pir2Pred_w) * state[EVMB]);//state[EVM]
 				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor);		
 
-				//if (i > 2){
+				if (i > 2 || mode == ERadiance){
 					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
 					state[EVM] += MisHeuristic(giIn);
-				//}				
+				}				
 				state[EVCM] = MisHeuristic(invpi);
 			}
 			else{				
@@ -1895,7 +1902,7 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 
 #if UPM_DEBUG == 1
 				wr->putDebugSample(s, 1, samplePos, value * weight);
-				wr->putDebugSampleM(s, 1, samplePos, value);
+				//wr->putDebugSampleM(s, 1, samplePos, value);
 #endif
 
 				value *= weight;
@@ -1989,7 +1996,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			std::vector<uint32_t> acceptCnt;
 			std::vector<size_t> shootCnt;
 
-			int minT = 2; int minS = 2;
+			int minT = 2; int minS = 3;
 
 			int maxT = (int)m_sensorSubpath.vertexCount() - 1;
 			if (m_maxDepth != -1)
@@ -2221,11 +2228,11 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 #if UPM_DEBUG == 1
 						if (cameraDirConnection){
 							wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
-							wr->putDebugSampleM(s, t - 1, samplePos, contrib);
+							//wr->putDebugSampleM(s, t - 1, samplePos, contrib);
 						}
 						else{
 							wr->putDebugSample(s - 1, t, samplePos, contrib * miWeight);
-							wr->putDebugSampleM(s - 1, t, samplePos, contrib);
+							//wr->putDebugSampleM(s - 1, t, samplePos, contrib);
 						}
 #endif
 
@@ -2373,7 +2380,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 #if UPM_DEBUG == 1
 					wr->putDebugSample(s, t, samplePos, value * miWeight);
-					wr->putDebugSampleM(s, t, samplePos, value);
+					//wr->putDebugSampleM(s, t, samplePos, value);
 #endif
 
 					value *= miWeight;
