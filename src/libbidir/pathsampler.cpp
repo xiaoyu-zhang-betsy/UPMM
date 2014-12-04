@@ -1608,6 +1608,36 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 		MisState *sensorStates = (MisState *)alloca(m_sensorSubpath.vertexCount() * sizeof(MisState));
 		initializeMisHelper(m_sensorSubpath, sensorStates, m_scene, nLightPaths, misVcWeightFactor, misVmWeightFactor, ERadiance);
 
+		// massive vertex merging
+		if (useVM){
+			int minT = 2, maxT = (int)m_sensorSubpath.vertexCount() - 1;
+			if (m_maxDepth != -1)
+				maxT = std::min(maxT, m_maxDepth);
+
+			for (int t = minT; t <= maxT; ++t) {
+				PathVertex
+					*vtPred2 = m_sensorSubpath.vertexOrNull(t - 2),
+					*vtPred = m_sensorSubpath.vertexOrNull(t - 1),
+					*vt = m_sensorSubpath.vertex(t);
+				PathEdge
+					*vtEdge = m_sensorSubpath.edgeOrNull(t - 1);
+
+				if (!vt->isDegenerate()){
+					BDAssert(vt->type == PathVertex::ESurfaceInteraction);
+
+					Vector wi = normalize(vtPred->getPosition() - vt->getPosition());
+					Vector wiPred = (t == 2) ? Vector(-1.f, -1.f, -1.f) : normalize(vtPred2->getPosition() - vtPred->getPosition());
+					VertexMergingQuery query(m_scene, vt, vtPred, wi, wiPred, radianceWeights[t], m_lightVertices,
+						t, m_maxDepth, misVcWeightFactor, vmNormalization, sensorStates[t - 1]);
+
+					m_lightPathTree.executeQuery(vt->getPosition(), gatherRadius, query);
+
+					if (!query.result.isZero())
+						list.accum(0, query.result);
+				}
+			}
+		}
+
 		PathVertex tempEndpoint, tempSample;
 		PathEdge tempEdge, connectionEdge;		
 		// vertex connection
@@ -1742,36 +1772,6 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 			}
 			m_pool.release(vs0);
 			m_pool.release(vsPred0);
-		}
-
-		// massive vertex merging
-		if (useVM){
-			int minT = 2, maxT = (int)m_sensorSubpath.vertexCount() - 1;
-			if (m_maxDepth != -1)
-				maxT = std::min(maxT, m_maxDepth);
-
-			for (int t = minT; t <= maxT; ++t) {
-				PathVertex
-					*vtPred2 = m_sensorSubpath.vertexOrNull(t - 2),
-					*vtPred = m_sensorSubpath.vertexOrNull(t - 1),
-					*vt = m_sensorSubpath.vertex(t);
-				PathEdge
-					*vtEdge = m_sensorSubpath.edgeOrNull(t - 1);
-
-				if (!vt->isDegenerate()){
-					BDAssert(vt->type == PathVertex::ESurfaceInteraction);
-
-					Vector wi = normalize(vtPred->getPosition() - vt->getPosition());
-					Vector wiPred = (t == 2) ? Vector(-1.f, -1.f, -1.f) : normalize(vtPred2->getPosition() - vtPred->getPosition());
-					VertexMergingQuery query(m_scene, vt, vtPred, wi, wiPred, radianceWeights[t], m_lightVertices,
-						t, m_maxDepth, misVcWeightFactor, vmNormalization, sensorStates[t - 1]);
-
-					m_lightPathTree.executeQuery(vt->getPosition(), gatherRadius, query);
-
-					if (!query.result.isZero())
-						list.accum(0, query.result);
-				}
-			}
 		}
 
 		/* Release any used edges and vertices back to the memory pool */
