@@ -1997,7 +1997,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 					// evaluate sampling domain pdf normalization
 					int shareShootThreshold = 32;
-					int clampThreshold = 1000;
+					int clampThreshold = 1000000;
 					Float invBrdfIntegral = 1.f;
 					bool shareShoot = false;
 // 					if (searchPos.size() > shareShootThreshold){
