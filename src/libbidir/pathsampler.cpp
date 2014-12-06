@@ -1282,6 +1282,14 @@ Float miWeightVM(const Scene *scene, int s, int t,
 		Float wLight = emitterState[EVCM] * misVcWeightFactor + MisHeuristic(psr1_w * invps) * (emitterState[EVM] + MisHeuristic(psr2_w) * emitterState[EVMB]);
 		Float wCamera = MisHeuristic(dVCM * invpt) * misVcWeightFactor + MisHeuristic(ptr1_w * invpt) * (sensorState[EVM] + MisHeuristic(ptr2_w) * sensorState[EVMB]);
 		miWeight = 1.f / (1.f + wLight + wCamera);
+
+		if (!_finite(miWeight) || _isnan(miWeight)){
+			SLog(EWarn, "Invalid MIS weight %f, wLight = %f, wCamera = %f, emitterState=[%f, %f, %f, %f], sensorState=[%f, %f, %f, %f], \
+					invps = %f, invpt = %f, dVCM = %f, psr1_w = %f, psr2_w = %f, ptr1_w = %f, ptr2_w = %f",
+					miWeight, wLight, wCamera, emitterState[EVCM], emitterState[EVC], emitterState[EVM], emitterState[EVMB],
+					sensorState[EVCM], sensorState[EVC], sensorState[EVM], sensorState[EVMB],
+					invps, invpt, dVCM, psr1_w, psr2_w, ptr1_w, ptr2_w);
+		}
 	}
 	else{
 		Float ps = vsPred->evalPdf(scene, vsPred2, vt, EImportance, EArea);
@@ -1309,7 +1317,16 @@ Float miWeightVM(const Scene *scene, int s, int t,
 		Float wLight = MisHeuristic(dVCM * invps) * misVcWeightFactor + MisHeuristic(psr1_w * invps) * (emitterState[EVM] + MisHeuristic(psr2_w) * emitterState[EVMB]);
 		Float wCamera = sensorState[EVCM] * misVcWeightFactor + MisHeuristic(ptr1_w * invpt) * (sensorState[EVM] + MisHeuristic(ptr2_w) * sensorState[EVMB]);
 		miWeight = 1.f / (1.f + wLight + wCamera);
-	}
+
+		if (!_finite(miWeight) || _isnan(miWeight)){
+			SLog(EWarn, "Invalid MIS weight %f, wLight = %f, wCamera = %f, emitterState=[%f, %f, %f, %f], sensorState=[%f, %f, %f, %f], \
+					invps = %f, invpt = %f, dVCM = %f, psr1_w = %f, psr2_w = %f, ptr1_w = %f, ptr2_w = %f",
+					miWeight, wLight, wCamera, emitterState[EVCM], emitterState[EVC], emitterState[EVM], emitterState[EVMB],
+					sensorState[EVCM], sensorState[EVC], sensorState[EVM], sensorState[EVMB],
+					invps, invpt, dVCM, psr1_w, psr2_w, ptr1_w, ptr2_w);
+		}
+	}	
+
 	return miWeight;
 }
 void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scene,
@@ -1376,7 +1393,7 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 			Float giIn = std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / (e->length * e->length);
 			Float giInPred = std::abs(vPred->isOnSurface() ? dot(ePred->d, vPred->getGeometricNormal()) : 1) / (ePred->length * ePred->length);
 			Float pi = v->pdf[mode];
-			Float pir2_w = v->pdf[1 - mode] / giInPred;
+			Float pir2_w = (giInPred == 0.f) ? 0.f : (v->pdf[1 - mode] / giInPred);
 			Float invpi = 1.f / pi;
 			if (isUPM){
 				state[EVC] = MisHeuristic(giIn * invpi) * (state[EVCM] + MisHeuristic(pir2_w) * state[EVC]);
@@ -1386,7 +1403,7 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 					PathVertex *vPred2 = path.vertex(i - 2);
 					PathEdge * ePred2 = path.edge(i - 2);
 					Float giInPred2 = std::abs(vPred2->isOnSurface() ? dot(ePred2->d, vPred2->getGeometricNormal()) : 1) / (ePred2->length * ePred2->length);
-					pir2Pred_w = vPred->pdf[1 - mode] * ePred2->pdf[1 - mode] / giInPred2;
+					pir2Pred_w = (giInPred2 == 0.f) ? 0.f : (vPred->pdf[1 - mode] * ePred2->pdf[1 - mode] / giInPred2);
 				}
 				state[EVMB] = MisHeuristic(giIn / piPred) * (state[EVM] + MisHeuristic(pir2Pred_w) * state[EVMB]);//state[EVM]
 				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor);		
