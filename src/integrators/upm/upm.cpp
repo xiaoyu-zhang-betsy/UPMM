@@ -158,6 +158,8 @@ public:
 
 		m_config.useVM = props.getBoolean("useVM", true);
 		m_config.useVC = props.getBoolean("useVC", true);
+
+		m_config.clampThreshold = props.getSize("clampThreshold", 100);
 	}
 
 	/// Unserialize from a binary data stream

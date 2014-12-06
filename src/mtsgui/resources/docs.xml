@@ -673,6 +673,9 @@
 		<param name="useVM" readableName="Use vertex merging" type="boolean" default="true">
 			Use vertex merging
 		</param>
+		<param name="clampThreshold" readableName="Maximum 1/p sample number" type="integer" default="100" importance="1">
+			Clamp threshold for 1/p evaluation
+		</param>
 	</plugin>
 
 	<plugin type="integrator" name="pssmlt" readableName="Primary Sample Space MLT" show="true"

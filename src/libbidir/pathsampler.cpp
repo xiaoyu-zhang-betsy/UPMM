@@ -1143,7 +1143,9 @@ Float miWeightVC(const Scene *scene,
 		Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 		Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
 
+		//Float wCamera = MisHeuristic(ptr1) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		Float wCamera = MisHeuristic(ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+		//Float wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f: misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
 		Float wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
 		weight = 1.f / (1.f + wLight + wCamera);
 	}
@@ -1154,6 +1156,7 @@ Float miWeightVC(const Scene *scene,
 		Float wLight;
 		if (isUPM){
 			wLight = MisHeuristic(psr1) * (((s == 2) ? 0.f : misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
+			//wLight = MisHeuristic(psr1) * (emitterdVCM + MisHeuristic(psr2_w) * emitterdVC); // exclude (2,1) path in upm
 		}
 		else
 			wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
@@ -1197,6 +1200,7 @@ Float miWeightVC(const Scene *scene,
 		Float wCamera;
 		if (isUPM){
 			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+			//wCamera = MisHeuristic(ptrace / pconnect * ptr1) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		}
 		else
 			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
@@ -1883,7 +1887,8 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 }
 void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 	const float gatherRadius, const Point2i &offset, 
-	const size_t cameraPathIndex, SplatList &list, bool useVC, bool useVM, Float rejectionProb) {
+	const size_t cameraPathIndex, SplatList &list, bool useVC, bool useVM, 
+	Float rejectionProb, size_t clampThreshold) {
 	list.clear();
 
 	const Sensor *sensor = m_scene->getSensor();
@@ -1997,7 +2002,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 					// evaluate sampling domain pdf normalization
 					int shareShootThreshold = 32;
-					int clampThreshold = 1000000;
 					Float invBrdfIntegral = 1.f;
 					bool shareShoot = false;
 // 					if (searchPos.size() > shareShootThreshold){
@@ -2139,7 +2143,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							invBrdfIntegral = 1.f / brdfIntegral;
 							size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
 							Float distSquared = gatherRadius * gatherRadius;
-							while (totalShoot < clampThreshold / 10){
+							while (totalShoot < clampThreshold){
 								totalShoot++;
 
 								// restricted sampling evaluation shoots
@@ -2168,7 +2172,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							numInvpShoots += totalShoot;
 
 							numClampShoots.incrementBase();
-							if (totalShoot >= clampThreshold / 10)
+							if (totalShoot >= clampThreshold)
 								++numClampShoots;
 
 							invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;

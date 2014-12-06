@@ -47,6 +47,7 @@ struct UPMConfiguration {
 	Float radiusScale;
 	Float radiusAlpha;
 	Float rejectionProb;
+	size_t clampThreshold;
 
 	bool useVM;
 	bool useVC;
@@ -70,6 +71,7 @@ struct UPMConfiguration {
 		timeout = stream->readSize();
 		useVC = stream->readBool();
 		useVM = stream->readBool();
+		clampThreshold = stream->readSize();
 	}
 
 	inline void serialize(Stream *stream) const {
@@ -89,6 +91,7 @@ struct UPMConfiguration {
 		stream->writeSize(timeout);
 		stream->writeBool(useVC);
 		stream->writeBool(useVM);
+		stream->writeSize(clampThreshold);
 	}
 
 	void dump() const {
@@ -109,6 +112,7 @@ struct UPMConfiguration {
 		SLog(EDebug, "   Probability of uniform rejection of radius search:	%f", rejectionProb);
 		SLog(EDebug, "   Total number of work units  : %i", workUnits);
 		SLog(EDebug, "   Timeout                     : " SIZE_T_FMT, timeout);
+		SLog(EDebug, "   1/p clamp threshold   : " SIZE_T_FMT, clampThreshold);
 	}
 };
 
