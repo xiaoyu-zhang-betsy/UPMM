@@ -1409,8 +1409,8 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor);		
 
 				//if (i > 2 || mode == ERadiance){
-					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
-					state[EVM] += MisHeuristic(giIn);
+				state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
+				state[EVM] += MisHeuristic(giIn);
 				//}				
 				state[EVCM] = MisHeuristic(invpi);
 			}
