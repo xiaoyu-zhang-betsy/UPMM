@@ -48,5 +48,9 @@ plugins += bidirEnv.SharedLibrary('vcm',
 	
 plugins += bidirEnv.SharedLibrary('upm',
 	['upm/upm.cpp', 'upm/upm_proc.cpp'])
+	
+plugins += bidirEnv.SharedLibrary('epssmlt',
+	['epssmlt/epssmlt.cpp', 'epssmlt/epssmlt_sampler.cpp',
+    'epssmlt/epssmlt_proc.cpp']);
 
 Export('plugins')

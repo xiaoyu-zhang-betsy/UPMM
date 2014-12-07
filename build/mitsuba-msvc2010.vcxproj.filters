@@ -150,6 +150,9 @@
     <Filter Include="Source Files\integrators\upm">
       <UniqueIdentifier>{c8610930-b8dc-4ad0-b84f-56b231b19122}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\integrators\epssmlt">
+      <UniqueIdentifier>{d874b052-6983-44b7-a5dd-badc59489677}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup Label="Source Files">
     <ClCompile Include="..\src\converter\mtsimport.cpp">
@@ -1049,6 +1052,15 @@
     <ClCompile Include="..\src\integrators\upm\upm_proc.cpp">
       <Filter>Source Files\integrators\upm</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\integrators\epssmlt\epssmlt.cpp">
+      <Filter>Source Files\integrators\epssmlt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\epssmlt\epssmlt_proc.cpp">
+      <Filter>Source Files\integrators\epssmlt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\epssmlt\epssmlt_sampler.cpp">
+      <Filter>Source Files\integrators\epssmlt</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup Label="Header Files">
     <ClInclude Include="..\src\converter\converter.h">
@@ -1755,6 +1767,15 @@
     </ClInclude>
     <ClInclude Include="..\src\integrators\upm\upm_proc.h">
       <Filter>Source Files\integrators\upm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\epssmlt\epssmlt.h">
+      <Filter>Source Files\integrators\epssmlt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\epssmlt\epssmlt_proc.h">
+      <Filter>Source Files\integrators\epssmlt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\epssmlt\epssmlt_sampler.h">
+      <Filter>Source Files\integrators\epssmlt</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
