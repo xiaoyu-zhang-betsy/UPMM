@@ -1866,11 +1866,6 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 				}
 			}
 
-			if (k == 100 && s == 1){
-				Point p = vs->getPosition();
-				SLog(EInfo, " gatherLightPath k=100, s=1: (%f, %f, %f)", p.x, p.y, p.z);
-			}
-
 			// connect to camera
 			if (vs->measure != EDiscrete && wr != NULL && useVC){
 				Point2 samplePos(0.0f);
@@ -2946,15 +2941,15 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 						}
 
 						//Float invpOrig = 1.f / (vtPred->evalPdf(m_scene, vtPred2, vs, ERadiance) * M_PI * gatherRadius * gatherRadius);
-						Float invpOrig = 1.f;
-						if (cameraDirConnection)
-							invpOrig /= (vtPred->pdf[ERadiance] * M_PI * gatherRadius * gatherRadius);
-						else
-							invpOrig /= (vsPred->pdf[EImportance] * M_PI * gatherRadius * gatherRadius);
+// 						Float invpOrig = 1.f;
+// 						if (cameraDirConnection)
+// 							invpOrig /= (vtPred->pdf[ERadiance] * M_PI * gatherRadius * gatherRadius);
+// 						else
+// 							invpOrig /= (vsPred->pdf[EImportance] * M_PI * gatherRadius * gatherRadius);
+// 
+// 						contrib *= invpOrig;
 
-						contrib *= invpOrig;
-
-						/*
+						
 						Float invp = 0.f;
 						if (shareShoot){
 							invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
@@ -3010,7 +3005,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 							invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
 							contrib *= invp;
 						}
-						*/
+						
 
 						// accumulate to image
 						if (contrib.isZero()) continue;
@@ -3025,8 +3020,8 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 							contrib[1] < 0.f || _isnan(contrib[1]) || !std::isfinite(contrib[1]) ||
 							contrib[2] < 0.f || _isnan(contrib[2]) || !std::isfinite(contrib[2])){
 							Log(EWarn, "Invalid sample value[EPSSMLT-UPM]: %f %f %f, invp = %f, miWeight = %f",
-								contrib[0], contrib[1], contrib[2], invpOrig, miWeight);
-								//contrib[0], contrib[1], contrib[2], invp, miWeight);
+								contrib[0], contrib[1], contrib[2], invp, miWeight);
+								//contrib[0], contrib[1], contrib[2], invpOrig, miWeight);								
 							continue;
 						}
 
