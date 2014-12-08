@@ -90,7 +90,7 @@ public:
 					m_random->nextFloat());
 		m_sampleIndex = 0;
 		m_dimension1DArray = m_dimension2DArray = 0;
-	}
+	}	
 
 	Float next1D() {
 		return m_random->nextFloat();
@@ -109,6 +109,11 @@ public:
 			<< "]";
 		return oss.str();
 	}
+
+	/// Replace the underlying random number generator
+	inline void setRandom(Random *random) { m_random = random; }
+	/// Return the underlying random number generator
+	inline Random *getRandom() { return m_random; }
 
 	MTS_DECLARE_CLASS()
 private:

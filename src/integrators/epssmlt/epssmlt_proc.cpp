@@ -80,9 +80,12 @@ public:
 		m_emitterSampler = new EPSSMLTSampler(m_origSampler);
 		m_directSampler = new EPSSMLTSampler(m_origSampler);
 
-		m_pathSampler = new PathSampler(m_config.technique, m_scene,
-			m_emitterSampler, m_sensorSampler, m_directSampler, m_config.maxDepth,
-			m_config.rrDepth, m_config.separateDirect, m_config.directSampling);
+		m_independentSampler = static_cast<Sampler *>(getResource("lightSampler"));
+
+		m_pathSampler = new PathSampler(m_config.technique, m_scene,			
+			m_emitterSampler, m_sensorSampler, m_directSampler, m_config.maxDepth,			
+			m_config.rrDepth, m_config.separateDirect, m_config.directSampling, true,			
+			m_rplSampler);
 	}
 
 	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {
@@ -98,12 +101,21 @@ public:
 		m_emitterSampler->setRandom(m_rplSampler->getRandom());
 		m_directSampler->setRandom(m_rplSampler->getRandom());
 
+		m_rplSampler->setSampleIndex(0);
+		Vector2i cropSize = m_film->getCropSize();
+		if (m_config.useVM){
+			SLog(EInfo, "workunit->gatherLightPaths");
+			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM,
+				m_config.initialRadius, cropSize.x * cropSize.y, NULL);
+		}
+
 		/* Generate the initial sample by replaying the seeding random
 		   number stream at the appropriate position. Afterwards, revert
 		   back to this worker's own source of random numbers */
+		m_rplSampler->setSampleIndex(0);			
 		m_rplSampler->setSampleIndex(seed.sampleIndex);
-
-		m_pathSampler->sampleSplats(Point2i(-1), *current);
+		m_pathSampler->sampleSplatsExtend(m_config.useVC, m_config.useVM, 
+			m_config.initialRadius, Point2i(-1), *current);
 		result->clear();
 
 		ref<Random> random = m_origSampler->getRandom();
@@ -119,33 +131,48 @@ public:
 		m_emitterSampler->accept();
 		m_directSampler->accept();
 
+		m_pathSampler->setIndependentSampler(m_independentSampler);
+
 		/* Sanity check -- the luminance should match the one from
 		   the warmup phase - an error here would indicate inconsistencies
 		   regarding the use of random numbers during sample generation */
 		if (std::abs((current->luminance - seed.luminance)
 				/ seed.luminance) > Epsilon)
 			Log(EError, "Error when reconstructing a seed path: luminance "
-				"= %f, but expected luminance = %f", current->luminance, seed.luminance);
+				"= %f, but expected luminance = %f, sampleIndex = %ld", current->luminance, seed.luminance, seed.sampleIndex);
 
 		ref<Timer> timer = new Timer();
 
 		/* MLT main loop */
+		uint64_t lightPathRefresh = cropSize.x * cropSize.y;
+		uint64_t lightPathCtr = 1;
+		uint64_t mutationCtr = 0;
 		Float cumulativeWeight = 0;
 		current->normalize(m_config.importanceMap);
-		for (uint64_t mutationCtr=0; mutationCtr<m_config.nMutations && !stop; ++mutationCtr) {
+		for ( ; mutationCtr<m_config.nMutations && !stop; ++mutationCtr) {
 			if (wu->getTimeout() > 0 && (mutationCtr % 8192) == 0
 					&& (int) timer->getMilliseconds() > wu->getTimeout())
 				break;
+
+			// refresh light paths
+			if (mutationCtr >= lightPathRefresh && m_config.useVM){
+				m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM,
+					m_config.initialRadius, cropSize.x * cropSize.y, NULL);
+				lightPathRefresh += cropSize.x * cropSize.y;
+			}
 
 			bool largeStep = random->nextFloat() < m_config.pLarge;
 			m_sensorSampler->setLargeStep(largeStep);
 			m_emitterSampler->setLargeStep(largeStep);
 			m_directSampler->setLargeStep(largeStep);
 
-			m_pathSampler->sampleSplats(Point2i(-1), *proposed);
+			m_pathSampler->sampleSplatsExtend(m_config.useVC, m_config.useVM,
+				m_config.initialRadius, Point2i(-1), *proposed);
 			proposed->normalize(m_config.importanceMap);
 
 			Float a = std::min((Float) 1.0f, proposed->luminance / current->luminance);
+			//Float a = (current->luminance == 0.f) ? 1.0f : std::min((Float) 1.0f, proposed->luminance / current->luminance);
+			BDAssert(current->luminance > 0.f);
 
 			if (std::isnan(proposed->luminance) || proposed->luminance < 0) {
 				Log(EWarn, "Encountered a sample with luminance = %f, ignoring!",
@@ -205,7 +232,7 @@ public:
 			} else {
 				for (size_t k=0; k<proposed->size(); ++k) {
 					Spectrum value = proposed->getValue(k) * proposedWeight;
-					if (!value.isZero())
+					if (!value.isZero() && std::isfinite(value.average()))
 						result->put(proposed->getPosition(k), &value[0]);
 				}
 
@@ -227,6 +254,8 @@ public:
 				result->put(current->getPosition(k), &value[0]);
 		}
 
+		if (m_config.timeout > 0)
+			Log(EInfo, "PSSMLT process have run for %ld mutations, %ld light path passes.", mutationCtr, lightPathCtr);
 
 		delete current;
 		delete proposed;
@@ -248,6 +277,7 @@ private:
 	ref<EPSSMLTSampler> m_emitterSampler;
 	ref<EPSSMLTSampler> m_directSampler;
 	ref<ReplayableSampler> m_rplSampler;
+	ref<Sampler> m_independentSampler;
 };
 
 /* ==================================================================== */

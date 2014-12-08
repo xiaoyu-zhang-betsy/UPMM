@@ -240,10 +240,18 @@ public:
 		   transmitted), hence it is important to set this value as low as
 		   possible, while ensuring that there are enough units to keep all
 		   workers busy. */
-		m_config.workUnits = props.getInteger("workUnits", -1);
+		m_config.workUnits = props.getInteger("workUnits", 8);
 
 		/* Stop MLT after X seconds -- useful for equal-time comparisons */
 		m_config.timeout = props.getInteger("timeout", 0);
+
+		/* initial gather radius for vertex merging paths, same as Mitsuba */
+		m_config.initialRadius = props.getFloat("initialRadius", 0.0f);
+		/* exposed scale parameter for gather radius, which user could adjust it*/
+		m_config.radiusScale = props.getFloat("radiusScale", 1.0f);
+		/* Switch for separate components */
+		m_config.useVM = props.getBoolean("useVM", true);
+		m_config.useVC = props.getBoolean("useVC", true);
 	}
 
 	/// Unserialize from a binary data stream
@@ -274,6 +282,29 @@ public:
 		if (sensor->getSampler()->getClass()->getName() != "IndependentSampler")
 			Log(EError, "Metropolis light transport requires the independent sampler");
 
+		if (m_config.initialRadius == 0) {
+			/* Guess an initial radius if not provided
+			(use scene width / horizontal or vertical pixel count) * 5 */
+			Float rad = scene->getBSphere().radius;
+			Vector2i filmSize = scene->getSensor()->getFilm()->getSize();
+
+			m_config.initialRadius = std::min(rad / filmSize.x, rad / filmSize.y) * 3; // Mitsuba style
+			//m_config.initialRadius = rad * 0.003f; //VCM style
+			//m_config.initialRadius = 0.003f * 2.21705961; // for debug
+
+		}
+		m_config.initialRadius *= m_config.radiusScale;
+
+		// set log level
+		/*
+		mitsuba::Thread *thread = mitsuba::Thread::getThread();
+		if (EXPECT_NOT_TAKEN(thread == NULL)){
+			throw std::runtime_error("Null thread pointer");
+			mitsuba::Logger *logger = thread->getLogger();
+			logger->setLogLevel(EInfo);
+		}
+		*/
+
 		return true;
 	}
 
@@ -293,6 +324,10 @@ public:
 		size_t nCores = scheduler->getCoreCount();
 		size_t sampleCount = sampler->getSampleCount();
 		m_config.importanceMap = NULL;
+
+		if (m_config.initialRadius > 0.0f){
+			m_config.twoStage = false;
+		}
 
 		if (m_config.twoStage && !m_config.firstStage) {
 			Log(EInfo, "Executing first MLT stage");
@@ -350,13 +385,19 @@ public:
 		ref<ReplayableSampler> rplSampler = new ReplayableSampler();
 		ref<PathSampler> pathSampler = new PathSampler(m_config.technique, scene,
 			rplSampler, rplSampler, rplSampler, m_config.maxDepth, m_config.rrDepth,
-			m_config.separateDirect, m_config.directSampling);
+			m_config.separateDirect, m_config.directSampling, true, rplSampler);
+
+		if (m_config.useVM){
+			SLog(EInfo, "center->gatherLightPaths");
+			pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM,
+				m_config.initialRadius, cropSize.x * cropSize.y, NULL);
+		}
 
 		ref<EPSSMLTProcess> process = new EPSSMLTProcess(job, queue,
 				m_config, directImage, pathSeeds);
 
-		m_config.luminance = pathSampler->generateSeeds(luminanceSamples,
-			m_config.workUnits, false, m_config.importanceMap, pathSeeds);
+		m_config.luminance = pathSampler->generateSeedsExtend(m_config.useVC, m_config.useVM, m_config.initialRadius,
+			luminanceSamples, m_config.workUnits, pathSeeds);
 
 		if (!nested)
 			m_config.dump();
@@ -378,6 +419,9 @@ public:
 		process->bindResource("sensor", sensorResID);
 		process->bindResource("sampler", mltSamplerResID);
 		process->bindResource("rplSampler", rplSamplerResID);
+
+		int samplerID = scheduler->registerResource(sampler);
+		process->bindResource("lightSampler", samplerID);
 
 		m_process = process;
 		scheduler->schedule(process);

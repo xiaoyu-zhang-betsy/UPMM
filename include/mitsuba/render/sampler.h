@@ -161,6 +161,11 @@ public:
 	/// Serialize this sampler to a binary data stream
 	virtual void serialize(Stream *stream, InstanceManager *manager) const;
 
+	/// Replace the underlying random number generator
+	virtual void setRandom(Random *random) {}
+	/// Return the underlying random number generator
+	virtual inline Random *getRandom() { return NULL; }
+
 	MTS_DECLARE_CLASS()
 protected:
 	/// Construct a new sampler

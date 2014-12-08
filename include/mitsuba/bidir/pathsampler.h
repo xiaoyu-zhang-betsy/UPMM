@@ -507,7 +507,7 @@ public:
 	PathSampler(ETechnique technique, const Scene *scene, Sampler *emitterSampler,
 		Sampler *sensorSampler, Sampler *directSampler, int maxDepth, int rrDepth,
 		bool excludeDirectIllum, bool sampleDirect, bool lightImage = true,
-		Float gatherRadius = 0.0f, Sampler *lightPathSampler = NULL);
+		Sampler *lightPathSampler = NULL);
 
 	/**
 	 * \brief Generate a sample using the configured sampling strategy
@@ -605,10 +605,20 @@ public:
 	/// for VCM
 	void gatherLightPaths(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, ImageBlock* lightImage = NULL);
 	void sampleSplatsVCM(const bool useVC, const bool useVM, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
+
 	/// for UPM
-	void gatherLightPathsUPM(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, UPMWorkResult *wr, Float rejectionProb);
+	void gatherLightPathsUPM(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, UPMWorkResult *wr, Float rejectionProb = 0.f);
 	void sampleSplatsUPM(UPMWorkResult *wr, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list, 
 		bool useVC = false, bool useVM = true, Float rejectionProb = 0.f, size_t clampThreshold = 100);
+
+	/// for Extended PSSMLT
+	Float generateSeedsExtend(const bool useVC, const bool useVM, const float gatherRadius, 
+		size_t sampleCount, size_t seedCount, std::vector<PathSeed> &seeds);
+	void sampleSplatsExtend(const bool useVC, const bool useVM, const float gatherRadius, 
+		const Point2i &offset, SplatList &list);
+	void setIndependentSampler(Sampler* sampler){
+		m_lightPathSampler = sampler;
+	}
 
 	MTS_DECLARE_CLASS()
 protected:

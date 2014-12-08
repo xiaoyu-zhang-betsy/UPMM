@@ -56,6 +56,11 @@ struct EPSSMLTConfiguration {
 	size_t timeout;
 	ref<Bitmap> importanceMap;
 
+	Float initialRadius;
+	Float radiusScale;
+	bool useVC;
+	bool useVM;
+
 	inline EPSSMLTConfiguration() { }
 
 	void dump() const {
@@ -85,6 +90,10 @@ struct EPSSMLTConfiguration {
 		SLog(EDebug, "   Mutations per work unit     : " SIZE_T_FMT, nMutations);
 		if (timeout)
 			SLog(EDebug, "   Timeout                     : " SIZE_T_FMT,  timeout);
+		SLog(EDebug, "   Initial radius     : %f", initialRadius);
+		SLog(EDebug, "   Radius scale     : %f", radiusScale);
+		SLog(EDebug, "   Use vertex connection    : %s", useVC ? "yes" : "no");
+		SLog(EDebug, "   Use vertex merging    : %s", useVM ? "yes":"no");
 	}
 
 	inline EPSSMLTConfiguration(Stream *stream) {
@@ -112,6 +121,11 @@ struct EPSSMLTConfiguration {
 				(size_t) size.x * (size_t) size.y);
 		}
 		timeout = stream->readSize();
+
+		initialRadius = stream->readFloat();
+		radiusScale = stream->readFloat();
+		useVC = stream->readBool();
+		useVM = stream->readBool();
 	}
 
 	inline void serialize(Stream *stream) const {
@@ -140,6 +154,11 @@ struct EPSSMLTConfiguration {
 			Vector2i(0, 0).serialize(stream);
 		}
 		stream->writeSize(timeout);
+
+		stream->writeFloat(initialRadius);
+		stream->writeFloat(radiusScale);
+		stream->writeBool(useVC);
+		stream->writeBool(useVM);
 	}
 };
 

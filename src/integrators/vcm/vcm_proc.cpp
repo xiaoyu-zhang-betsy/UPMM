@@ -79,7 +79,7 @@ public:
 		m_pathSampler = new PathSampler(PathSampler::EBidirectional, m_scene,
 			m_sampler, m_sampler, m_sampler, m_config.maxDepth,
 			m_config.rrDepth, false /*m_config.separateDirect*/, true /*m_config.directSampling*/,
-			true, m_config.initialRadius, m_sampler);
+			true, m_sampler);
 	}
 
 	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {		

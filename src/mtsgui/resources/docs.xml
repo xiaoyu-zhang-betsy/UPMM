@@ -872,6 +872,12 @@
 			Specifies the minimum path depth, after which the implementation will start to use the
 			"russian roulette" path termination criterion (set to <tt>-1</tt> to disable).
 		</param>
+		<param name="useVC" readableName="Use vertex connection" type="boolean" default="true">
+			Use vertex connection
+		</param>
+		<param name="useVM" readableName="Use vertex merging" type="boolean" default="true">
+			Use vertex merging
+		</param>
 	</plugin>
 	
 	<plugin type="integrator" name="cmlt" readableName="Connection MLT" show="true"
