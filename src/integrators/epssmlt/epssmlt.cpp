@@ -391,6 +391,8 @@ public:
 			SLog(EInfo, "center->gatherLightPaths");
 			pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM,
 				m_config.initialRadius, cropSize.x * cropSize.y, NULL);
+			pathSampler->gatherCameraPathsUPM(m_config.useVC, m_config.useVM,
+				m_config.initialRadius);
 		}
 
 		ref<EPSSMLTProcess> process = new EPSSMLTProcess(job, queue,

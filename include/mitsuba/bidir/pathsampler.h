@@ -57,10 +57,16 @@ struct LightVertex{
 	Vector wo;
 	MisState emitterState;
 	inline  LightVertex(const PathVertex *vs, const PathVertex *vsPred,
-		const MisState &state, Spectrum _wgt) :
+		const MisState &state, Spectrum _wgt, ETransportMode mode = EImportance, Point2 samplePos = Point2(0.f)) :
 		emitterState(state), importanceWeight(_wgt){
 		if (vs->isSurfaceInteraction())
 			wo = normalize(vsPred->getPosition() - vs->getPosition());
+		
+		// for importon
+		if (mode == ERadiance){
+			wo.x = samplePos.x;
+			wo.y = samplePos.y;
+		}		
 	}
 };
 struct LightVertexExt{
@@ -73,38 +79,45 @@ struct LightVertexExt{
 	uint8_t measure;
 	uint8_t type;
 	Float pdfImp;
+	Float pdfRad;
+	
 	inline LightVertexExt(const PathVertex *vs, const PathVertex *vsPred, int _depth){
-		if (vs->isEmitterSample()){
+		if (vs->isEmitterSample() || vs->isSensorSample()){
 			const PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
 			shape = (const Shape*)pRec.object;
 			geoFrameN = pRec.n;
 			position = pRec.p;
 		}
-		else{
+		else if (vs->isSurfaceInteraction()){
 			const Intersection &its = vs->getIntersection();			
 			shape = its.shape;
 			position = its.p;
 			shFrameS = its.shFrame.s;
 			shFrameN = its.shFrame.n;
 			geoFrameN = its.geoFrame.n;			
-		}		
+		}
+		else{
+			SLog(EError, "Not supported vertex type to store in a path tree %d", vs->type);
+		}
 		depth = _depth;
 		measure = vs->measure;
 		type = vs->type;
 		pdfImp = vs->pdf[EImportance];
+		pdfRad = vs->pdf[ERadiance];
 	}
 	void expand(PathVertex* vs){
 		memset(vs, 0, sizeof(PathVertex));
 		vs->type = type;
 		vs->measure = measure;
 		vs->pdf[EImportance] = pdfImp;
-		if (vs -> type == PathVertex::EEmitterSample){
+		vs->pdf[ERadiance] = pdfRad;
+		if (vs->isEmitterSample() || vs->isSensorSample()){
 			PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
 			pRec.object = (const ConfigurableObject *)shape;
 			pRec.p = position;
 			pRec.n = geoFrameN;
 		}
-		else{
+		else if (vs->isSurfaceInteraction()){
 			Intersection &itp = vs->getIntersection();
 			itp.p = position;
 			itp.shFrame.s = shFrameS;
@@ -112,7 +125,10 @@ struct LightVertexExt{
 			itp.shFrame.t = cross(itp.shFrame.n, itp.shFrame.s);
 			itp.geoFrame = Frame(geoFrameN);
 			itp.setShapePointer(shape);
-		}		
+		}
+		else{
+			SLog(EError, "Not supported vertex type to draw frome a path tree %d", vs->type);
+		}
 	}
 };
 struct LightPathNodeData{
@@ -612,6 +628,7 @@ public:
 		bool useVC = false, bool useVM = true, Float rejectionProb = 0.f, size_t clampThreshold = 100);
 
 	/// for Extended PSSMLT
+	void gatherCameraPathsUPM(const bool useVC, const bool useVM, const float gatherRadius);
 	Float generateSeedsExtend(const bool useVC, const bool useVM, const float gatherRadius, 
 		size_t sampleCount, size_t seedCount, std::vector<PathSeed> &seeds);
 	void sampleSplatsExtend(const bool useVC, const bool useVM, const float gatherRadius, 
@@ -641,13 +658,19 @@ protected:
 	Path m_connectionSubpath, m_fullPath;
 	MemoryPool m_pool;
 
+	ref<Sampler> m_lightPathSampler; // independent sampler for photon and importon trace
+
 	// VCM
-	size_t m_lightPathNum;
-	ref<Sampler> m_lightPathSampler;	
+	size_t m_lightPathNum;	
 	LightPathTree m_lightPathTree;
 	std::vector<LightVertex> m_lightVertices;
 	std::vector<LightVertexExt> m_lightVerticesExt;
 	std::vector<size_t> m_lightPathEnds;
+
+	// EPSSMLT
+	LightPathTree m_cameraPathTree;
+	std::vector<LightVertex> m_cameraVertices;
+	std::vector<LightVertexExt> m_cameraVerticesExt;
 };
 
 /**

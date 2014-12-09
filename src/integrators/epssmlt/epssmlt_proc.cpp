@@ -107,6 +107,8 @@ public:
 			SLog(EInfo, "workunit->gatherLightPaths");
 			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM,
 				m_config.initialRadius, cropSize.x * cropSize.y, NULL);
+			m_pathSampler->gatherCameraPathsUPM(m_config.useVC, m_config.useVM,
+				m_config.initialRadius);
 		}
 
 		/* Generate the initial sample by replaying the seeding random
@@ -158,6 +160,8 @@ public:
 			if (mutationCtr >= lightPathRefresh && m_config.useVM){
 				m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM,
 					m_config.initialRadius, cropSize.x * cropSize.y, NULL);
+				m_pathSampler->gatherCameraPathsUPM(m_config.useVC, m_config.useVM,
+					m_config.initialRadius);
 				lightPathRefresh += cropSize.x * cropSize.y;
 			}
 
