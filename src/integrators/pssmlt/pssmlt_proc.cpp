@@ -132,7 +132,8 @@ public:
 		/* MLT main loop */
 		Float cumulativeWeight = 0;
 		current->normalize(m_config.importanceMap);
-		for (uint64_t mutationCtr=0; mutationCtr<m_config.nMutations && !stop; ++mutationCtr) {
+		for (uint64_t mutationCtr = 0; mutationCtr<m_config.nMutations || wu->getTimeout() > 0; ++mutationCtr) {
+			if (stop) break;
 			if (wu->getTimeout() > 0 && (mutationCtr % 8192) == 0
 					&& (int) timer->getMilliseconds() > wu->getTimeout())
 				break;

@@ -104,7 +104,6 @@ public:
 		m_rplSampler->setSampleIndex(0);
 		Vector2i cropSize = m_film->getCropSize();
 		if (m_config.useVM){
-			SLog(EInfo, "workunit->gatherLightPaths");
 			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM,
 				m_config.initialRadius, cropSize.x * cropSize.y, NULL);
 			m_pathSampler->gatherCameraPathsUPM(m_config.useVC, m_config.useVM,
@@ -146,12 +145,13 @@ public:
 		ref<Timer> timer = new Timer();
 
 		/* MLT main loop */
-		uint64_t lightPathRefresh = cropSize.x * cropSize.y;
+		uint64_t lightPathRefresh = 0;
 		uint64_t lightPathCtr = 1;
 		uint64_t mutationCtr = 0;
 		Float cumulativeWeight = 0;
 		current->normalize(m_config.importanceMap);
-		for ( ; mutationCtr<m_config.nMutations && !stop; ++mutationCtr) {
+		for (; mutationCtr<m_config.nMutations || wu->getTimeout() > 0; ++mutationCtr) {
+			if (stop) break;
 			if (wu->getTimeout() > 0 && (mutationCtr % 8192) == 0
 					&& (int) timer->getMilliseconds() > wu->getTimeout())
 				break;

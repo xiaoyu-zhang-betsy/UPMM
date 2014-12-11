@@ -388,7 +388,6 @@ public:
 			m_config.separateDirect, m_config.directSampling, true, rplSampler);
 
 		if (m_config.useVM){
-			SLog(EInfo, "center->gatherLightPaths");
 			pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM,
 				m_config.initialRadius, cropSize.x * cropSize.y, NULL);
 			pathSampler->gatherCameraPathsUPM(m_config.useVC, m_config.useVM,

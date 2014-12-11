@@ -774,6 +774,10 @@
 			Specifies the minimum path depth, after which the implementation will start to use the
 			"russian roulette" path termination criterion (set to <tt>-1</tt> to disable).
 		</param>
+		<param name="timeout" readableName="Target render time" type="integer" default="0" importance="1">
+			A non-zero target render time (in seconds) will override SPP setup, the rendering process will 
+			keep going until target render time arrived. 
+		</param>
 	</plugin>
 	
 	<plugin type="integrator" name="epssmlt" readableName="Extended Primary Sample Space MLT" show="true"
@@ -882,6 +886,10 @@
 		</param>
 		<param name="useVM" readableName="Use vertex merging" type="boolean" default="true">
 			Use vertex merging
+		</param>
+		<param name="timeout" readableName="Target render time" type="integer" default="0" importance="1">
+			A non-zero target render time (in seconds) will override SPP setup, the rendering process will 
+			keep going until target render time arrived. 
 		</param>
 	</plugin>
 	

@@ -1146,8 +1146,8 @@ Float miWeightVC(const Scene *scene,
 
 		//Float wCamera = MisHeuristic(ptr1) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		Float wCamera = MisHeuristic(ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
-		//Float wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f: misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
-		Float wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+		Float wLight = MisHeuristic(psr1) * ((s == 2 ? 0.f: misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+		//Float wLight = MisHeuristic(psr1) * (misVmWeightFactor + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
 		weight = 1.f / (1.f + wLight + wCamera);
 	}
 	else if (t == 1 && s > 1){		
@@ -1204,8 +1204,8 @@ Float miWeightVC(const Scene *scene,
 		Float wLight = (measure == EDiscrete) ? 0.f : MisHeuristic(psr1 / pconnect);
 		Float wCamera;
 		if (isUPM){
-			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
-			//wCamera = MisHeuristic(ptrace / pconnect * ptr1) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+			//wCamera = MisHeuristic(ptrace / pconnect * ptr1) * ((t == 2 ? 0.f : misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
+			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * (sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 		}
 		else
 			wCamera = MisHeuristic(ptrace / pconnect * ptr1) * (misVmWeightFactor + sensordVCM + MisHeuristic(ptr2_w) * sensordVC); // exclude (1,t) path in upm
@@ -1236,7 +1236,8 @@ Float miWeightVC(const Scene *scene,
 		Float ptrace = vsTemp.evalPdf(scene, NULL, vt, EImportance, measure == ESolidAngle ? EArea : measure);
 		Float ptr1_w = vt->evalPdf(scene, &vsTemp, vtPred, EImportance, ESolidAngle);
 
-		if (t == 3 && misVmWeightFactor > 0.f){
+		//if (t == 3 && misVmWeightFactor > 0.f){
+		if (t >= 3 && misVmWeightFactor > 0.f){
 			Vector edir = normalize(vt->getPosition() - vtPred->getPosition());
 			Float elen = (vt->getPosition() - vtPred->getPosition()).length();
 			Float giIn = std::abs(vtPred->isOnSurface() ? dot(edir, vtPred->getGeometricNormal()) : 1) / (elen * elen);
@@ -1413,10 +1414,10 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 				state[EVMB] = MisHeuristic(giIn / piPred) * (state[EVM] + MisHeuristic(pir2Pred_w) * state[EVMB]);//state[EVM]
 				state[EVM] = MisHeuristic(giIn) * (state[EVCM] * misVcWeightFactor);		
 
-				//if (i > 2 || mode == ERadiance){
-				state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
-				state[EVM] += MisHeuristic(giIn);
-				//}				
+				if (i > 2 || mode == ERadiance){
+					state[EVC] += MisHeuristic(giIn * invpi) * misVmWeightFactor;
+					state[EVM] += MisHeuristic(giIn);
+				}				
 				state[EVCM] = MisHeuristic(invpi);
 			}
 			else{				
@@ -2055,7 +2056,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			std::vector<uint32_t> acceptCnt;
 			std::vector<size_t> shootCnt;
 
-			int minT = 2; int minS = 2;
+			int minT = 2; int minS = 3;
 
 			int maxT = (int)m_sensorSubpath.vertexCount() - 1;
 			if (m_maxDepth != -1)
@@ -2188,8 +2189,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							const BSDF *bsdf = its.getBSDF();
 							sBandwidth = bsdf->getBandwidth();
 						}
-						if (sBandwidth < tBandwidth)
-							cameraDirConnection = false;
+ 						if (sBandwidth < tBandwidth)
+ 							cameraDirConnection = false;						
 
 						samplePos = initialSamplePos;
 						if (vtPred->isSensorSample()){
@@ -2847,7 +2848,6 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 		size_t clampThreshold = 1000000; // TODO: make it a parameter
 		int shareShootThreshold = 128;
 
-
 		// massive vertex merging - CAMERA!
 		// trace camera subpath to gather photons
 		if (useVM){
@@ -2860,7 +2860,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 			PathEdge *succEdge = m_pool.allocEdge();
 			Point2 samplePos(0.0f);			
 
-			int minT = 2; int minS = 2;
+			int minT = 2; int minS = 3;
 
 			int maxT = (int)m_sensorSubpath.vertexCount() - 1;
 			if (m_maxDepth != -1)
@@ -3153,7 +3153,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 			Point2 samplePos(0.0f);
 			std::vector<uint32_t> searchResults;
 
-			int minT = 2; int minS = 2;
+			int minT = 2; int minS = 3;
 
 			int maxS = (int)m_emitterSubpath.vertexCount() - 1;
 			if (m_maxDepth != -1)
