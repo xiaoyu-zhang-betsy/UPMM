@@ -27,7 +27,8 @@
  * rendering into the weighted contributions of the individual sampling
  * strategies.
  */
-//#define BDPT_DEBUG 1
+
+#define BDPT_DEBUG 1
 
 MTS_NAMESPACE_BEGIN
 

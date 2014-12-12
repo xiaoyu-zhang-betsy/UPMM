@@ -38,15 +38,17 @@ enum EMisTech {
 	EVC = 1,
 	EVM = 2,
 	EVMB = 3,
-	EMisTechs = 4
+	EVCB = 4,
+	EMisTechs = 5
 };
 struct MTS_EXPORT_BIDIR MisState{
 	float state[EMisTechs];
 	MisState(){
-		state[EVCM] = 0.f;
+		state[EVCM] = 1.f;
 		state[EVC] = 0.f;
 		state[EVM] = 0.f;
 		state[EVMB] = 0.f;
+		state[EVCB] = 0.f;
 	}
 	float& operator[](EMisTech tech){
 		return state[tech];
