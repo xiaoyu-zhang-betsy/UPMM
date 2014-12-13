@@ -510,6 +510,10 @@ public:
 	virtual Float getBandwidth() const{
 		return 0.f;
 	}
+	virtual Float getAreaMaxPdf(Vector wi, Vector wo, Float gatherRadius) const{
+		SLog(EWarn, "Not implment bsdf->getAreaMaxProb");
+		return 0.f;
+	}
 
 	MTS_DECLARE_CLASS()
 protected:

@@ -1664,5 +1664,38 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 
 	return true;
 }
+
+Float PathVertex::getAreaMaxPdf(Point p, Float radius, const PathVertex* pPred) const{
+	switch (type) {
+// 	case ESensorSample: {
+// 		// Assume perspective camera
+// 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+// 		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+// 		bbox = sensor->evaluateSphereBounds(p, radius);
+// 		return (bbox.y - bbox.x) * (bbox.w - bbox.z);
+// 	}
+// 		break;
+	case ESurfaceInteraction: {
+		const Intersection &its = getIntersection();
+		Vector wo = p - its.p;
+		Vector wi = normalize(pPred->getPosition() - its.p);
+		const BSDF *bsdf = its.getBSDF();
+		return bsdf->getAreaMaxPdf(its.toLocal(wi), its.toLocal(wo), radius);
+	}
+		break;
+
+// 	case EEmitterSample: {
+// 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+// 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+// 		return emitter->gatherAreaPdf(pRec, p, radius, bbox, bboxd);
+// 	}
+
+	default:
+		SLog(EError, "PathVertex::sampsamplingProbabilityleNext(): Encountered an "
+			"unsupported vertex type (%i)!", type);
+		return 0.f;
+	}
+}
+
 MTS_NAMESPACE_END
 

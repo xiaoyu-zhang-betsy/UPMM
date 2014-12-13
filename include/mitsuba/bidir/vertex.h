@@ -919,6 +919,7 @@ struct MTS_EXPORT_BIDIR PathVertex {
 		ETransportMode mode, 
 		Point gatherPosition, Float gatherRadius, Vector4 bbox, Vector4 bboxd,
 		bool russianRoulette = false, Spectrum *throughput = NULL);
+	Float getAreaMaxPdf(Point p, Float radius, const PathVertex* pPred) const;
 
 	//! @}
 	/* ==================================================================== */

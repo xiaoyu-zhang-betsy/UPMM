@@ -275,9 +275,28 @@ public:
 		return dir;
 	}
 
+	Float getAreaMaxPdf(Vector wi, Vector wo, Float gatherRadius) const{
+		if (Frame::cosTheta(wi) <= 0) return 0.f;
+		Vector dir = wo;
+		Float dis = dir.length();
+		Float alpha = 0.f;
+		if (dis < gatherRadius)
+			alpha = 1.f;
+		else{
+			dir /= dis;
+			Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);
+			Float theta = acos(dir.z);
+			Float theta0 = theta - dTheta;
+			theta0 = std::max(theta0, (Float)0.0);
+			alpha = cos(theta0);
+		}
+		return INV_PI * alpha;
+	}
+
 	Float getBandwidth() const{
 		return 0.f;
 	}
+
 
 	MTS_DECLARE_CLASS()
 private:

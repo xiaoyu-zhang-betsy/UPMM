@@ -491,6 +491,46 @@ public:
 		}
 	}
 
+	Float getAreaMaxPdf(Vector wi, Vector wo, Float gatherRadius) const{
+		if (Frame::cosTheta(wi) <= 0)
+			return 0.f;
+
+		Float alpha = 0.f;
+		Float specPdf = 0.f, diffPdf = 0.f;
+
+		Float dis = wo.length();
+		Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);
+
+		if (dis < gatherRadius)
+			alpha = 1.f;
+		else{			
+			Vector wir = reflect(wi);
+			Vector dir = Frame(wir).toLocal(wo / dis);
+			Float exponent = m_exponent->getAverage().average();
+			Float theta = acos(dir.z);
+			Float theta0 = theta - dTheta;
+			theta0 = std::max(theta0, (Float)0.0);
+			alpha = cos(theta0);
+		}
+		Float exponent = m_exponent->getAverage().average();
+		if (alpha > 0)
+			specPdf = std::pow(alpha, exponent) *
+			(exponent + 1.0f) / (2.0f * M_PI);
+
+		if (dis < gatherRadius)
+			alpha = 1.f;
+		else{
+			Vector dir = wo / dis;
+			Float theta = acos(dir.z);
+			Float theta0 = theta - dTheta;
+			theta0 = std::max(theta0, (Float)0.0);
+			alpha = cos(theta0);
+		}
+		diffPdf = INV_PI * alpha;
+
+		return specPdf * m_specularSamplingWeight + diffPdf * (1.f - m_specularSamplingWeight);
+	}
+
 	MTS_DECLARE_CLASS()
 private:
 	ref<Texture> m_diffuseReflectance;
