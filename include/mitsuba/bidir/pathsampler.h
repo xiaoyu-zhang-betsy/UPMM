@@ -36,19 +36,13 @@ MTS_NAMESPACE_BEGIN
 enum EMisTech {
 	EVCM = 0,
 	EVC = 1,
-	EVM = 2,
-	EVMB = 3,
-	EVCB = 4,
-	EMisTechs = 5
+	EMisTechs = 2
 };
 struct MTS_EXPORT_BIDIR MisState{
 	float state[EMisTechs];
 	MisState(){
 		state[EVCM] = 1.f;
 		state[EVC] = 0.f;
-		state[EVM] = 0.f;
-		state[EVMB] = 0.f;
-		state[EVCB] = 0.f;
 	}
 	float& operator[](EMisTech tech){
 		return state[tech];

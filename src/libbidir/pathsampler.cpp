@@ -1200,48 +1200,15 @@ Float termEVCM(int i, Float dVCM){
 Float misEVM(int i, MisState state, Float piPred, Float pir1, Float pir2, const PathVertex* v,
 	Float gatherRadius, size_t numLightPath, Float etai, ETransportMode mode, ETransportMode connectionMode, bool USEVC){
 	
-	Float eVM = state[EVMB];
-	Float dVCM = termEVCM(i - 1 , state[EVCM]);
-	Float invPiPred = (piPred == 0.f) ? 0.f : (1.f / piPred);
-	eVM *= MisHeuristic(pir2 * invPiPred);											// former terms
-	if (v->measure != EDiscrete){				
-		Float inv_eta = (etai == 0.f) ? 0.f : 1.f / etai;
-		if (USEVC)
-			eVM += MisHeuristic(invPiPred * inv_eta) * dVCM;				// pvc_{r-1} / pvm
-		if (i > 2 || (mode == ERadiance && i > 1)){
-			Float etair1 = 0.f;
-			if (connectionMode != mode)
-				etair1 = misEffectiveEta(pir1, gatherRadius, numLightPath, (ETransportMode)(1 - mode));
-			else
-				etair1 = misEffectiveEta(piPred, gatherRadius, numLightPath, mode);
-			eVM += MisHeuristic(etair1 * inv_eta);									// pvm_{r-1} / pvm
-		}
-	}
-
-	return eVM;
+	BDAssert(false); // discarded
+	return 0.f;
 }
 
 Float misEVC(int i, MisState state, Float piPred, Float pir1, Float pir2, const PathVertex* v, 
 	Float gatherRadius, size_t numLightPath, ETransportMode mode, ETransportMode connectionMode, bool USEVM, bool directLightSegment = false){
 
-	Float eVC = (i > 1) ? state[EVCB] : 0.f;
-	Float dVCM = termEVCM(i - 1 , state[EVCM]);
-	Float invPiPred = (piPred == 0.f) ? 0.f : (1.f / piPred);
-
-	eVC *= MisHeuristic(pir2 * invPiPred);										// former terms
-	if (v->measure != EDiscrete){
-		eVC += MisHeuristic(invPiPred) * dVCM;									// pvc_{r-1} / pvc
-		if ((i > 2 || (mode == ERadiance && i > 1)) && USEVM){
-			Float etair1 = 0.f;
-			if (connectionMode != mode)
-				etair1 = misEffectiveEta(pir1, gatherRadius, numLightPath, (ETransportMode)(1 - mode));
-			else
-				etair1 = misEffectiveEta(piPred, gatherRadius, numLightPath, mode);
-			if (!directLightSegment)
-				eVC += MisHeuristic(etair1);												// pvm_{r-1} / pvc
-		}
-	}
-	return eVC;
+	BDAssert(false); // discarded
+	return 0.f;
 }
 
 Float misdVC(int i, MisState statePred, Float piPred, Float pir2, const PathVertex* vPred, const PathVertex* vPred3,
@@ -1345,9 +1312,6 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 	if (i == 0){
 		state[EVCM] = 1.f;
 		state[EVC] = 0.f;
-		state[EVM] = 0.f;
-		state[EVMB] = 0.f;
-		state[EVCB] = 0.f;
 	}
 	else if (i == 1){
 		PathVertex *vPred = path.vertex(0);
@@ -1376,7 +1340,6 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 		state[EVC] = misdVC(i, state, piPred, pir2, vPred, vPred3,
 			gatherRadius, numLightPath, mode, useVM);
 	}
-	state[EVCB] = float(i);
 }
 void initializeMisHelper(const Path &path, MisState *states, const Scene* scene,
 	Float gatherRadius, size_t nLightPaths, bool useVC, bool useVM,
@@ -1722,11 +1685,12 @@ struct VertexMergingQuery {
 		Float weightExt = 0.f;
 		Float psr2_w = vt->evalPdf(scene, wi, wo, ERadiance, ESolidAngle);
 		Float ptr2_w = vt->evalPdf(scene, wo, wi, EImportance, ESolidAngle);
-		Float wLight = emitterState[EVCM] * misVcWeightFactor + MisHeuristic(psr2_w) * emitterState[EVM];
-		Float wCamera = sensorState[EVCM] * misVcWeightFactor + MisHeuristic(ptr2_w) * sensorState[EVM];
-		weightExt = 1.f / (1.f + wLight + wCamera);
-
-		result += val * weightExt * vmNormalization;
+		BDAssert(false);
+// 		Float wLight = emitterState[EVCM] * misVcWeightFactor + MisHeuristic(psr2_w) * emitterState[EVM];
+// 		Float wCamera = sensorState[EVCM] * misVcWeightFactor + MisHeuristic(ptr2_w) * sensorState[EVM];
+// 		weightExt = 1.f / (1.f + wLight + wCamera);
+// 
+// 		result += val * weightExt * vmNormalization;
 	}
 	int t, maxDepth;
 	Float misVcWeightFactor, vmNormalization;
