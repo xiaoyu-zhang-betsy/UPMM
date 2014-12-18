@@ -1441,7 +1441,7 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterStatePred, Mi
 			const PositionSamplingRecord &pRec = vs->getPositionSamplingRecord();
 			const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
 			EMeasure measure = emitter->getDirectMeasure();
-			Float psr = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
+			Float psr = (vs->isDegenerate()) ? 0.f : vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 			pconnect = vt->evalPdfDirect(scene, vs, EImportance, measure == ESolidAngle ? EArea : measure);
 			ptrace = vsPred->pdf[EImportance];
 			if (emitter->needsPositionSample() && !emitter->needsDirectionSample()){ // directional light
@@ -1450,9 +1450,9 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterStatePred, Mi
 			wLight = (measure == EDiscrete) ? 0.f : MisHeuristic(psr / pconnect);
 		}
 		else{
-			Float psr = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
-			Float psr1 = vs->evalPdf(scene, vt, vsPred, ERadiance, EArea);
-			Float psr2 = vsPred->evalPdf(scene, vs, vsPred2, ERadiance, EArea);
+			Float psr = (vs->isDegenerate()) ? 0.f : vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
+			Float psr1 = (vsPred->isDegenerate()) ? 0.f : vs->evalPdf(scene, vt, vsPred, ERadiance, EArea);
+			Float psr2 = (vsPred2->isDegenerate()) ? 0.f : vsPred->evalPdf(scene, vs, vsPred2, ERadiance, EArea);
 			Float ps = vsPred->pdf[EImportance];
 			Float psPred = vsPred2->pdf[EImportance];
 			wLight = misWeightVC(s - 1, t, emitterStatePred, sensorStatePred,
@@ -1465,8 +1465,8 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterStatePred, Mi
 		}
 		else{
 			Float ptr = vs->evalPdf(scene, vsPred, vt, EImportance, measureTrace);
-			Float ptr1 = vt->evalPdf(scene, vs, vtPred, EImportance, EArea);
-			Float ptr2 = vtPred->evalPdf(scene, vt, vtPred2, EImportance, EArea);
+			Float ptr1 = (t > 2) ? vt->evalPdf(scene, vs, vtPred, EImportance, EArea) : 0.f;
+			Float ptr2 = (t > 3) ? vtPred->evalPdf(scene, vt, vtPred2, EImportance, EArea) : 0.f;
 			Float pt = vtPred->pdf[ERadiance];
 			Float ptPred = vtPred2->pdf[ERadiance];
 			wCamera = MisHeuristic(ptrace / pconnect) * 
@@ -1477,6 +1477,7 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterStatePred, Mi
 		}
 	}
 	Float miWeight = 1.f / (wLight + wCamera + 1.f);
+
 	return miWeight;
 
 
@@ -1550,15 +1551,15 @@ Float miWeightVM(const Scene *scene, int s, int t, MisState emitterStatePred, Mi
 		Float ps = vsPred->pdf[EImportance];
 		
 		Float psPred = vsPred2->pdf[EImportance];
-		Float psr1 = vs->evalPdf(scene, vtPred, vsPred, ERadiance, EArea);
-		Float psr2 = vsPred->evalPdf(scene, vs, vsPred2, ERadiance, EArea);
+		Float psr1 = (vsPred->isDegenerate()) ? 0.f : vs->evalPdf(scene, vtPred, vsPred, ERadiance, EArea);
+		Float psr2 = (vsPred2->isDegenerate()) ? 0.f : vsPred->evalPdf(scene, vs, vsPred2, ERadiance, EArea);
 		wLight = misWeightVM(s - 1, emitterStatePred,
 			ps, psPred, pt, psr1, psr2,
 			vtPred, vs, vsPred, vsPred2, vsPred3,
-			gatherRadius, numLightPath, EImportance, useVC, useVM);
+			gatherRadius, numLightPath, EImportance, useVC, useVM);		
 
-		Float ptr1 = vs->evalPdf(scene, vsPred, vtPred, EImportance, EArea);
-		Float ptr2 = vtPred->evalPdf(scene, vs, vtPred2, EImportance, EArea);
+		Float ptr1 = (t <= 2) ? 0.f : vs->evalPdf(scene, vsPred, vtPred, EImportance, EArea);
+		Float ptr2 = (t <= 3) ? 0.f : vtPred->evalPdf(scene, vs, vtPred2, EImportance, EArea);
 		Float ptPred = vtPred2->pdf[ERadiance];
 		wCamera = misWeightVM(t - 1, sensorStatePred,
 			pt, ptPred, ps, ptr1, ptr2,
@@ -1569,16 +1570,24 @@ Float miWeightVM(const Scene *scene, int s, int t, MisState emitterStatePred, Mi
 		Float ps = vsPred->evalPdf(scene, vsPred2, vt, EImportance, EArea);	
 		Float pt = vtPred->pdf[ERadiance];
 
-		Float psr1 = vt->evalPdf(scene, vtPred, vsPred, ERadiance, EArea);
-		Float psr2 = vsPred->evalPdf(scene, vt, vsPred2, ERadiance, EArea);
+		if (s == 2 && t > 2){
+			float fuck = 1.f;
+		}
+
+		Float psr1 = (vsPred->isDegenerate()) ? 0.f : vt->evalPdf(scene, vtPred, vsPred, ERadiance, EArea);
+		Float psr2 = (vsPred2->isDegenerate()) ? 0.f : vsPred->evalPdf(scene, vt, vsPred2, ERadiance, EArea);
 		Float psPred = vsPred2->pdf[EImportance];
 		wLight = misWeightVM(s - 1, emitterStatePred,
 			ps, psPred, pt, psr1, psr2,
 			vtPred, vt, vsPred, vsPred2, vsPred3,
-			gatherRadius, numLightPath, EImportance, useVC, useVM);
+			gatherRadius, numLightPath, EImportance, useVC, useVM);		
 
-		Float ptr1 = vt->evalPdf(scene, vsPred, vtPred, EImportance, (EMeasure)vtPred->measure);
-		Float ptr2 = vtPred->evalPdf(scene, vt, vtPred2, EImportance, EArea);	
+		if ((EMeasure)vtPred->measure != EArea){
+			float fuck = 1.f;
+		}
+
+		Float ptr1 = (t <= 2) ? 0.f : vt->evalPdf(scene, vsPred, vtPred, EImportance, EArea);
+		Float ptr2 = (t <= 3) ? 0.f : vtPred->evalPdf(scene, vt, vtPred2, EImportance, EArea);
 		Float ptPred = vtPred2->pdf[ERadiance];
 		wCamera = misWeightVM(t - 1, sensorStatePred,
 			pt, ptPred, ps, ptr1, ptr2,
@@ -2501,6 +2510,10 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					else
 						value *= connectionEdge.evalCached(vs, vt, PathEdge::ETransmittance |
 						(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
+
+					if (samplePos.x >= 203 && samplePos.x < 204 && samplePos.y >= 307 && samplePos.y < 308){
+						float fucka = 1.f;
+					}
 
 					MisState sensorStatePred = sensorStates[t - 2];
 					Float miWeight = miWeightVC(m_scene, s, t, emitterStatePred, sensorStatePred,

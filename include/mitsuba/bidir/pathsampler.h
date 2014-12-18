@@ -76,6 +76,7 @@ struct LightVertexExt{
 	uint8_t type;
 	Float pdfImp;
 	Float pdfRad;
+	bool degenerate;
 	
 	inline LightVertexExt(const PathVertex *vs, const PathVertex *vsPred, int _depth){
 		if (vs->isEmitterSample() || vs->isSensorSample()){
@@ -97,6 +98,7 @@ struct LightVertexExt{
 		}
 		depth = _depth;
 		measure = vs->measure;
+		degenerate = vs->degenerate;
 		type = vs->type;
 		pdfImp = vs->pdf[EImportance];
 		pdfRad = vs->pdf[ERadiance];
@@ -105,6 +107,7 @@ struct LightVertexExt{
 		memset(vs, 0, sizeof(PathVertex));
 		vs->type = type;
 		vs->measure = measure;
+		vs->degenerate = degenerate;
 		vs->pdf[EImportance] = pdfImp;
 		vs->pdf[ERadiance] = pdfRad;
 		if (vs->isEmitterSample() || vs->isSensorSample()){
