@@ -1983,6 +1983,10 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 	Float misVmWeightFactor = useVM ? MisHeuristic(etaVCM) : 0.f;
 	Float misVcWeightFactor = useVC ? MisHeuristic(1.f / etaVCM) : 0.f;
 	for (size_t k = 0; k < m_lightPathNum; k++){
+		// emitter states
+		MisState emitterState, emitterStatePred, sensorStatePred;
+		Spectrum importanceWeight = Spectrum(1.0f);
+
 		/* Initialize the path endpoints */
 		m_emitterSubpath.initialize(m_scene, time, EImportance, m_pool);
 
@@ -1990,9 +1994,11 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 		m_emitterSubpath.randomWalk(m_scene, m_lightPathSampler, m_emitterDepth,
 			m_rrDepth, EImportance, m_pool);
 
-		// emitter states
-		MisState emitterState, emitterStatePred, sensorStatePred;
-		Spectrum importanceWeight = Spectrum(1.0f);
+		PathVertex* vs = m_emitterSubpath.vertex(0);
+		LightVertex lvertex = LightVertex(vs, NULL, emitterStatePred, Spectrum(1.f));
+		m_lightVertices.push_back(lvertex);
+		LightVertexExt lvertexExt = LightVertexExt(vs, NULL, 0);
+		m_lightVerticesExt.push_back(lvertexExt);		
 		for (int s = 1; s < (int)m_emitterSubpath.vertexCount(); ++s) {
 			PathVertex
 				*vsPred3 = m_emitterSubpath.vertexOrNull(s - 3),
@@ -2014,7 +2020,7 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 			// store light paths												
 			//if (s > 1 && vs->measure != EDiscrete && dot(es->d, -vs->getGeometricNormal()) > Epsilon /* don't save backfaced photons */){
 			{
-				LightVertex lvertex = LightVertex(vs, vsPred, emitterStatePred, importanceWeight);
+				LightVertex lvertex = LightVertex(vs, vsPred, emitterState, importanceWeight);
 				m_lightVertices.push_back(lvertex);
 				LightVertexExt lvertexExt = LightVertexExt(vs, vsPred, s);
 				m_lightVerticesExt.push_back(lvertexExt);
@@ -2235,22 +2241,21 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						size_t vertexIndex = node.data.vertexIndex;
 						LightVertex vi = m_lightVertices[vertexIndex];
 						LightVertex viPred = m_lightVertices[vertexIndex - 1];
-						MisState emitterStatePred = vi.emitterState;
+						MisState emitterStatePred = viPred.emitterState;
 
 						vs = vs_; vsPred = vsPred_; vsPred2 = vsPred2_; vsPred3 = vsPred3_;
 						m_lightVerticesExt[vertexIndex].expand(vs);						
 						m_lightVerticesExt[vertexIndex - 1].expand(vsPred);						
-						if (s > 3){
+						if (s > 2){
 							m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
 							m_lightVerticesExt[vertexIndex - 3].expand(vsPred3);
 						}
-						else if (s == 3){
+						else if (s == 2){
 							m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
-							vsPred3->makeEndpoint(m_scene, time, EImportance);
+							vsPred3 = NULL;
 						}
 						else{
-							BDAssert(s == 2);
-							vsPred2->makeEndpoint(m_scene, time, EImportance);
+							vsPred2 = NULL;
 							vsPred3 = NULL;
 						}
 
@@ -2358,6 +2363,16 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 #endif
 
 						contrib *= miWeight;						
+
+						if ((samplePos.x >= 415 && samplePos.x < 416 && samplePos.y >= 261 && samplePos.y < 262 ||
+							samplePos.x >= 411 && samplePos.x < 412 && samplePos.y >= 258 && samplePos.y < 259)
+							&& (s == 2 && t == 3 || s == 1 && t == 4) && contrib[0] > 0.8f){
+							float fucka = 1.f;
+							Float miWeight2 = miWeightVM(m_scene, s, t, emitterStatePred, sensorStatePred,
+								vsPred3, vsPred2, vsPred, vs,
+								vt, vtPred, vtPred2, vtPred3,
+								cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
+						}
 						
 #ifdef UPM_DEBUG_HARD
 						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
@@ -2404,24 +2419,25 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 				memset(vs, 0, sizeof(PathVertex));
 				if (i < lightPathEnd){
 					LightVertex lvertex = m_lightVertices[i];
-					importanceWeight = lvertex.importanceWeight;
-					emitterStatePred = lvertex.emitterState;
 					s = m_lightVerticesExt[i].depth;
-					if (s == 1) continue;
+					if (s <= 1) continue;
+
+					importanceWeight = lvertex.importanceWeight;
+					LightVertex lvertexPred = m_lightVertices[i - 1];
+					emitterStatePred = lvertexPred.emitterState;
 
 					m_lightVerticesExt[i].expand(vs);
 					m_lightVerticesExt[i - 1].expand(vsPred);
-					if (s > 3){
+					if (s > 2){
 						m_lightVerticesExt[i - 2].expand(vsPred2);
 						m_lightVerticesExt[i - 3].expand(vsPred3);
 					}
-					else if (s == 3){
+					else if (s == 2){
 						m_lightVerticesExt[i - 2].expand(vsPred2);
-						vsPred3->makeEndpoint(m_scene, time, EImportance);
+						vsPred3 = NULL;
 					}
 					else{
-						BDAssert(s == 2);
-						vsPred2->makeEndpoint(m_scene, time, EImportance);
+						vsPred2 = NULL;
 						vsPred3 = NULL;
 					}
 				}
@@ -2527,6 +2543,15 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 					value *= miWeight;
 					if (value.isZero()) continue;
+
+					if ((samplePos.x >= 142 && samplePos.x < 143 && samplePos.y >= 218 && samplePos.y < 219)
+						&& s == 2 && t == 1 && value[0] > 0.1f){
+						float fucka = 1.f;
+						Float miWeight = miWeightVC(m_scene, s, t, emitterStatePred, sensorStatePred,
+							vsPred3, vsPred2, vsPred, vs,
+							vt, vtPred, vtPred2, vtPred3,
+							gatherRadius, m_lightPathNum, useVC, useVM);
+					}
 
 #ifdef UPM_DEBUG_HARD
 					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f){
@@ -3109,7 +3134,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 						size_t vertexIndex = node.data.vertexIndex;
 						LightVertex vi = m_lightVertices[vertexIndex];
 						LightVertex viPred = m_lightVertices[vertexIndex - 1];
-						MisState emitterStatePred = vi.emitterState;
+						MisState emitterStatePred = viPred.emitterState;
 
 						vs = vs_; vsPred = vsPred_; vsPred2 = vsPred2_; vsPred3 = vsPred3_;
 						m_lightVerticesExt[vertexIndex].expand(vs);

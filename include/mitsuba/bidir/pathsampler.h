@@ -93,9 +93,6 @@ struct LightVertexExt{
 			shFrameN = its.shFrame.n;
 			geoFrameN = its.geoFrame.n;			
 		}
-		else{
-			SLog(EError, "Not supported vertex type to store in a path tree %d", vs->type);
-		}
 		depth = _depth;
 		measure = vs->measure;
 		degenerate = vs->degenerate;
@@ -124,9 +121,6 @@ struct LightVertexExt{
 			itp.shFrame.t = cross(itp.shFrame.n, itp.shFrame.s);
 			itp.geoFrame = Frame(geoFrameN);
 			itp.setShapePointer(shape);
-		}
-		else{
-			SLog(EError, "Not supported vertex type to draw frome a path tree %d", vs->type);
 		}
 	}
 };
