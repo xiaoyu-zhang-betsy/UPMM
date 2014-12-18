@@ -282,17 +282,14 @@ public:
 		if (sensor->getSampler()->getClass()->getName() != "IndependentSampler")
 			Log(EError, "Metropolis light transport requires the independent sampler");
 
-		if (m_config.initialRadius == 0) {
-			/* Guess an initial radius if not provided
-			(use scene width / horizontal or vertical pixel count) * 5 */
-			Float rad = scene->getBSphere().radius;
-			Vector2i filmSize = scene->getSensor()->getFilm()->getSize();
+		/* Guess an initial radius if not provided
+		(use scene width / horizontal or vertical pixel count) * 5 */
+		Float rad = scene->getBSphere().radius;
+		Vector2i filmSize = scene->getSensor()->getFilm()->getSize();
+		m_config.initialRadius = std::min(rad / filmSize.x, rad / filmSize.y) * 3; // Mitsuba style
+		//m_config.initialRadius = rad * 0.003f; //VCM style
+		//m_config.initialRadius = 0.003f * 2.21705961; // for debug
 
-			m_config.initialRadius = std::min(rad / filmSize.x, rad / filmSize.y) * 3; // Mitsuba style
-			//m_config.initialRadius = rad * 0.003f; //VCM style
-			//m_config.initialRadius = 0.003f * 2.21705961; // for debug
-
-		}
 		m_config.initialRadius *= m_config.radiusScale;
 
 		// set log level
