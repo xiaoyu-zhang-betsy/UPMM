@@ -2028,7 +2028,7 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 					LightPathNode lnode(vs->getPosition(), m_lightVertices.size() - 1, s);
 					m_lightPathTree.push_back(lnode);
 				}
-			}			
+			}
 
 			// connect to camera
 			if (vs->measure != EDiscrete && wr != NULL && useVC){
@@ -2242,6 +2242,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						LightVertex vi = m_lightVertices[vertexIndex];
 						LightVertex viPred = m_lightVertices[vertexIndex - 1];
 						MisState emitterStatePred = viPred.emitterState;
+						emitterStatePred[EVCM] = vi.emitterState[EVCM];
 
 						vs = vs_; vsPred = vsPred_; vsPred2 = vsPred2_; vsPred3 = vsPred3_;
 						m_lightVerticesExt[vertexIndex].expand(vs);						
@@ -2364,9 +2365,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 						contrib *= miWeight;						
 
-						if ((samplePos.x >= 415 && samplePos.x < 416 && samplePos.y >= 261 && samplePos.y < 262 ||
-							samplePos.x >= 411 && samplePos.x < 412 && samplePos.y >= 258 && samplePos.y < 259)
-							&& (s == 2 && t == 3 || s == 1 && t == 4) && contrib[0] > 0.8f){
+						if ((samplePos.x >= 123 && samplePos.x < 124 && samplePos.y >= 392 && samplePos.y < 393)
+							&& (s == 2 && t == 3 || s == 3 && t == 2) && contrib[1] > 0.2f){
 							float fucka = 1.f;
 							Float miWeight2 = miWeightVM(m_scene, s, t, emitterStatePred, sensorStatePred,
 								vsPred3, vsPred2, vsPred, vs,
@@ -2425,6 +2425,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					importanceWeight = lvertex.importanceWeight;
 					LightVertex lvertexPred = m_lightVertices[i - 1];
 					emitterStatePred = lvertexPred.emitterState;
+					emitterStatePred[EVCM] = lvertex.emitterState[EVCM];
 
 					m_lightVerticesExt[i].expand(vs);
 					m_lightVerticesExt[i - 1].expand(vsPred);
@@ -2544,8 +2545,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					value *= miWeight;
 					if (value.isZero()) continue;
 
-					if ((samplePos.x >= 142 && samplePos.x < 143 && samplePos.y >= 218 && samplePos.y < 219)
-						&& s == 2 && t == 1 && value[0] > 0.1f){
+					if ((samplePos.x >= 123 && samplePos.x < 124 && samplePos.y >= 392 && samplePos.y < 393)
+						&& (s == 1 && t == 3) && value[1] > 0.2f){
 						float fucka = 1.f;
 						Float miWeight = miWeightVC(m_scene, s, t, emitterStatePred, sensorStatePred,
 							vsPred3, vsPred2, vsPred, vs,
