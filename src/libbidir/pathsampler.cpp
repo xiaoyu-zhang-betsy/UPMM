@@ -1171,9 +1171,10 @@ ETransportMode connectionDirection(const PathVertex* vsPred, const PathVertex* v
 const bool EnableCovAwareMis = true;
 const bool MaxClampedConnectionPdf = false;
 Float misEffectiveEta(int i, Float pi, Float pir , const PathVertex* vPred, const PathVertex* vNext, 
-	Float gatherRadius, size_t numLightPath, ETransportMode mode){
+	Float gatherRadius, size_t numLightPath, ETransportMode mode, int j = 0){
 
 	if (i < 1) return 0.f;
+	if (i == 1 && j == 1) return 0.f;
 #ifdef EXCLUDE_DIRECT_LIGHT_UPM
 	if (i == 1 && mode == EImportance)
 		return 0.f;
@@ -1261,35 +1262,39 @@ Float misWeightVC_vc(int i, MisState statei,
 	return wVC;
 }
 
-Float misWeightVC_pm(int i, MisState statei,
+Float misWeightVC_pm(int i, int j, MisState statei,
 	Float pi, Float piPred, Float pir, Float pir1,
 	const PathVertex* vNext, const PathVertex* v, const PathVertex* vPred, const PathVertex* vPred2,
 	Float gatherRadius, size_t numLightPath, ETransportMode mode){
 
 	Float wPM = 0.f;	
 	
-	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, v, gatherRadius, numLightPath, mode);
+	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, v, gatherRadius, numLightPath, mode, j + 2);
 	Float invpi = (pi == 0.f) ? 0.f : 1.f / pi;
 	wPM = MisHeuristic(pir * invpi) * (MisHeuristic(pir1) * statei[EPM] + MisHeuristic(pir1 * etar1));
 
-	Float etar = misEffectiveEta(i, pi, pir, vPred, vNext, gatherRadius, numLightPath, mode);
+	Float etar = misEffectiveEta(i, pi, pir, vPred, vNext, gatherRadius, numLightPath, mode, j + 1);
 	wPM += MisHeuristic(pir * etar);
 
 	return wPM;
 }
 
-Float misWeightPM_pm(int i, MisState statei,
+Float misWeightPM(int i, int j, MisState statei,
 	Float pi, Float piPred, Float pir, Float pir1,
 	const PathVertex* vNext, const PathVertex* v, const PathVertex* vPred, const PathVertex* vPred2,
-	Float gatherRadius, size_t numLightPath, ETransportMode mode){
+	Float gatherRadius, size_t numLightPath, ETransportMode mode,
+	bool useVC, bool useVM){
 
-	Float etar = misEffectiveEta(i, pi, pir, vPred, vNext, gatherRadius, numLightPath, mode);
-	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, v, gatherRadius, numLightPath, mode);
+	Float etar = misEffectiveEta(i, pi, pir, vPred, vNext, gatherRadius, numLightPath, mode, j);
+	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, v, gatherRadius, numLightPath, mode, j + 1);
 	Float invpi = (pi == 0.f) ? 0.f : 1.f / pi;
 	Float invetar = (etar == 0.f) ? 0.f : 1.f / etar;
+	Float ratioDirect = (i == 1) ? statei[EDIR] : 1.f;
 
 	Float wPM = MisHeuristic(invpi * invetar) * (MisHeuristic(pir1 * etar1) + MisHeuristic(pir1) * statei[EPM]);
-	return wPM;
+	Float wVC = MisHeuristic(invpi * invetar) * (ratioDirect + MisHeuristic(pir1) * statei[EVC]);
+
+	return (useVC ? wVC : 0.f) + (useVM ? wPM : 0.f);
 }
 
 Float misWeightPM_pm_pred(int i, MisState state, MisState statePred,
@@ -1309,21 +1314,6 @@ Float misWeightPM_pm_pred(int i, MisState state, MisState statePred,
 	wPM *= MisHeuristic(invpi * invetar);
 
 	return wPM;
-}
-
-Float misWeightPM_vc(int i, MisState statei,
-	Float pi, Float piPred, Float pir, Float pir1,
-	const PathVertex* vNext, const PathVertex* v, const PathVertex* vPred, const PathVertex* vPred2,
-	Float gatherRadius, size_t numLightPath, ETransportMode mode){
-
-	Float etar = misEffectiveEta(i, pi, pir, vPred, vNext, gatherRadius, numLightPath, mode);
-	Float invpi = (pi == 0.f) ? 0.f : 1.f / pi;
-	Float invetar = (etar == 0.f) ? 0.f : 1.f / etar;
-	Float ratioDirect = (i == 1) ? statei[EDIR] : 1.f;
-
-	Float wVC = MisHeuristic(invpi * invetar) * (ratioDirect + MisHeuristic(pir1) * statei[EVC]);
-
-	return wVC;
 }
 
 Float misWeightPM_vc_pred(int i, MisState statei, MisState statePred,
@@ -1608,7 +1598,7 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterState, MisSta
 		if (useVC)
 			wCamera += MisHeuristic(ptrdir * invpt) + MisHeuristic(ptr * ptr1 * invpt) * sensorState[EVC];
 		if (useVM)
-			wCamera += misWeightVC_pm(t - 1, sensorState,
+			wCamera += misWeightVC_pm(t - 1, s - 1, sensorState,
 				pt, ptPred, ptr, ptr1,
 				vs, vt, vtPred, vtPred2,
 				gatherRadius, numLightPath, ERadiance);
@@ -1638,7 +1628,7 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterState, MisSta
 			wLight += MisHeuristic(ratioEmitterDirect) * misWeightVC_vc(s - 1, emitterState,
 				ps, psr, psr1, vs, vsPred);
 		if (useVM)
-			wLight += MisHeuristic(ratioEmitterDirect) * misWeightVC_pm(s - 1, emitterState,
+			wLight += MisHeuristic(ratioEmitterDirect) * misWeightVC_pm(s - 1, t - 1, emitterState,
 				ps, psPred, psr, psr1,
 				vt, vs, vsPred, vsPred2,
 				gatherRadius, numLightPath, EImportance);
@@ -1659,7 +1649,7 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterState, MisSta
 					misWeightVC_vc(t - 1, sensorState, 
 					pt, ptr, ptr1, vt, vtPred);
 			if (useVM)
-				wCamera += MisHeuristic(ratioEmitterDirect) * misWeightVC_pm(t - 1, sensorState,
+				wCamera += MisHeuristic(ratioEmitterDirect) * misWeightVC_pm(t - 1, s - 1, sensorState,
 					pt, ptPred, ptr, ptr1,
 					vs, vt, vtPred, vtPred2,
 					gatherRadius, numLightPath, ERadiance);
@@ -1743,31 +1733,18 @@ Float miWeightVM(const Scene *scene, int s, int t, MisState emitterState, MisSta
 		Float psPred = vsPred2->pdf[EImportance];
 		Float psr1 = vs->evalPdf(scene, vtPred, vsPred, ERadiance, EArea);
 		Float psr2 = vsPred->evalPdf(scene, vs, vsPred2, ERadiance, EArea);
-		if (useVC)
-			wLight += misWeightPM_vc(s - 1, emitterState,
-				ps, psPred, pt, psr1,
-				vtPred, vs, vsPred, vsPred2,
-				gatherRadius, numLightPath, EImportance);
-		if (useVM)
-			wLight += misWeightPM_pm(s- 1, emitterState,
-				ps, psPred, pt, psr1,
-				vtPred, vs, vsPred, vsPred2,
-				gatherRadius, numLightPath, EImportance);
-
+		wLight += misWeightPM(s - 1, t - 1, emitterState,
+			ps, psPred, pt, psr1,
+			vtPred, vs, vsPred, vsPred2,
+			gatherRadius, numLightPath, EImportance, useVC, useVM);
 
 		Float ptr1 = vs->evalPdf(scene, vsPred, vtPred, EImportance, EArea);
 		Float ptr2 = vtPred->evalPdf(scene, vs, vtPred2, EImportance, EArea);
 		Float ptPred = vtPred2->pdf[ERadiance];
-		if (useVC)
-			wCamera += misWeightPM_vc(t - 1, sensorState,
-				pt, ptPred, ps, ptr1,
-				vsPred, vs, vtPred, vtPred2,
-				gatherRadius, numLightPath, ERadiance);
-		if (useVM)
-			wCamera += misWeightPM_pm(t - 1, sensorState,
-				pt, ptPred, ps, ptr1,
-				vsPred, vs, vtPred, vtPred2,
-				gatherRadius, numLightPath, ERadiance);
+		wCamera += misWeightPM(t - 1, s - 1, sensorState,
+			pt, ptPred, ps, ptr1,
+			vsPred, vs, vtPred, vtPred2,
+			gatherRadius, numLightPath, ERadiance, useVC, useVM);		
 	}
 	else{
 		Float ps = vsPred->evalPdf(scene, vsPred2, vt, EImportance, EArea);	
@@ -1776,30 +1753,18 @@ Float miWeightVM(const Scene *scene, int s, int t, MisState emitterState, MisSta
 		Float psr1 = (vsPred->isDegenerate()) ? 0.f : vt->evalPdf(scene, vtPred, vsPred, ERadiance, EArea);
 		Float psr2 = (vsPred2->isDegenerate()) ? 0.f : vsPred->evalPdf(scene, vt, vsPred2, ERadiance, EArea);
 		Float psPred = vsPred2->pdf[EImportance];
-		if (useVC)
-			wLight += misWeightPM_vc(s - 1, emitterState,
-				ps, psPred, pt, psr1,
-				vtPred, vt, vsPred, vsPred2,
-				gatherRadius, numLightPath, EImportance);
-		if (useVM)
-			wLight += misWeightPM_pm(s - 1, emitterState,
-				ps, psPred, pt, psr1,
-				vtPred, vt, vsPred, vsPred2,
-				gatherRadius, numLightPath, EImportance);
+		wLight += misWeightPM(s - 1, t - 1, emitterState,
+			ps, psPred, pt, psr1,
+			vtPred, vt, vsPred, vsPred2,
+			gatherRadius, numLightPath, EImportance, useVC, useVM);		
 
 		Float ptr1 = (t <= 2) ? 0.f : vt->evalPdf(scene, vsPred, vtPred, EImportance, EArea);
 		Float ptr2 = (t <= 3) ? 0.f : vtPred->evalPdf(scene, vt, vtPred2, EImportance, EArea);
 		Float ptPred = vtPred2->pdf[ERadiance];
-		if (useVC)
-			wCamera += misWeightPM_vc(t - 1, sensorState,
-				pt, ptPred, ps, ptr1,
-				vsPred, vt, vtPred, vtPred2,
-				gatherRadius, numLightPath, ERadiance);
-		if (useVM)
-			wCamera += misWeightPM_pm(t - 1, sensorState,
-				pt, ptPred, ps, ptr1,
-				vsPred, vt, vtPred, vtPred2,
-				gatherRadius, numLightPath, ERadiance);
+		wCamera += misWeightPM(t - 1, s - 1, sensorState,
+			pt, ptPred, ps, ptr1,
+			vsPred, vt, vtPred, vtPred2,
+			gatherRadius, numLightPath, ERadiance, useVC, useVM);		
 	}	
 
 	Float miWeight = 1.f / (1.f + wLight + wCamera);
