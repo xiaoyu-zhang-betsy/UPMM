@@ -1612,7 +1612,7 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterState, MisSta
 				vsMeasure = EDiscrete;
 		}
 		Float psr1 = vs->evalPdf(scene, vt, vsPred, ERadiance, EArea);
-		Float psPred = vsPred2->pdf[EImportance];
+		Float psPred = (vsPred2 != NULL) ? vsPred2->pdf[EImportance] : 0.f;
 		if (useVC)
 			wLight += MisHeuristic(ratioEmitterDirect) * misWeightVC_vc(s - 1, emitterState,
 				ps, psr, psr1, vs, vsPred);
@@ -1632,7 +1632,7 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterState, MisSta
 			Float ptr1 = vt->evalPdf(scene, vs, vtPred, EImportance, EArea);
 			Float pt = vtPred->pdf[ERadiance];
 			//Float ptr2 = (t > 3) ? vtPred->evalPdf(scene, vt, vtPred2, EImportance, EArea) : 0.f;
-			Float ptPred = vtPred2->pdf[ERadiance];
+			Float ptPred = (vtPred2 != NULL) ?  vtPred2->pdf[ERadiance] : 0.f;
 			if (useVC)
 				wCamera += MisHeuristic(ratioEmitterDirect) *										// divide direct sampling prob. correction
 					misWeightVC_vc(t - 1, sensorState, 
@@ -1730,7 +1730,7 @@ Float miWeightVM(const Scene *scene, int s, int t,
 		Float ptr1 = vs->evalPdf(scene, vsPred, vtPred, EImportance, EArea);
 		Float ptr2 = vtPred->evalPdf(scene, vs, vtPred2, EImportance, EArea);
 		Float ptPred = vtPred2->pdf[ERadiance];
-		Float ptPred2 = vtPred3->pdf[ERadiance];	
+		Float ptPred2 = (vtPred3 != NULL) ? vtPred3->pdf[ERadiance] : 0.f;
 		wCamera += misWeightPM_pred(t - 1, s - 1, sensorState, sensorStatePred,
 			pt, ptPred, ptPred2, ps, ptr1, ptr2,
 			vsPred, vs, vtPred, vtPred2, vtPred3,
@@ -1743,7 +1743,7 @@ Float miWeightVM(const Scene *scene, int s, int t,
 		Float psr1 = (vsPred->isDegenerate()) ? 0.f : vt->evalPdf(scene, vtPred, vsPred, ERadiance, EArea);
 		Float psr2 = (vsPred2->isDegenerate()) ? 0.f : vsPred->evalPdf(scene, vt, vsPred2, ERadiance, EArea);
 		Float psPred = vsPred2->pdf[EImportance];
-		Float psPred2 = vsPred3->pdf[EImportance];
+		Float psPred2 = (vsPred3 != NULL) ? vsPred3->pdf[EImportance] : 0.f;
 		wLight += misWeightPM_pred(s - 1, t - 1, emitterState, emitterStatePred,
 			ps, psPred, psPred2, pt, psr1, psr2,
 			vtPred, vt, vsPred, vsPred2, vsPred3,
