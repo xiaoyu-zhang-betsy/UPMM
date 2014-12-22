@@ -1174,7 +1174,8 @@ Float misEffectiveEta(int i, Float pi, Float pir , const PathVertex* vPred, cons
 	Float gatherRadius, size_t numLightPath, ETransportMode mode, int j = 0){
 
 	if (i < 1) return 0.f;
-	if (i == 1 && j == 1) return 0.f;
+	if (i == 1 && j == 1 || i == 2 && j == 0) return 0.f;
+
 #ifdef EXCLUDE_DIRECT_LIGHT_UPM
 	if (i == 1 && mode == EImportance)
 		return 0.f;
@@ -2211,6 +2212,7 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 
 #if UPM_DEBUG == 1
 				wr->putDebugSample(s, 1, samplePos, value * miWeight);
+				wr->putDebugSampleM(s, 1, samplePos, value);
 #endif
 
 				value *= miWeight;
@@ -2528,23 +2530,39 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 #if UPM_DEBUG == 1
 						if (cameraDirConnection){
 							wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
+							wr->putDebugSampleM(s, t - 1, samplePos, contrib);
 						}
 						else{
 							wr->putDebugSample(s - 1, t, samplePos, contrib * miWeight);
+							wr->putDebugSampleM(s - 1, t, samplePos, contrib);
 						}
 #endif
 
 						contrib *= miWeight;						
 
-// 						if ((samplePos.x >= 176 && samplePos.x < 177 && samplePos.y >= 358 && samplePos.y < 359)
-// 							&& (s == 2 && t == 3 || s == 3 && t == 2) && contrib[1] > 0.2f){
-// 							float fucka = 1.f;
-// 							Float miWeight = miWeightVM(m_scene, s, t,
-// 								emitterState, sensorState, emitterStatePred, sensorStatePred,
-// 								vsPred3, vsPred2, vsPred, vs,
-// 								vt, vtPred, vtPred2, vtPred3,
-// 								cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
-// 						}
+						if ((samplePos.x >= 107 && samplePos.x < 108 && samplePos.y >= 361 && samplePos.y < 362)	&& 
+							(s == 4 && t == 2 || s == 3 && t == 3) && contrib[0] > 0.8f){
+							float fucka = 1.f;
+							Point vsp0 = vs->getPosition();
+							Point vsp1 = vsPred->getPosition();
+							Point vsp2 = vsPred2->getPosition();
+							Point vtp0 = vt->getPosition();
+							Point vtp1 = vtPred->getPosition();
+							Point vtp2 = vtPred2->getPosition();
+
+							Vector vsn0 = vs->getGeometricNormal();
+							Vector vsn1 = vsPred->getGeometricNormal();
+							Vector vsn2 = vsPred2->getGeometricNormal();
+							Vector vtn0 = vt->getGeometricNormal();
+							Vector vtn1 = vtPred->getGeometricNormal();
+							Vector vtn2 = vtPred2->getGeometricNormal();
+
+							Float miWeight = miWeightVM(m_scene, s, t,
+								emitterState, sensorState, emitterStatePred, sensorStatePred,
+								vsPred3, vsPred2, vsPred, vs,
+								vt, vtPred, vtPred2, vtPred3,
+								cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
+						}
 						
 #ifdef UPM_DEBUG_HARD
 						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
@@ -2710,19 +2728,20 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 #if UPM_DEBUG == 1
 					wr->putDebugSample(s, t, samplePos, value * miWeight);
+					wr->putDebugSampleM(s, t, samplePos, value);
 #endif					
 
 					value *= miWeight;
 					if (value.isZero()) continue;
 
-					if ((samplePos.x >= 242 && samplePos.x < 243 && samplePos.y >= 76 && samplePos.y < 77)
-						&& (s == 4 && t == 1) && value[1] > 0.5f){
-						float fucka = 1.f;
-						Float miWeight2 = miWeightVC(m_scene, s, t, emitterState, sensorState,
-							vsPred3, vsPred2, vsPred, vs,
-							vt, vtPred, vtPred2, vtPred3,
-							gatherRadius, m_lightPathNum, useVC, useVM);
-					}
+// 					if ((samplePos.x >= 242 && samplePos.x < 243 && samplePos.y >= 76 && samplePos.y < 77)
+// 						&& (s == 4 && t == 1) && value[1] > 0.5f){
+// 						float fucka = 1.f;
+// 						Float miWeight2 = miWeightVC(m_scene, s, t, emitterState, sensorState,
+// 							vsPred3, vsPred2, vsPred, vs,
+// 							vt, vtPred, vtPred2, vtPred3,
+// 							gatherRadius, m_lightPathNum, useVC, useVM);
+// 					}
 
 #ifdef UPM_DEBUG_HARD
 					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f){
