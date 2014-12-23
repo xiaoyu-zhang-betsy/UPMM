@@ -197,9 +197,8 @@ public:
 		Float prob = 0.f;
 		if (theta0 < 0.f){
 			// sample the full sphere cap of polar
-			Float cos0 = cos(2.f * theta0);
 			Float cos1 = cos(2.f * theta1);
-			prob = 0.5f * (cos0 - cos1);
+			prob = 0.5f * (1.f - cos1);
 			bbox.x = theta0; bbox.y = theta1;
 		}
 		else{

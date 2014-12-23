@@ -373,9 +373,8 @@ public:
 			bboxd->z = phi - dPhi; bboxd->w = phi + dPhi;
 		} else {
 			// sample the full sphere cap of polar
-			cos0 = cos(2.f * theta0);
 			cos1 = cos(2.f * theta1);
-			probDiff = 0.5f * (cos0 - cos1);
+			probDiff = 0.5f * (1.f - cos1);
 		}
 
 		Float prob = probSpec * m_specularSamplingWeight + probDiff * (1.f - m_specularSamplingWeight);

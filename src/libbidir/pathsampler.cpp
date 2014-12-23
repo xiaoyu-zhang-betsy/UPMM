@@ -2540,29 +2540,31 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 						contrib *= miWeight;						
 
-						if ((samplePos.x >= 107 && samplePos.x < 108 && samplePos.y >= 361 && samplePos.y < 362)	&& 
-							(s == 4 && t == 2 || s == 3 && t == 3) && contrib[0] > 0.8f){
-							float fucka = 1.f;
-							Point vsp0 = vs->getPosition();
-							Point vsp1 = vsPred->getPosition();
-							Point vsp2 = vsPred2->getPosition();
-							Point vtp0 = vt->getPosition();
-							Point vtp1 = vtPred->getPosition();
-							Point vtp2 = vtPred2->getPosition();
-
-							Vector vsn0 = vs->getGeometricNormal();
-							Vector vsn1 = vsPred->getGeometricNormal();
-							Vector vsn2 = vsPred2->getGeometricNormal();
-							Vector vtn0 = vt->getGeometricNormal();
-							Vector vtn1 = vtPred->getGeometricNormal();
-							Vector vtn2 = vtPred2->getGeometricNormal();
-
-							Float miWeight = miWeightVM(m_scene, s, t,
-								emitterState, sensorState, emitterStatePred, sensorStatePred,
-								vsPred3, vsPred2, vsPred, vs,
-								vt, vtPred, vtPred2, vtPred3,
-								cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
-						}
+// 						if ((samplePos.x >= 107 && samplePos.x < 108 && samplePos.y >= 361 && samplePos.y < 362)	&& 
+// 							(s == 4 && t == 2 || s == 3 && t == 3) && contrib[0] > 0.8f){
+// 							k--;
+// 
+// 							float fucka = 1.f;
+// 							Point vsp0 = vs->getPosition();
+// 							Point vsp1 = vsPred->getPosition();
+// 							Point vsp2 = vsPred2->getPosition();
+// 							Point vtp0 = vt->getPosition();
+// 							Point vtp1 = vtPred->getPosition();
+// 							Point vtp2 = vtPred2->getPosition();
+// 
+// 							Vector vsn0 = vs->getGeometricNormal();
+// 							Vector vsn1 = vsPred->getGeometricNormal();
+// 							Vector vsn2 = vsPred2->getGeometricNormal();
+// 							Vector vtn0 = vt->getGeometricNormal();
+// 							Vector vtn1 = vtPred->getGeometricNormal();
+// 							Vector vtn2 = vtPred2->getGeometricNormal();
+// 
+// 							Float miWeight = miWeightVM(m_scene, s, t,
+// 								emitterState, sensorState, emitterStatePred, sensorStatePred,
+// 								vsPred3, vsPred2, vsPred, vs,
+// 								vt, vtPred, vtPred2, vtPred3,
+// 								cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
+// 						}
 						
 #ifdef UPM_DEBUG_HARD
 						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
