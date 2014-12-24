@@ -1592,10 +1592,6 @@ Float miWeightVC(const Scene *scene, int s, int t, MisState emitterState, MisSta
 				gatherRadius, numLightPath, ERadiance);
 	}
 	else{
-
-		if (s == 1 && t == 4)
-			float fuck = 1.f;
-
 		// MIS weight for light sub path
 		EMeasure vsMeasure = EArea;
 		Float ratioEmitterDirect = 1.f;
@@ -1739,8 +1735,8 @@ Float miWeightVM(const Scene *scene, int s, int t,
 		Float ps = vsPred->evalPdf(scene, vsPred2, vt, EImportance, EArea);	
 		Float pt = vtPred->pdf[ERadiance];
 
-		Float psr1 = (vsPred->isDegenerate()) ? 0.f : vt->evalPdf(scene, vtPred, vsPred, ERadiance, EArea);
-		Float psr2 = (vsPred2->isDegenerate()) ? 0.f : vsPred->evalPdf(scene, vt, vsPred2, ERadiance, EArea);
+		Float psr1 = vt->evalPdf(scene, vtPred, vsPred, ERadiance, EArea);
+		Float psr2 = vsPred->evalPdf(scene, vt, vsPred2, ERadiance, EArea);
 		Float psPred = vsPred2->pdf[EImportance];
 		Float psPred2 = (vsPred3 != NULL) ? vsPred3->pdf[EImportance] : 0.f;
 		wLight += misWeightPM_pred(s - 1, t - 1, emitterState, emitterStatePred,
@@ -1748,8 +1744,8 @@ Float miWeightVM(const Scene *scene, int s, int t,
 			vtPred, vt, vsPred, vsPred2, vsPred3,
 			gatherRadius, numLightPath, EImportance, useVC, useVM);
 
-		Float ptr1 = (t <= 2) ? 0.f : vt->evalPdf(scene, vsPred, vtPred, EImportance, EArea);
-		Float ptr2 = (t <= 3) ? 0.f : vtPred->evalPdf(scene, vt, vtPred2, EImportance, EArea);
+		Float ptr1 = vt->evalPdf(scene, vsPred, vtPred, EImportance, EArea);
+		Float ptr2 = vtPred->evalPdf(scene, vt, vtPred2, EImportance, EArea);
 		Float ptPred = vtPred2->pdf[ERadiance];
 		wCamera += misWeightPM(t - 1, s - 1, sensorState,
 			pt, ptPred, ps, ptr1,
@@ -2251,6 +2247,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 	size_t nLightPaths = m_lightPathNum;
 	Float invLightPaths = 1.f / (float)nLightPaths;
 
+	bool repeated = false;
+
 	PathVertex tempSample, tempEndpoint;
 	PathEdge tempEdge;
 	switch (m_technique) {
@@ -2538,24 +2536,21 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 						contrib *= miWeight;						
 
-// 						if ((samplePos.x >= 107 && samplePos.x < 108 && samplePos.y >= 361 && samplePos.y < 362)	&& 
-// 							(s == 4 && t == 2 || s == 3 && t == 3) && contrib[0] > 0.8f){
-// 							k--;
+// 						if ((samplePos.x >= 157 && samplePos.x < 158 && samplePos.y >= 373 && samplePos.y < 374)	&& 
+// 							(s == 3 && t == 2 || s == 2 && t == 3) && contrib[1] > 0.3f){
+// 							if (!repeated) k--;
+// 							repeated = true;
 // 
 // 							float fucka = 1.f;
 // 							Point vsp0 = vs->getPosition();
 // 							Point vsp1 = vsPred->getPosition();
-// 							Point vsp2 = vsPred2->getPosition();
 // 							Point vtp0 = vt->getPosition();
 // 							Point vtp1 = vtPred->getPosition();
-// 							Point vtp2 = vtPred2->getPosition();
 // 
 // 							Vector vsn0 = vs->getGeometricNormal();
 // 							Vector vsn1 = vsPred->getGeometricNormal();
-// 							Vector vsn2 = vsPred2->getGeometricNormal();
 // 							Vector vtn0 = vt->getGeometricNormal();
 // 							Vector vtn1 = vtPred->getGeometricNormal();
-// 							Vector vtn2 = vtPred2->getGeometricNormal();
 // 
 // 							Float miWeight = miWeightVM(m_scene, s, t,
 // 								emitterState, sensorState, emitterStatePred, sensorStatePred,
@@ -2588,6 +2583,8 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 			m_pool.release(succVertex);
 			m_pool.release(succEdge);
 		}
+
+		repeated = false;
 
 		// vertex connection	 
 		if (useVC){
@@ -2716,10 +2713,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						value *= connectionEdge.evalCached(vs, vt, PathEdge::ETransmittance |
 						(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
 
-					if (samplePos.x >= 203 && samplePos.x < 204 && samplePos.y >= 307 && samplePos.y < 308){
-						float fucka = 1.f;
-					}
-
 					MisState sensorState = sensorStates[t - 1];
 					Float miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
 						vsPred3, vsPred2, vsPred, vs,
@@ -2734,9 +2727,20 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					value *= miWeight;
 					if (value.isZero()) continue;
 
-// 					if ((samplePos.x >= 242 && samplePos.x < 243 && samplePos.y >= 76 && samplePos.y < 77)
-// 						&& (s == 4 && t == 1) && value[1] > 0.5f){
+// 					if ((samplePos.x >= 157 && samplePos.x < 158 && samplePos.y >= 373 && samplePos.y < 374) &&
+// 						(s == 1 && t == 3) && value[1] > 0.1f){
+// 						if (!repeated) t--;
+// 						repeated = true;
+// 
 // 						float fucka = 1.f;
+// 						Point vsp0 = vs->getPosition();
+// 						Point vtp0 = vt->getPosition();
+// 						Point vtp1 = vtPred->getPosition();
+// 
+// 						Vector vsn0 = vs->getGeometricNormal();
+// 						Vector vtn0 = vt->getGeometricNormal();
+// 						Vector vtn1 = vtPred->getGeometricNormal();
+// 
 // 						Float miWeight2 = miWeightVC(m_scene, s, t, emitterState, sensorState,
 // 							vsPred3, vsPred2, vsPred, vs,
 // 							vt, vtPred, vtPred2, vtPred3,
