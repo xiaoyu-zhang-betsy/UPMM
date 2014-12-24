@@ -603,6 +603,10 @@ public:
 	 */
 	virtual Emitter *getElement(size_t index);
 
+	virtual Float getBandwidth() const{
+		// treat unhandled emitter as highest frequency to prevent shoot from them
+		return 99999.f;
+	}
 
 	virtual Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
 		SLog(EWarn, "Not implment emitter->gatherAreaPdf");

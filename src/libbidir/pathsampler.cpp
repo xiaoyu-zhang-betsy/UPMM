@@ -1149,10 +1149,8 @@ ETransportMode connectionDirection(const PathVertex* vsPred, const PathVertex* v
 	if (vsPred->isEmitterSample()){
 		const PositionSamplingRecord &pRec = vsPred->getPositionSamplingRecord();
 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
-		if (!emitter->needsDirectionSample())
-			sBandwidth = 99999.f;
-		else
-			sBandwidth = 0.f;
+
+		sBandwidth = emitter->getBandwidth();		
 	}
 	else if (vsPred->isSurfaceInteraction()){
 		const Intersection &its = vsPred->getIntersection();
@@ -1174,7 +1172,7 @@ Float misEffectiveEta(int i, Float pi, Float pir , const PathVertex* vPred, cons
 	Float gatherRadius, size_t numLightPath, ETransportMode mode, int j = 0){
 
 	if (i < 1) return 0.f;
-	if (i == 1 && j == 1 || i == 2 && j == 0) return 0.f;
+	if (i + j <= 2) return 0.f; // exclude (2,2) photon mapping
 
 #ifdef EXCLUDE_DIRECT_LIGHT_UPM
 	if (i == 1 && mode == EImportance)

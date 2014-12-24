@@ -164,6 +164,10 @@ public:
 		return oss.str();
 	}
 
+	Float getBandwidth() const{
+		return 0.f;
+	}
+
 	virtual Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
 		Vector dir = gatherPosition - pRec.p;
 		Float dis = dir.length();
