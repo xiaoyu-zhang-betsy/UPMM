@@ -1169,7 +1169,7 @@ ETransportMode connectionDirection(const PathVertex* vsPred, const PathVertex* v
 const bool EnableCovAwareMis = true;
 const bool MaxClampedConnectionPdf = false;
 Float misEffectiveEta(int i, Float pi, Float pir , const PathVertex* vPred, const PathVertex* vNext, 
-	Float gatherRadius, size_t numLightPath, ETransportMode mode, int j = 0){
+	Float gatherRadius, size_t numLightPath, ETransportMode mode, int j = 999){
 
 	if (i < 1) return 0.f;
 	if (i + j <= 2) return 0.f; // exclude (2,2) photon mapping
@@ -1506,8 +1506,6 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 	else if (i == 1){
 		PathVertex *v0 = path.vertex(1);
 		PathVertex *v1 = path.vertex(2);
-		if (v1->measure == EDiscrete)
-			float fuck = 1.f;
 		EMeasure measure = v0->getAbstractEmitter()->getDirectMeasure();
 		Float p0dir = v1->evalPdfDirect(scene, v0, mode, measure == ESolidAngle ? EArea : measure);
 		Float p0 = path.vertex(0)->pdf[mode];
@@ -1730,6 +1728,10 @@ Float miWeightVM(const Scene *scene, int s, int t,
 			pt, ptPred, ptPred2, ps, ptr1, ptr2,
 			vsPred, vs, vtPred, vtPred2, vtPred3,
 			gatherRadius, numLightPath, ERadiance, useVC, useVM);
+// 		wCamera += misWeightPM(t - 1, s - 1, sensorState,
+// 			pt, ptPred, ps, ptr1,
+// 			vsPred, vs, vtPred, vtPred2,
+// 			gatherRadius, numLightPath, ERadiance, useVC, useVM);
 	}
 	else{
 		Float ps = vsPred->evalPdf(scene, vsPred2, vt, EImportance, EArea);	
@@ -1743,6 +1745,10 @@ Float miWeightVM(const Scene *scene, int s, int t,
 			ps, psPred, psPred2, pt, psr1, psr2,
 			vtPred, vt, vsPred, vsPred2, vsPred3,
 			gatherRadius, numLightPath, EImportance, useVC, useVM);
+// 		wLight += misWeightPM(s - 1, t - 1, emitterState,
+// 			ps, psPred, pt, psr1,
+// 			vtPred, vt, vsPred, vsPred2,
+// 			gatherRadius, numLightPath, EImportance, useVC, useVM);
 
 		Float ptr1 = vt->evalPdf(scene, vsPred, vtPred, EImportance, EArea);
 		Float ptr2 = vtPred->evalPdf(scene, vt, vtPred2, EImportance, EArea);
