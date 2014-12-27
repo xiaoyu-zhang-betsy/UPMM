@@ -1,4 +1,4 @@
-Import('env', 'sys', 'plugins')
+Import('env', 'sys', 'integrEnv', 'plugins')
 
 plugins += env.SharedLibrary('ao', ['direct/ao.cpp'])
 plugins += env.SharedLibrary('direct', ['direct/direct.cpp'])
@@ -52,5 +52,16 @@ plugins += bidirEnv.SharedLibrary('upm',
 plugins += bidirEnv.SharedLibrary('epssmlt',
 	['epssmlt/epssmlt.cpp', 'epssmlt/epssmlt_sampler.cpp',
     'epssmlt/epssmlt_proc.cpp']);
+
+# we need OpenGl
+visEnv = integrEnv.Clone()
+if visEnv.has_key('GLLIB'):
+	visEnv.Prepend(LIBS=visEnv['GLLIB'])
+if visEnv.has_key('GLLIBDIR'):
+	visEnv.Prepend(LIBPATH=visEnv['GLLIBDIR'])
+if visEnv.has_key('GLFLAGS'):	
+	visEnv.Prepend(CPPFLAGS=visEnv['GLFLAGS'])
+	
+plugins += visEnv.SharedLibrary('guided_path', ['guide/guided_path.cpp'])
 
 Export('plugins')

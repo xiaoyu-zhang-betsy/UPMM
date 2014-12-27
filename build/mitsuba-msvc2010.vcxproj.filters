@@ -153,6 +153,48 @@
     <Filter Include="Source Files\integrators\epssmlt">
       <UniqueIdentifier>{d874b052-6983-44b7-a5dd-badc59489677}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\libimportance">
+      <UniqueIdentifier>{f960b232-033a-4fe0-a281-96f38af583c1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\caching">
+      <UniqueIdentifier>{e5348d02-869f-489a-a01a-f5eae87f8831}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\distribution">
+      <UniqueIdentifier>{2ffa18e4-869e-43c8-8317-ef0dc6563c08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\em">
+      <UniqueIdentifier>{ce3a845d-600f-4a01-8201-a62b07dd0008}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\gaussian">
+      <UniqueIdentifier>{5047c037-ec1d-4db3-83bb-027d12370083}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\hey">
+      <UniqueIdentifier>{ddd80255-d049-43a9-860c-639943a00850}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\jensen">
+      <UniqueIdentifier>{6ecbaa2c-402e-44ac-ba65-24e0d0066528}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\pharr">
+      <UniqueIdentifier>{3f25a4af-a5e7-4e5f-8144-ac8c555ec631}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\sampler">
+      <UniqueIdentifier>{d88d1429-cf54-4024-b68b-597d566d4b2d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\shared">
+      <UniqueIdentifier>{3e1429af-6033-4c2b-8570-e816e897b30c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\shared\FastFloat">
+      <UniqueIdentifier>{906687a5-59ad-46ce-a71f-7d074188a982}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\simple">
+      <UniqueIdentifier>{42c5d835-b012-4058-b3a9-6e731510ae93}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libimportance\viz">
+      <UniqueIdentifier>{5aa373a7-eed8-4f1a-86f2-3aa3ef7fda50}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\integrators\guide">
+      <UniqueIdentifier>{119582a7-b6f5-4fd1-a332-2bc37db7f935}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup Label="Source Files">
     <ClCompile Include="..\src\converter\mtsimport.cpp">
@@ -1061,6 +1103,39 @@
     <ClCompile Include="..\src\integrators\epssmlt\epssmlt_sampler.cpp">
       <Filter>Source Files\integrators\epssmlt</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\LibImportance\LibImportance.cpp">
+      <Filter>Source Files\libimportance</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LibImportance\caching\MultirefOctree.cpp">
+      <Filter>Source Files\libimportance\caching</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LibImportance\jensen\jensen.cpp">
+      <Filter>Source Files\libimportance\jensen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LibImportance\pharr\pharr.cpp">
+      <Filter>Source Files\libimportance\pharr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LibImportance\shared\simplelogger.cpp">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LibImportance\shared\FastFloat\avx_mathfun.cpp">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LibImportance\shared\FastFloat\pow.cpp">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LibImportance\shared\FastFloat\sse_mathfun.cpp">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LibImportance\viz\Viz.cpp">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LibImportance\viz\vizapi.cpp">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\guide\guided_path.cpp">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup Label="Header Files">
     <ClInclude Include="..\src\converter\converter.h">
@@ -1777,5 +1852,285 @@
     <ClInclude Include="..\src\integrators\epssmlt\epssmlt_sampler.h">
       <Filter>Source Files\integrators\epssmlt</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\LibImportance\distributionmodels.h">
+      <Filter>Source Files\libimportance</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\LibImportance.h">
+      <Filter>Source Files\libimportance</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\LibImportanceTypes.h">
+      <Filter>Source Files\libimportance</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\caching\CachedSampler.h">
+      <Filter>Source Files\libimportance\caching</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\caching\CacheStats.h">
+      <Filter>Source Files\libimportance\caching</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\caching\CacheTypes.h">
+      <Filter>Source Files\libimportance\caching</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\caching\DynamicKdTree.h">
+      <Filter>Source Files\libimportance\caching</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\caching\kdtmpl.h">
+      <Filter>Source Files\libimportance\caching</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\caching\MultirefOctree.h">
+      <Filter>Source Files\libimportance\caching</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\caching\MultirefOctreeAux.h">
+      <Filter>Source Files\libimportance\caching</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\caching\ReaderWriterLock.h">
+      <Filter>Source Files\libimportance\caching</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\distribution\DefaultDistributionModel.h">
+      <Filter>Source Files\libimportance\distribution</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\em\stats.h">
+      <Filter>Source Files\libimportance\em</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\em\stepwise_em.h">
+      <Filter>Source Files\libimportance\em</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\em\stepwise_EM_config.h">
+      <Filter>Source Files\libimportance\em</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\em\stepwise_emsse.h">
+      <Filter>Source Files\libimportance\em</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\gaussian\arraysse.h">
+      <Filter>Source Files\libimportance\gaussian</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussian_implsse.h">
+      <Filter>Source Files\libimportance\gaussian</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussian_stepwise_emsse.h">
+      <Filter>Source Files\libimportance\gaussian</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussianfactorysse.h">
+      <Filter>Source Files\libimportance\gaussian</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussiansse.h">
+      <Filter>Source Files\libimportance\gaussian</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussiantraitssse.h">
+      <Filter>Source Files\libimportance\gaussian</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\hey\hey.h">
+      <Filter>Source Files\libimportance\hey</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\hey\heyfactory.h">
+      <Filter>Source Files\libimportance\hey</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\jensen\jensen.h">
+      <Filter>Source Files\libimportance\jensen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\jensen\jensenfactory.h">
+      <Filter>Source Files\libimportance\jensen</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\pharr\pharr.h">
+      <Filter>Source Files\libimportance\pharr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\pharr\pharrfactory.h">
+      <Filter>Source Files\libimportance\pharr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\sampler\Sampler.h">
+      <Filter>Source Files\libimportance\sampler</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\sampler\SamplerFactory.h">
+      <Filter>Source Files\libimportance\sampler</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Array.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\basicfactory.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Bitmap.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\BoundingBox.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\buffers.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Config.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\frame.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Hit.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\IIterator.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\matrix.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\NumberUtils.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Particle.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\particlefilter.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\PointKdTree.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\PointKdTreeNode.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\PointKdTreeShared.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\QuadVector.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\simplelogger.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Sse.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Stack.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\StaticArray.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\StaticHeap.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\StaticStack.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\tools.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Triangle.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Utils.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Vector2.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\Vector3.h">
+      <Filter>Source Files\libimportance\shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\avx_mathfun.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\FastFloat.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\fastonebigheader.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\pow.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sse.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sse_mathfun.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sse4Floats.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sse4Ints.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sseMask.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sseMath.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sseUtil.h">
+      <Filter>Source Files\libimportance\shared\FastFloat</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\simple\SimpleSampler.h">
+      <Filter>Source Files\libimportance\simple</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\AtomicInt.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\GlWindow.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\MainWindow.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\RecordViz.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\samplersfacade.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\SimpleLock.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\sphere.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\State.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\Viz.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LibImportance\viz\vizapi.h">
+      <Filter>Source Files\libimportance\viz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mitsuba\render\discretephoton.h">
+      <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mitsuba\render\guided_brdf.h">
+      <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mitsuba\render\guided_particletracing.h">
+      <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mitsuba\render\guiding.h">
+      <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mitsuba\render\guiding_config.h">
+      <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mitsuba\render\libImpUtils.h">
+      <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mitsuba\render\libImpVizUtils.h">
+      <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mitsuba\render\weightwindow.h">
+      <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\mitsuba\render\nondiscretephoton.h">
+      <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\src\LibImportance\autoexp.dat">
+      <Filter>Source Files\libimportance</Filter>
+    </None>
+    <None Include="..\src\LibImportance\SConscript">
+      <Filter>Source Files\libimportance</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\src\LibImportance\licence.txt">
+      <Filter>Source Files\libimportance</Filter>
+    </Text>
   </ItemGroup>
 </Project>

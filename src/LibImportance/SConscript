@@ -1,0 +1,18 @@
+Import('env','os')
+
+libImpEnv = env.Clone()
+libImpEnv.Append(CPPPATH=env['IMPLIBINCLUDE'])
+
+#for the purpose of using wxwidgets
+libImpEnv.Append(CPPFLAGS=['/D', '_UNICODE', '/D', 'UNICODE'])
+libImpEnv.Append(LIBS=libImpEnv['WXWIDGETSLIB'])
+libImpEnv.Append(LIBPATH=libImpEnv['WXWIDGETSDIR'])
+
+libimportance = libImpEnv.StaticLibrary( 'libimportance', ['pharr/pharr.cpp', 'vmf/Timer.cpp', 'shared/simplelogger.cpp', 'shared/fastfloat/sse_mathfun.cpp', 'caching/MultirefOctree.cpp', 'viz/Viz.cpp', 'viz/vizapi.cpp', 'enviro/EnviroSampler.cpp', 'jensen/jensen.cpp', 'LibImportance.cpp' ] )
+
+integrEnv = libImpEnv.Clone()
+integrEnv.Append(LIBS=['libimportance'])
+integrEnv.Append(LIBPATH=[os.path.join(env['BUILDDIR'], 'LibImportance')])
+
+
+Export('integrEnv')

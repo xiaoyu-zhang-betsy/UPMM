@@ -25,9 +25,9 @@
 MTS_NAMESPACE_BEGIN
 
 ParticleProcess::ParticleProcess(EMode mode, size_t workCount, size_t granularity,
-		const std::string &progressText, const void *progressReporterPayload)
-	: m_mode(mode), m_workCount(workCount), m_numGenerated(0),
-	  m_granularity(granularity), m_receivedResultCount(0) {
+		const std::string &progressText, const void *progressReporterPayload, size_t numGenerated)
+	: m_mode(mode), m_workCount(workCount+numGenerated), m_numGenerated(numGenerated),
+	  m_granularity(granularity), m_receivedResultCount(numGenerated) {
 
 	/* Choose a suitable work unit granularity if none was specified */
 	if (m_granularity == 0)
@@ -35,8 +35,9 @@ ParticleProcess::ParticleProcess(EMode mode, size_t workCount, size_t granularit
 			(16 * Scheduler::getInstance()->getWorkerCount()));
 
 	/* Create a visual progress reporter */
-	m_progress = new ProgressReporter(progressText, workCount,
+	m_progress = new ProgressReporter(progressText, m_workCount,
 		progressReporterPayload);
+	m_progress->update( m_numGenerated );
 	m_resultMutex = new Mutex();
 }
 

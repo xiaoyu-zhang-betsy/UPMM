@@ -113,6 +113,15 @@
     </Filter>
   </ItemGroup>
   <ItemGroup Label="Header Files">
+    <ClInclude Include="..\include\mitsuba\render\discretephoton.h" />
+    <ClInclude Include="..\include\mitsuba\render\guided_brdf.h" />
+    <ClInclude Include="..\include\mitsuba\render\guided_particletracing.h" />
+    <ClInclude Include="..\include\mitsuba\render\guiding.h" />
+    <ClInclude Include="..\include\mitsuba\render\guiding_config.h" />
+    <ClInclude Include="..\include\mitsuba\render\libImpUtils.h" />
+    <ClInclude Include="..\include\mitsuba\render\libImpVizUtils.h" />
+    <ClInclude Include="..\include\mitsuba\render\nondiscretephoton.h" />
+    <ClInclude Include="..\include\mitsuba\render\weightwindow.h" />
     <ClInclude Include="..\src\converter\converter.h">
     </ClInclude>
     <ClInclude Include="..\src\bsdfs\irawan.h">
@@ -133,6 +142,86 @@
     <ClInclude Include="..\src\integrators\upm\upm_proc.h" />
     <ClInclude Include="..\src\integrators\vcm\vcm.h" />
     <ClInclude Include="..\src\integrators\vcm\vcm_proc.h" />
+    <ClInclude Include="..\src\LibImportance\caching\CachedSampler.h" />
+    <ClInclude Include="..\src\LibImportance\caching\CacheStats.h" />
+    <ClInclude Include="..\src\LibImportance\caching\CacheTypes.h" />
+    <ClInclude Include="..\src\LibImportance\caching\DynamicKdTree.h" />
+    <ClInclude Include="..\src\LibImportance\caching\kdtmpl.h" />
+    <ClInclude Include="..\src\LibImportance\caching\MultirefOctree.h" />
+    <ClInclude Include="..\src\LibImportance\caching\MultirefOctreeAux.h" />
+    <ClInclude Include="..\src\LibImportance\caching\ReaderWriterLock.h" />
+    <ClInclude Include="..\src\LibImportance\distributionmodels.h" />
+    <ClInclude Include="..\src\LibImportance\distribution\DefaultDistributionModel.h" />
+    <ClInclude Include="..\src\LibImportance\em\stats.h" />
+    <ClInclude Include="..\src\LibImportance\em\stepwise_em.h" />
+    <ClInclude Include="..\src\LibImportance\em\stepwise_emsse.h" />
+    <ClInclude Include="..\src\LibImportance\em\stepwise_EM_config.h" />
+    <ClInclude Include="..\src\LibImportance\gaussian\arraysse.h" />
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussianfactorysse.h" />
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussiansse.h" />
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussiantraitssse.h" />
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussian_implsse.h" />
+    <ClInclude Include="..\src\LibImportance\gaussian\gaussian_stepwise_emsse.h" />
+    <ClInclude Include="..\src\LibImportance\hey\hey.h" />
+    <ClInclude Include="..\src\LibImportance\hey\heyfactory.h" />
+    <ClInclude Include="..\src\LibImportance\jensen\jensen.h" />
+    <ClInclude Include="..\src\LibImportance\jensen\jensenfactory.h" />
+    <ClInclude Include="..\src\LibImportance\LibImportance.h" />
+    <ClInclude Include="..\src\LibImportance\LibImportanceTypes.h" />
+    <ClInclude Include="..\src\LibImportance\pharr\pharr.h" />
+    <ClInclude Include="..\src\LibImportance\pharr\pharrfactory.h" />
+    <ClInclude Include="..\src\LibImportance\sampler\Sampler.h" />
+    <ClInclude Include="..\src\LibImportance\sampler\SamplerFactory.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Array.h" />
+    <ClInclude Include="..\src\LibImportance\shared\basicfactory.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Bitmap.h" />
+    <ClInclude Include="..\src\LibImportance\shared\BoundingBox.h" />
+    <ClInclude Include="..\src\LibImportance\shared\buffers.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Config.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\avx_mathfun.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\FastFloat.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\fastonebigheader.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\pow.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sse.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sse4Floats.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sse4Ints.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sseMask.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sseMath.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sseUtil.h" />
+    <ClInclude Include="..\src\LibImportance\shared\FastFloat\sse_mathfun.h" />
+    <ClInclude Include="..\src\LibImportance\shared\frame.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Hit.h" />
+    <ClInclude Include="..\src\LibImportance\shared\IIterator.h" />
+    <ClInclude Include="..\src\LibImportance\shared\matrix.h" />
+    <ClInclude Include="..\src\LibImportance\shared\NumberUtils.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Particle.h" />
+    <ClInclude Include="..\src\LibImportance\shared\particlefilter.h" />
+    <ClInclude Include="..\src\LibImportance\shared\PointKdTree.h" />
+    <ClInclude Include="..\src\LibImportance\shared\PointKdTreeNode.h" />
+    <ClInclude Include="..\src\LibImportance\shared\PointKdTreeShared.h" />
+    <ClInclude Include="..\src\LibImportance\shared\QuadVector.h" />
+    <ClInclude Include="..\src\LibImportance\shared\simplelogger.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Sse.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Stack.h" />
+    <ClInclude Include="..\src\LibImportance\shared\StaticArray.h" />
+    <ClInclude Include="..\src\LibImportance\shared\StaticHeap.h" />
+    <ClInclude Include="..\src\LibImportance\shared\StaticStack.h" />
+    <ClInclude Include="..\src\LibImportance\shared\tools.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Triangle.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Utils.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Vector2.h" />
+    <ClInclude Include="..\src\LibImportance\shared\Vector3.h" />
+    <ClInclude Include="..\src\LibImportance\simple\SimpleSampler.h" />
+    <ClInclude Include="..\src\LibImportance\viz\AtomicInt.h" />
+    <ClInclude Include="..\src\LibImportance\viz\GlWindow.h" />
+    <ClInclude Include="..\src\LibImportance\viz\MainWindow.h" />
+    <ClInclude Include="..\src\LibImportance\viz\RecordViz.h" />
+    <ClInclude Include="..\src\LibImportance\viz\samplersfacade.h" />
+    <ClInclude Include="..\src\LibImportance\viz\SimpleLock.h" />
+    <ClInclude Include="..\src\LibImportance\viz\sphere.h" />
+    <ClInclude Include="..\src\LibImportance\viz\State.h" />
+    <ClInclude Include="..\src\LibImportance\viz\Viz.h" />
+    <ClInclude Include="..\src\LibImportance\viz\vizapi.h" />
     <ClInclude Include="..\src\samplers\faure.h">
     </ClInclude>
     <ClInclude Include="..\src\samplers\sobolseq.h">
@@ -639,10 +728,21 @@
     <ClCompile Include="..\src\integrators\epssmlt\epssmlt.cpp" />
     <ClCompile Include="..\src\integrators\epssmlt\epssmlt_proc.cpp" />
     <ClCompile Include="..\src\integrators\epssmlt\epssmlt_sampler.cpp" />
+    <ClCompile Include="..\src\integrators\guide\guided_path.cpp" />
     <ClCompile Include="..\src\integrators\upm\upm.cpp" />
     <ClCompile Include="..\src\integrators\upm\upm_proc.cpp" />
     <ClCompile Include="..\src\integrators\vcm\vcm.cpp" />
     <ClCompile Include="..\src\integrators\vcm\vcm_proc.cpp" />
+    <ClCompile Include="..\src\LibImportance\caching\MultirefOctree.cpp" />
+    <ClCompile Include="..\src\LibImportance\jensen\jensen.cpp" />
+    <ClCompile Include="..\src\LibImportance\LibImportance.cpp" />
+    <ClCompile Include="..\src\LibImportance\pharr\pharr.cpp" />
+    <ClCompile Include="..\src\LibImportance\shared\FastFloat\avx_mathfun.cpp" />
+    <ClCompile Include="..\src\LibImportance\shared\FastFloat\pow.cpp" />
+    <ClCompile Include="..\src\LibImportance\shared\FastFloat\sse_mathfun.cpp" />
+    <ClCompile Include="..\src\LibImportance\shared\simplelogger.cpp" />
+    <ClCompile Include="..\src\LibImportance\viz\Viz.cpp" />
+    <ClCompile Include="..\src\LibImportance\viz\vizapi.cpp" />
     <ClCompile Include="..\src\librender\trimesh.cpp">
     </ClCompile>
     <ClCompile Include="..\src\librender\irrcache.cpp">
@@ -1175,6 +1275,13 @@
     </ClCompile>
     <ClCompile Include="..\src\libpython\render.cpp">
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\src\LibImportance\autoexp.dat" />
+    <None Include="..\src\LibImportance\SConscript" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\src\LibImportance\licence.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

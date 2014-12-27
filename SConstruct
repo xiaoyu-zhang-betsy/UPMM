@@ -85,6 +85,8 @@ build('src/volume/SConscript')
 build('src/subsurface/SConscript')
 # Texture types
 build('src/textures/SConscript')
+# Importance Library
+build('src/LibImportance/SConscript')
 # Integrators
 build('src/integrators/SConscript')
 # Testcases

@@ -72,6 +72,9 @@ public:
 		EGather
 	};
 
+	/** Returns number of generated particles so far (including previous executions of the process) */
+	virtual size_t getNumGenerated() { return m_numGenerated; }
+
 	// =============================================================
 	//! @{ \name Implementation of the ParallelProcess interface
 	// =============================================================
@@ -101,7 +104,7 @@ protected:
 	 */
 	ParticleProcess(EMode mode, size_t workCount,
 		size_t granularity, const std::string &progressText,
-		const void *progressReporterPayload);
+		const void *progressReporterPayload, size_t numGenerated = 0);
 
 	void increaseResultCount(size_t resultCount);
 

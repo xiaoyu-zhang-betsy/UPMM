@@ -841,6 +841,10 @@ public:
 		return emitter->getSamplingWeight() * m_emitterPDF.getNormalization();
 	}
 
+	inline Float emitterPdfSum() const {
+		return m_emitterPDF.getSum();
+	}
+
  	/**
 	 * \brief Importance sample a ray according to the emission profile
 	 * defined by the sensors in the scene

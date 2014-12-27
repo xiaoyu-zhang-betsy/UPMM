@@ -2,6 +2,8 @@ Import('env', 'sys', 'os')
 
 renderEnv = env.Clone()
 renderEnv.Append(CPPDEFINES = [['MTS_BUILD_MODULE', 'MTS_MODULE_RENDER']] )
+renderEnv.Append(LIBS=['libimportance'])
+renderEnv.Append(LIBPATH=[os.path.join(env['BUILDDIR'], 'LibImportance')])
 if renderEnv.has_key('XERCESINCLUDE'):
 	renderEnv.Prepend(CPPPATH=renderEnv['XERCESINCLUDE'])
 if renderEnv.has_key('XERCESLIBDIR'):
@@ -15,7 +17,7 @@ librender = renderEnv.SharedLibrary('mitsuba-render', [
 	'rectwu.cpp', 'renderproc.cpp', 'imageblock.cpp', 'particleproc.cpp',
 	'renderqueue.cpp', 'scene.cpp',  'subsurface.cpp', 'texture.cpp',
 	'shape.cpp', 'trimesh.cpp', 'sampler.cpp', 'util.cpp', 'irrcache.cpp',
-	'testcase.cpp', 'photonmap.cpp', 'gatherproc.cpp', 'volume.cpp',
+	'testcase.cpp', 'photonmap.cpp', 'gatherproc.cpp', 'guided_particletracing.cpp', 'volume.cpp',
 	'vpl.cpp', 'shader.cpp', 'scenehandler.cpp', 'intersection.cpp',
 	'common.cpp', 'phase.cpp', 'noise.cpp', 'photon.cpp'
 ])
