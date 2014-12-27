@@ -238,6 +238,16 @@ public:
 				break;
 			}
 
+			/*
+			Prepare a directional distribution for sampling from BSDF and guiding distribution
+			(if guided path-tracing is set off than it falls back to regular BSDF sampling distribution)
+			*/
+			GuidedBRDF gsampler(its, ray, m_gs.getRadianceSampler(),
+				m_gs.getConfig().m_mitsuba.bsdfSamplingProbability);
+			if (!gsampler.isValid()) {
+				m_gs.distributionConstructionFailed(its);
+			}
+
 			/* ==================================================================== */
 			/*                     Direct illumination sampling                     */
 			/* ==================================================================== */
@@ -246,7 +256,7 @@ public:
 			DirectSamplingRecord dRec(its);
 
 			if (rRec.type & RadianceQueryRecord::EDirectSurfaceRadiance &&
-				(bsdf->getType() & BSDF::ESmooth)) {
+				(!gsampler.isBSDFPureSpecular())) {
 				Spectrum value = scene->sampleEmitterDirect(dRec, rRec.nextSample2D());
 				if (!value.isZero()) {
 					const Emitter *emitter = static_cast<const Emitter *>(dRec.object);
@@ -255,7 +265,8 @@ public:
 					BSDFSamplingRecord bRec(its, its.toLocal(dRec.d), ERadiance);
 
 					/* Evaluate BSDF * cos(theta) */
-					const Spectrum bsdfVal = bsdf->eval(bRec);
+					//const Spectrum bsdfVal = bsdf->eval(bRec);
+					const Spectrum bsdfVal = gsampler.eval(dRec.d);
 
 					/* Prevent light leaks due to the use of shading normals */
 					if (!bsdfVal.isZero() && (!m_strictNormals
@@ -263,8 +274,12 @@ public:
 
 						/* Calculate prob. of having generated that direction
 						   using BSDF sampling */
-						Float bsdfPdf = (emitter->isOnSurface() && dRec.measure == ESolidAngle)
-							? bsdf->pdf(bRec) : 0;
+// 						Float bsdfPdf = (emitter->isOnSurface() && dRec.measure == ESolidAngle)
+// 							? bsdf->pdf(bRec) : 0;
+
+						Float bsdfPdf = (emitter->isOnSurface()
+							&& dRec.measure == ESolidAngle)
+							? gsampler.pdf(dRec.d) : (Float) 0.0f;
 
 						/* Weight using the power heuristic */
 						Float weight = miWeight(dRec.pdf, bsdfPdf);
@@ -279,17 +294,22 @@ public:
 
 			/* Sample BSDF * cos(theta) */
 			Float bsdfPdf;
-			BSDFSamplingRecord bRec(its, rRec.sampler, ERadiance);
-			Spectrum bsdfWeight = bsdf->sample(bRec, bsdfPdf, rRec.nextSample2D());
+			Vector wo; // Outgoing direction
+			//BSDFSamplingRecord bRec(its, rRec.sampler, ERadiance);
+			//Spectrum bsdfWeight = bsdf->sample(bRec, bsdfPdf, rRec.nextSample2D());
+			Spectrum bsdfWeight = gsampler.sample(wo, bsdfPdf, rRec.sampler);
 			if (bsdfWeight.isZero())
 				break;
 
-			scattered |= bRec.sampledType != BSDF::ENull;
+			//scattered |= bRec.sampledType != BSDF::ENull;
 
 			/* Prevent light leaks due to the use of shading normals */
-			const Vector wo = its.toWorld(bRec.wo);
+// 			const Vector wo = its.toWorld(bRec.wo);
+// 			Float woDotGeoN = dot(its.geoFrame.n, wo);
+// 			if (m_strictNormals && woDotGeoN * Frame::cosTheta(bRec.wo) <= 0)
+// 				break;
 			Float woDotGeoN = dot(its.geoFrame.n, wo);
-			if (m_strictNormals && woDotGeoN * Frame::cosTheta(bRec.wo) <= 0)
+			if (m_strictNormals && woDotGeoN * Frame::cosTheta(its.toLocal(wo)) <= 0)
 				break;
 
 			bool hitEmitter = false;
@@ -324,7 +344,8 @@ public:
 			/* Keep track of the throughput and relative
 			   refractive index along the path */
 			throughput *= bsdfWeight;
-			eta *= bRec.eta;
+			//eta *= bRec.eta;
+			eta *= gsampler.getEta();
 
 			/* If a luminaire was hit, estimate the local illumination and
 			   weight using the power heuristic */
@@ -332,7 +353,9 @@ public:
 				(rRec.type & RadianceQueryRecord::EDirectSurfaceRadiance)) {
 				/* Compute the prob. of generating that direction using the
 				   implemented direct illumination sampling technique */
-				const Float lumPdf = (!(bRec.sampledType & BSDF::EDelta)) ?
+// 				const Float lumPdf = (!(bRec.sampledType & BSDF::EDelta)) ?
+// 					scene->pdfEmitterDirect(dRec) : 0;
+				const Float lumPdf = (!(gsampler.getLastSampledComponent() & BSDF::EDelta)) ?
 					scene->pdfEmitterDirect(dRec) : 0;
 				Li += throughput * value * miWeight(bsdfPdf, lumPdf);
 			}
