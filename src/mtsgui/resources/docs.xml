@@ -1436,5 +1436,55 @@
 			It does not account for participating media, such as fog or smoke&mdash;see
 			the volumetric path tracer if this is needed.
 		</descr>
+		<param name="minRadius" readableName="Cache: min. radius" type="float" default="0.1">Minimal validity radius for a cache record</param>
+	    <param name="maxRadius" readableName="Cache: max. radius" type="float" default="1">Maximal validity radius for a cache record</param>
+	    <param name="maxEnviroRadius" readableName="Cache: max. env. radius" type="float" default="1">Maximum environment records search radius for both particles and cache records</param>
+	    <param name="klDivThres" readableName="KL divergence thr." type="float" default="5">Kullback–Leibler divergence treshold for determining cache validity radius</param>
+	    <param name="photonClampingMin" readableName="Photon min. clamping" type="float" default="0.5">Multiply of particle search radius that is a lower bound for validity radius</param>
+	    <param name="photonClampingMax" readableName="Photon max. clamping" type="float" default="1">Multiply of particle search radius that is an upper bound for validity radius</param>
+	    <param name="neighbourClamping" readableName="Cache: Use neighbour clamping" type="boolean" default="true">Use neighbour clamping of cache records?</param>
+	    <param name="useCache" readableName="Use caching" type="boolean" default="true">Use caching?</param>
+	    <param name="knnParticles" readableName="KNN particle count" type="integer" default="250">Maximum number of particles in KNN-query</param>
+	    <param name="globalSizeMult" readableName="Global size mult." type="float" default="0.01">This influence the maximum size of search radii of both particles and cache records, which are set relatively to the scene size</param>
+	    <param name="jensenRes" readableName="Jensen: histogram res." type="integer" default="16">Resolution of histogram used in Jensen method</param>
+	    <param name="IIF" readableName="Guiding method" type="string" default="gaussian">
+	    	A method used for guiding paths, options: <tt>gaussian</tt>, <tt>pharr</tt>, <tt>hey</tt> and <tt>jensen</tt> Don't use more than one training passes with pharr and hey - these methods cannot be made progressive straightforwardly.
+	    </param>
+	    <param name="passes" readableName="Number of trainig passes" type="integer" default="10">A number of training passes</param>
+	    <param name="nPhotons" readableName="Number of photons" type="integer" default="100000">A number of emitted photons in each training pass</param>
+	    <param name="nImportons" readableName="Number of importons" type="integer" default="100000">A number of emitted importons in each training pass</param>
+	    <param name="showVisualization" readableName="Show visualization" type="boolean" default="false">Show a visualization of trained distributions and cache records?</param>
+	    <param name="usePingPong" readableName="Use ping-pong" type="boolean" default="true">Use interleaved importons/photons training passes? (false = use only single photon training pass)</param>
+	    <param name="useEnvSampler" readableName="Use env. sampler" type="boolean" default="false">Use trained environment sampler to guide paths from background emitter?</param>
+	    <param name="useGuidedSampling" readableName="Use guided sampling" type="boolean" default="true">Use training distributions to guide paths?</param>    
+	    <param name="bsdfSamplingProbability" readableName="BSDF probability" type="float" default="0.5">Probability of sampling path direction using bsdf importance sampling</param>
+	</plugin>
+	<plugin type="integrator" name="guided_bdpt" readableName="Guided bidirectional path tracer" show="true"
+			className="GuidedBDPTIntegrator" extends="Integrator">
+		<descr>
+			<p>This plugin implements a Veach-style bidirectional path tracer (short:
+			BDPT) with support for multiple importance sampling.</p>			
+		</descr>
+		<param name="maxDepth" readableName="Maximum depth" type="integer" default="-1">
+			Specifies the longest path depth in the generated output image (where <tt>-1</tt>
+			corresponds to ∞). A value of 1 will only render directly visible light sources.
+			2 will lead to single-bounce (direct-only) illumination, and so on.
+		</param>
+		<param name="lightImage" readableName="Create light image" type="boolean" default="true">
+			Include sampling strategies that connect
+			paths traced from emitters directly to the camera? (i.e. what the adjoint particle tracer does)
+			This improves the effectiveness of bidirectional path tracing
+			but severely increases the local and remote communication
+			overhead, since large <em>light images</em> must be transferred between threads
+			or over the network. See the main documentation for a more detailed explanation.
+		</param>
+		<param name="sampleDirect" readableName="Use direct sampling methods" type="boolean" default="true">
+			Enable direct sampling strategies? This is a generalization of direct illumination sampling that works with both emitters
+			and sensors. Usually a good idea.
+		</param>
+		<param name="rrDepth" readableName="Russian Roulette starting depth" type="integer" default="5" importance="1">
+			Specifies the minimum path depth, after which the implementation will start to use the
+			"russian roulette" path termination criterion (set to <tt>-1</tt> to disable).
+		</param>
 	</plugin>
 </documentation>

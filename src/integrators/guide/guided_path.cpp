@@ -23,6 +23,7 @@
 #include <mitsuba/render/scene.h>
 #include <mitsuba/core/statistics.h>
 
+
 MTS_NAMESPACE_BEGIN
 
 static StatsCounter avgPathLength("Path tracer", "Average path length", EAverage);
