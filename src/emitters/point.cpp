@@ -211,6 +211,10 @@ public:
 
 	Shader *createShader(Renderer *renderer) const;
 
+	Spectrum getPower() const {
+		return m_intensity * (4 * M_PI);
+	}
+
 	MTS_DECLARE_CLASS()
 private:
 	Spectrum m_intensity;

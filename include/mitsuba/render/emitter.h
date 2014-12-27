@@ -620,6 +620,11 @@ public:
 		return dRec.d;
 	}
 
+	virtual Spectrum getPower() const {
+		throw std::runtime_error("getPower() is not implemented");
+		return Spectrum(0.f);
+	}
+
 	//! @}
 	// =============================================================
 

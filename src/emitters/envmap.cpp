@@ -647,6 +647,10 @@ public:
 
 	Shader *createShader(Renderer *renderer) const;
 
+	virtual Spectrum getPower() const {
+		return Spectrum(m_power);
+	}
+
 	MTS_DECLARE_CLASS()
 private:
 	/// Sample from an array using the inversion method

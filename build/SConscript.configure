@@ -79,6 +79,8 @@ vars.Add('SHLIBSUFFIX',     'Suffix for shared libraries')
 vars.Add('LIBPREFIX',       'Prefix for windows library files')
 vars.Add('LIBSUFFIX',       'Suffix for windows library files')
 vars.Add('PROGSUFFIX',      'Suffix for executables')
+vars.Add('WXWIDGETSLIB',    'wxWidgets libraries')
+vars.Add('WXWIDGETSDIR',	'wxWidgets lib directory')
 vars.Add('GLLIB',           'OpenGL+GLEW libraries')
 vars.Add('GLINCLUDE',       'OpenGL+GLEW include path')
 vars.Add('GLFLAGS',         'OpenGL+GLEW-related compiler flags')
@@ -91,8 +93,6 @@ vars.Add('MSVC_VERSION',    'MS Visual C++ compiler version')
 vars.Add('QTDIR',           'Qt installation directory')
 vars.Add('QTINCLUDE',       'Additional Qt include directory')
 vars.Add('INTEL_COMPILER',  'Should the Intel C++ compiler be used?')
-vars.Add('WXWIDGETSLIB',    'wxWidgets libraries')
-vars.Add('WXWIDGETSDIR',	'wxWidgets lib directory')
 vars.Add('IMPLIBINCLUDE',   'include directories for libImportance')
 
 try:
@@ -371,9 +371,8 @@ def configure_for_objective_cpp(env):
 		'-fp-model', 'fast=.*', '-wd.*', '-openmp'])
 	env['CCFLAGS'] += ['-fno-strict-aliasing']
 	# Enforce GCC usage (Intel compiler doesn't handle Objective C/C++)
-	if 'icpc' in env['CXX']:
-		env['CXX'] = 'g++'
-		env['CC'] = 'gcc'
+	env['CXX'] = 'g++'
+	env['CC'] = 'gcc'
 
 def relax_compiler_settings(env):
 	# Relax the compiler settings when compiling heavy templated code

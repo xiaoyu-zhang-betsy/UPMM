@@ -743,6 +743,9 @@
     <ClCompile Include="..\src\LibImportance\shared\simplelogger.cpp" />
     <ClCompile Include="..\src\LibImportance\viz\Viz.cpp" />
     <ClCompile Include="..\src\LibImportance\viz\vizapi.cpp" />
+    <ClCompile Include="..\src\librender\discretephoton.cpp" />
+    <ClCompile Include="..\src\librender\guided_particletracing.cpp" />
+    <ClCompile Include="..\src\librender\nondiscretephoton.cpp" />
     <ClCompile Include="..\src\librender\trimesh.cpp">
     </ClCompile>
     <ClCompile Include="..\src\librender\irrcache.cpp">

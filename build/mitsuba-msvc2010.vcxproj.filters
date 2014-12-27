@@ -1136,6 +1136,15 @@
     <ClCompile Include="..\src\integrators\guide\guided_path.cpp">
       <Filter>Source Files\integrators\guide</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\librender\guided_particletracing.cpp">
+      <Filter>Source Files\librender</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\librender\nondiscretephoton.cpp">
+      <Filter>Source Files\librender</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\librender\discretephoton.cpp">
+      <Filter>Source Files\librender</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup Label="Header Files">
     <ClInclude Include="..\src\converter\converter.h">

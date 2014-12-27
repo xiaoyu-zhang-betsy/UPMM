@@ -18,6 +18,7 @@
 
 #include <mitsuba/render/guiding.h>
 #include <mitsuba/render/guided_brdf.h>
+#include <mitsuba/render/renderproc.h>
 
 #include <mitsuba/render/scene.h>
 #include <mitsuba/core/statistics.h>
@@ -113,11 +114,18 @@ static StatsCounter avgPathLength("Path tracer", "Average path length", EAverage
 class GuidedPathTracer : public MonteCarloIntegrator {
 public:
 	GuidedPathTracer(const Properties &props)
-		: MonteCarloIntegrator(props) { }
+		: MonteCarloIntegrator(props), m_gs(GuidingConfig(props)) {
+		Assert(m_gs.getConfig().m_mitsuba.maxDepth == m_maxDepth);
+	}
 
 	/// Unserialize from a binary data stream
 	GuidedPathTracer(Stream *stream, InstanceManager *manager)
 		: MonteCarloIntegrator(stream, manager) { }
+
+	void cancel() {
+		m_gs.cancel();
+		SamplingIntegrator::cancel();
+	}
 
 	bool preprocess(const Scene * scene, RenderQueue * queue, const RenderJob * job,
 		int sceneResID, int cameraResID, int samplerResID) {
@@ -126,6 +134,60 @@ public:
 		/// Print info about guided path tracer settings
 		Log(EInfo, "%s", this->toString().c_str());
 		return res;
+	}
+
+	virtual bool render(Scene *scene, RenderQueue *queue, const RenderJob *job,
+		int sceneResID, int sensorResID, int samplerResID) {
+		ref<Scheduler> sched = Scheduler::getInstance();
+		ref<Sensor> camera = static_cast<Sensor *>(sched->getResource(sensorResID));
+		ref<Film> film = camera->getFilm();
+
+		size_t nCores = sched->getCoreCount();
+		Sampler *samplerRendering = static_cast<Sampler *>(sched->getResource(samplerResID, 0));
+		ref<ParallelProcess> proc;
+		size_t sampleCount = samplerRendering->getSampleCount();
+
+		/** The Training Phase of guiding distributions preceding the Rendering Phase. */
+		m_gs.trainingPhase(job, sceneResID, sensorResID);
+		m_gs.getWeightWindow().pathTracing();
+
+		/** The Rendering Phase */
+		//m_timer->reset();
+		Log(EInfo, "Starting render job (pass %ix%i, " SIZE_T_FMT " %s, " SIZE_T_FMT
+			" %s, " SSE_STR ") ..",
+			film->getCropSize().x, film->getCropSize().y,
+			sampleCount, sampleCount == 1 ? "sample" : "samples", nCores,
+			nCores == 1 ? "core" : "cores");
+
+		/* This is a sampling-based integrator - parallelize */
+		proc = new BlockedRenderProcess(job,
+			queue, scene->getBlockSize());
+		int integratorResID = sched->registerResource(this);
+		proc->bindResource("integrator", integratorResID);
+		proc->bindResource("scene", sceneResID);
+		proc->bindResource("sensor", sensorResID);
+		proc->bindResource("sampler", samplerResID);
+		scene->bindUsedResources(proc);
+		bindUsedResources(proc);
+		sched->schedule(proc);
+
+		m_process = proc;
+		sched->wait(proc);
+		m_process = NULL;
+		sched->unregisterResource(integratorResID);
+
+		return proc.get() != NULL && proc->getReturnStatus() == ParallelProcess::ESuccess;
+	}
+
+	void postprocess(const Scene *scene, RenderQueue *queue,
+		const RenderJob *job, int sceneResID, int cameraResID,
+		int samplerResID) {
+
+		//Log(EInfo, "Rendering phase took %s", timeString(m_timer->getMilliseconds() / 1000.f).c_str());
+
+		m_gs.postprocess();
+
+		SamplingIntegrator::postprocess(scene, queue, job, cameraResID, cameraResID, samplerResID);
 	}
 
 	Spectrum Li(const RayDifferential &r, RadianceQueryRecord &rRec) const {
@@ -324,7 +386,7 @@ public:
 			<< "]";
 		return oss.str();
 	}
-private:
+private:	
 	GuidingSamplers m_gs;
 public:
 	MTS_DECLARE_CLASS()

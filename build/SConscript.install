@@ -92,6 +92,7 @@ if sys.platform == 'win32':
 			installTargets += env.Install(distDir, '#dependencies/bin/vcredist_2013_x64.exe')
 		else:
 			installTargets += env.Install(distDir, '#dependencies/bin/vcredist_2010_sp1_x64.exe')
+		install(distDir, ['wxbase295u_vc_custom.dll','wxbase295ud_vc_custom.dll','wxmsw295u_core_vc_custom.dll','wxmsw295u_gl_vc_custom.dll','wxmsw295ud_core_vc_custom.dll','wxmsw295ud_gl_vc_custom.dll'], '#src/LibImportance/wxWidgets-2.9.5/bin/')
 	else:
 		installTargets += env.Install(distDir, '#dependencies/bin/vcredist_2010_sp1_x86.exe')
 

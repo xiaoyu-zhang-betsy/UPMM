@@ -318,12 +318,8 @@ public:
 		return dir;
 	}
 
-	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
-		
-	}
-
-	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
-		
+	virtual Spectrum getPower() const {
+		return m_power;
 	}
 
 	MTS_DECLARE_CLASS()
@@ -362,7 +358,7 @@ public:
 	void bind(GPUProgram *program, const std::vector<int> &parameterIDs,
 		int &textureUnitOffset) const {
 		program->setParameter(parameterIDs[0], m_radiance);
-	}
+	}	
 
 	MTS_DECLARE_CLASS()
 private:

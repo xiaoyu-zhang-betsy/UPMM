@@ -725,7 +725,7 @@ public:
 	 *    The density expressed with respect to the requested measure
 	 *    (usually \ref ESolidAngle)
 	 */
-	Float pdfEmitterDirect(const DirectSamplingRecord &dRec) const;
+	Float pdfEmitterDirect(const DirectSamplingRecord &dRec) const;    
 
 	/**
 	 * \brief Evaluate the probability density of the \a direct sampling
@@ -838,12 +838,13 @@ public:
 	 * certain emitter in <tt>sampleEmitter*</tt>
 	 */
 	inline Float pdfEmitterDiscrete(const Emitter *emitter) const {
-		return emitter->getSamplingWeight() * m_emitterPDF.getNormalization();
+		//return emitter->getSamplingWeight() * m_emitterPDF.getNormalization();
+        return emitter->getPower().max() * m_emitterPDF.getNormalization();
 	}
 
-	inline Float emitterPdfSum() const {
-		return m_emitterPDF.getSum();
-	}
+    inline Float emitterPdfSum() const {
+        return m_emitterPDF.getSum();
+    }
 
  	/**
 	 * \brief Importance sample a ray according to the emission profile

@@ -1,7 +1,11 @@
 /*
-    This file is part of Mitsuba, a physically based rendering system.
+    This file is part of a demo implementation of an importance sampling technique
+    described in the "On-line Learning of Parametric Mixture Models for Light Transport Simulation"
+    (SIGGRAPH 2014) paper.
+    The implementation is based on Mitsuba, a physically based rendering system.
 
-    Copyright (c) 2007-2012 by Wenzel Jakob and others.
+    Copyright (c) 2014 by Jiri Vorba, Ondrej Karlik, Martin Sik.
+    Copyright (c) 2007-2014 by Wenzel Jakob and others.
 
     Mitsuba is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License Version 3
@@ -15,6 +19,7 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
+
 
 #include <mitsuba/render/scene.h>
 #include <mitsuba/render/renderjob.h>
@@ -350,33 +355,47 @@ void Scene::initialize() {
 	m_objects.ensureUnique();
 	m_netObjects.ensureUnique();
 
-	if (!m_emitterPDF.isNormalized()) {
-		if (m_emitters.size() == 0) {
-			Log(EWarn, "No emitters found -- adding sun & sky.");
-			/* This is not a particularly realistic sky -- it extends below the
-			   horizon and uses an enlarged sun :). This is done to get better
-			   results for arbitrary input (and with a path tracer). */
 
-			Properties skyProps("sunsky");
-			skyProps.setFloat("scale", 2);
-			skyProps.setTransform("toWorld", Transform::rotate(Vector(0,1,0), -120.0f));
-			skyProps.setBoolean("extend", true);
-			skyProps.setFloat("sunRadiusScale", 15);
-			ref<Emitter> emitter = static_cast<Emitter *>(
-				PluginManager::getInstance()->createObject(MTS_CLASS(Emitter), skyProps));
-			addChild(emitter);
-			emitter->configure();
-		}
+    bool addingSunAndSky = false;
+	if (m_emitters.size() == 0) {
+        addingSunAndSky = true;
+		Log(EWarn, "No emitters found -- adding sun & sky.");
+		/* This is not a particularly realistic sky -- it extends below the
+			horizon and uses an enlarged sun :). This is done to get better
+			results for arbitrary input (and with a path tracer). */
 
-		/* Calculate a discrete PDF to importance sample emitters */
-		for (ref_vector<Emitter>::iterator it = m_emitters.begin();
-				it != m_emitters.end(); ++it)
-			m_emitterPDF.append(it->get()->getSamplingWeight());
-
-		m_emitterPDF.normalize();
+		Properties skyProps("sunsky");
+		skyProps.setFloat("scale", 2);
+		skyProps.setTransform("toWorld", Transform::rotate(Vector(0,1,0), -120.0f));
+		skyProps.setBoolean("extend", true);
+		skyProps.setFloat("sunRadiusScale", 15);
+		ref<Emitter> emitter = static_cast<Emitter *>(
+			PluginManager::getInstance()->createObject(MTS_CLASS(Emitter), skyProps));
+		addChild(emitter);
+		emitter->configure();
 	}
 
-	initializeBidirectional();
+    initializeBidirectional();
+
+	if (!m_emitterPDF.isNormalized() || addingSunAndSky) {
+
+
+		/* Calculate a discrete PDF to importance sample emitters */
+		//for (ref_vector<Emitter>::iterator it = m_emitters.begin();
+		//		it != m_emitters.end(); ++it)
+		//	m_emitterPDF.append(it->get()->getSamplingWeight());
+        /* Don't forget to carefully treat the pdfEmitterDiscrete() method if you switch back to 
+           the user defined importance sampling via Emitter::getSamplingWeight() */
+        for (ref_vector<Emitter>::iterator it = m_emitters.begin();
+            it != m_emitters.end(); ++it) {
+            if ( it->get()->getPower().max() == 0.f ) {
+                Log( EWarn,  "There is a light source in the scene with zero power." );
+            }
+            m_emitterPDF.append(it->get()->getPower().max());
+        }
+
+		m_emitterPDF.normalize();        
+	}
 }
 
 void Scene::initializeBidirectional() {
