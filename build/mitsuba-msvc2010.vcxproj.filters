@@ -1145,6 +1145,15 @@
     <ClCompile Include="..\src\librender\discretephoton.cpp">
       <Filter>Source Files\librender</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\integrators\guide\guided_bdpt.cpp">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\guide\guided_bdpt_proc.cpp">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\guide\guided_bdpt_wr.cpp">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup Label="Header Files">
     <ClInclude Include="..\src\converter\converter.h">
@@ -2127,6 +2136,15 @@
     </ClInclude>
     <ClInclude Include="..\include\mitsuba\render\nondiscretephoton.h">
       <Filter>Header Files\mitsuba\render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\guide\guided_bdpt.h">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\guide\guided_bdpt_proc.h">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\guide\guided_bdpt_wr.h">
+      <Filter>Source Files\integrators\guide</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
