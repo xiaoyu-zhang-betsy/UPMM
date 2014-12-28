@@ -61,13 +61,12 @@ if visEnv.has_key('GLLIBDIR'):
 	visEnv.Prepend(LIBPATH=visEnv['GLLIBDIR'])
 if visEnv.has_key('GLFLAGS'):	
 	visEnv.Prepend(CPPFLAGS=visEnv['GLFLAGS'])
-	
-plugins += visEnv.SharedLibrary('guided_path', ['guide/guided_path.cpp'])
-
 visEnv.Append(LIBS=['mitsuba-bidir'])
 visEnv.Append(LIBPATH=['#src/libbidir'])
-plugins += visEnv.SharedLibrary('guided_bdpt',
-	['guide/guided_bdpt.cpp', 'guide/guided_bdpt_wr.cpp', 'guide/guided_bdpt_proc.cpp'])
+	
+#plugins += visEnv.SharedLibrary('guided_path', ['guide/guided_path.cpp'])
+#plugins += visEnv.SharedLibrary('guided_bdpt',
+#	['guide/guided_bdpt.cpp', 'guide/guided_bdpt_wr.cpp', 'guide/guided_bdpt_proc.cpp'])
 	
 Export('plugins')
 

@@ -16,9 +16,13 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <mitsuba/render/guiding.h>
+#include <mitsuba/render/guided_brdf.h>
+
 #include <mitsuba/bidir/vertex.h>
 #include <mitsuba/bidir/edge.h>
 #include "guided_bdpt_proc.h"
+
 
 MTS_NAMESPACE_BEGIN
 
@@ -132,7 +136,7 @@ MTS_NAMESPACE_BEGIN
  */
 class GuidedBDPTIntegrator : public Integrator {
 public:
-	GuidedBDPTIntegrator(const Properties &props) : Integrator(props) {
+	GuidedBDPTIntegrator(const Properties &props) : Integrator(props), m_gs(GuidingConfig(props)){
 		/* Load the parameters / defaults */
 		m_config.maxDepth = props.getInteger("maxDepth", -1);
 		m_config.rrDepth = props.getInteger("rrDepth", 5);
@@ -150,6 +154,8 @@ public:
 			m_config.maxDepth = 6;
 		}
 		#endif
+
+		Assert(m_gs.getConfig().m_mitsuba.maxDepth == m_config.maxDepth);
 
 		if (m_config.rrDepth <= 0)
 			Log(EError, "'rrDepth' must be set to a value greater than zero!");
@@ -179,10 +185,13 @@ public:
 			Log(EError, "Subsurface integrators are not supported "
 				"by the bidirectional path tracer!");
 
-		return true;
+		bool res = m_gs.preprocess(scene);
+
+		return res;
 	}
 
 	void cancel() {
+		m_gs.cancel();
 		Scheduler::getInstance()->cancel(m_process);
 	}
 
@@ -211,16 +220,25 @@ public:
 		m_config.sampleCount = sampleCount;
 		m_config.dump();
 
+		/** The Training Phase of guiding distributions preceding the Rendering Phase. */
+		m_gs.trainingPhase(job, sceneResID, sensorResID);
+		m_gs.getWeightWindow().pathTracing();
+
 		ref<GuidedBDPTProcess> process = new GuidedBDPTProcess(job, queue, m_config);
 		m_process = process;
 
 		process->bindResource("scene", sceneResID);
 		process->bindResource("sensor", sensorResID);
 		process->bindResource("sampler", samplerResID);
+
+// 		int guidingSamplerResID = scheduler->registerResource(m_gs);
+// 		process->bindResource("guidingSampler", guidingSamplerResID);
+
 		scheduler->schedule(process);
 
 		scheduler->wait(process);
 		m_process = NULL;
+		//scheduler->unregisterResource(guidingSamplerResID);
 		process->develop();
 
 		#if GBDPT_DEBUG == 1
@@ -232,10 +250,18 @@ public:
 		return process->getReturnStatus() == ParallelProcess::ESuccess;
 	}
 
+	void postprocess(const Scene *scene, RenderQueue *queue,
+		const RenderJob *job, int sceneResID, int cameraResID,
+		int samplerResID) {
+		m_gs.postprocess();
+	}
+
 	MTS_DECLARE_CLASS()
 private:
 	ref<ParallelProcess> m_process;
 	GuidedBDPTConfiguration m_config;
+
+	GuidingSamplers m_gs;
 };
 
 MTS_IMPLEMENT_CLASS_S(GuidedBDPTIntegrator, false, Integrator)
