@@ -381,17 +381,17 @@ void Scene::initialize() {
 
 
 		/* Calculate a discrete PDF to importance sample emitters */
-// 		for (ref_vector<Emitter>::iterator it = m_emitters.begin(); it != m_emitters.end(); ++it)
-// 				m_emitterPDF.append(it->get()->getSamplingWeight());
+		for (ref_vector<Emitter>::iterator it = m_emitters.begin(); it != m_emitters.end(); ++it)
+				m_emitterPDF.append(it->get()->getSamplingWeight());
         /* Don't forget to carefully treat the pdfEmitterDiscrete() method if you switch back to 
            the user defined importance sampling via Emitter::getSamplingWeight() */
-        for (ref_vector<Emitter>::iterator it = m_emitters.begin();
-            it != m_emitters.end(); ++it) {
-            if ( it->get()->getPower().max() == 0.f ) {
-                Log( EWarn,  "There is a light source in the scene with zero power." );
-            }
-            m_emitterPDF.append(it->get()->getPower().max());
-        }
+//         for (ref_vector<Emitter>::iterator it = m_emitters.begin();
+//             it != m_emitters.end(); ++it) {
+//             if ( it->get()->getPower().max() == 0.f ) {
+//                 Log( EWarn,  "There is a light source in the scene with zero power." );
+//             }
+//             m_emitterPDF.append(it->get()->getPower().max());
+//         }
 
 		m_emitterPDF.normalize();        
 	}
