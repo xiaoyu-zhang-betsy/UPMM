@@ -20,7 +20,6 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #pragma once
 
 #include <mitsuba/render/libImpVizUtils.h>
@@ -32,11 +31,10 @@
 MTS_NAMESPACE_BEGIN 
 
 /** Holds and trains samplers for guiding both paths from light sources and from the camera. */
-class GuidingSamplers {
+class GuidingSamplers : public ConfigurableObject {
 public:
-    GuidingSamplers() {}
-    GuidingSamplers( const GuidingConfig & cfg ) 
-          : m_cfg( cfg ),
+	GuidingSamplers(const Properties &props)
+		  : ConfigurableObject(props), m_cfg(GuidingConfig(props)),
             m_qmcSamplerID_photons( -1 ), m_qmcSamplerID_importons( -1 ), 
             m_photonTracingState( 0 ), m_importonTracingState( 0 ),
             m_radianceSampler( NULL ), m_importanceSampler( NULL ), m_enviroSampler( NULL ),
@@ -404,6 +402,5 @@ private:
     /** Timer for measurement of single particle tracing steps. */
     ref<Timer> m_timer;
 };
-
 
 MTS_NAMESPACE_END

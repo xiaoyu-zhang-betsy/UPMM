@@ -110,7 +110,6 @@ public:
 				iteration += numWork;
 			}
 
-
 			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr, m_config.rejectionProb);
 
 			for (size_t i = 0; i < hilbertCurve.getPointCount(); ++i) {

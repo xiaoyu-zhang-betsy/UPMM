@@ -32,6 +32,31 @@ MTS_NAMESPACE_BEGIN
 class GuidedBRDF {
 public:
     /** Constructs guided sampler */
+	GuidedBRDF(
+		mitsuba::Intersection       its,
+		Importance::Sampler*        importanceSampler,
+		Float                       bsdfSamplingProbability)
+		: m_its(its), m_importanceSampler(importanceSampler),
+		m_bsdfSamplingProbability(bsdfSamplingProbability), m_impDistrib(NULL), m_eta(-1.f) {
+
+		/* Prepare distribution if guided path-tracing is set on*/
+		m_bsdf = its.getBSDF();
+		if (m_importanceSampler != NULL) {
+			Importance::Hit hit = itsToHit(its);
+			m_impDistrib = m_importanceSampler->getDistribution(hit, m_distBuffer);
+#ifdef LIBIMP_STATS
+			if (m_impDistrib != NULL) {
+				/// somehow prevent storing photons from EM if you don't need it and statistics are on
+				Importance::EmInfo * info = const_cast<Importance::EmInfo *>(m_impDistrib->getInfo());
+				if (info != NULL) {
+					info->particles.clear();
+				}
+			}
+#endif
+		}
+		m_pureSpecularBSDF = (m_bsdf->getType() & BSDF::EAll & ~BSDF::EDelta) == 0;
+	}
+
     GuidedBRDF( 
         mitsuba::Intersection       its, 
         const RayDifferential&      ray, 

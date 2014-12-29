@@ -18,8 +18,8 @@
 
 #include <mitsuba/render/guiding.h>
 #include <mitsuba/render/guided_brdf.h>
-#include <mitsuba/render/renderproc.h>
 
+#include <mitsuba/render/renderproc.h>
 #include <mitsuba/render/scene.h>
 #include <mitsuba/core/statistics.h>
 
@@ -115,8 +115,9 @@ static StatsCounter avgPathLength("Path tracer", "Average path length", EAverage
 class GuidedPathTracer : public MonteCarloIntegrator {
 public:
 	GuidedPathTracer(const Properties &props)
-		: MonteCarloIntegrator(props), m_gs(GuidingConfig(props)) {
-		Assert(m_gs.getConfig().m_mitsuba.maxDepth == m_maxDepth);
+		: MonteCarloIntegrator(props){
+		m_gs = new GuidingSamplers(props);
+		Assert(m_gs->getConfig().m_mitsuba.maxDepth == m_maxDepth);
 	}
 
 	/// Unserialize from a binary data stream
@@ -124,14 +125,14 @@ public:
 		: MonteCarloIntegrator(stream, manager) { }
 
 	void cancel() {
-		m_gs.cancel();
+		m_gs->cancel();
 		SamplingIntegrator::cancel();
 	}
 
 	bool preprocess(const Scene * scene, RenderQueue * queue, const RenderJob * job,
 		int sceneResID, int cameraResID, int samplerResID) {
 		SamplingIntegrator::preprocess(scene, queue, job, sceneResID, cameraResID, samplerResID);
-		bool res = m_gs.preprocess(scene);
+		bool res = m_gs->preprocess(scene);
 		/// Print info about guided path tracer settings
 		Log(EInfo, "%s", this->toString().c_str());
 		return res;
@@ -149,8 +150,8 @@ public:
 		size_t sampleCount = samplerRendering->getSampleCount();
 
 		/** The Training Phase of guiding distributions preceding the Rendering Phase. */
-		m_gs.trainingPhase(job, sceneResID, sensorResID);
-		m_gs.getWeightWindow().pathTracing();
+		m_gs->trainingPhase(job, sceneResID, sensorResID);
+		m_gs->getWeightWindow().pathTracing();
 
 		/** The Rendering Phase */
 		//m_timer->reset();
@@ -186,7 +187,7 @@ public:
 
 		//Log(EInfo, "Rendering phase took %s", timeString(m_timer->getMilliseconds() / 1000.f).c_str());
 
-		m_gs.postprocess();
+		m_gs->postprocess();
 
 		SamplingIntegrator::postprocess(scene, queue, job, cameraResID, cameraResID, samplerResID);
 	}
@@ -243,10 +244,10 @@ public:
 			Prepare a directional distribution for sampling from BSDF and guiding distribution
 			(if guided path-tracing is set off than it falls back to regular BSDF sampling distribution)
 			*/
-			GuidedBRDF gsampler(its, ray, m_gs.getRadianceSampler(),
-				m_gs.getConfig().m_mitsuba.bsdfSamplingProbability);
+			GuidedBRDF gsampler(its, ray, m_gs->getRadianceSampler(),
+				m_gs->getConfig().m_mitsuba.bsdfSamplingProbability);
 			if (!gsampler.isValid()) {
-				m_gs.distributionConstructionFailed(its);
+				m_gs->distributionConstructionFailed(its);
 			}
 
 			/* ==================================================================== */
@@ -411,7 +412,7 @@ public:
 		return oss.str();
 	}
 private:	
-	GuidingSamplers m_gs;
+	GuidingSamplers* m_gs;
 public:
 	MTS_DECLARE_CLASS()
 };

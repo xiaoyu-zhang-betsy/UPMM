@@ -16,10 +16,13 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <mitsuba/render/guiding.h>
+#include <mitsuba/render/guided_brdf.h>
+
+#include "guided_bdpt_proc.h"
 #include <mitsuba/core/statistics.h>
 #include <mitsuba/core/sfcurve.h>
 #include <mitsuba/bidir/util.h>
-#include "guided_bdpt_proc.h"
 
 MTS_NAMESPACE_BEGIN
 
@@ -61,6 +64,8 @@ public:
 		m_scene->setSampler(m_sampler);
 		m_scene->wakeup(NULL, m_resources);
 		m_scene->initializeBidirectional();
+
+		m_guidingSampler = static_cast<GuidingSamplers *>(getResource("guidingSampler"));
 	}
 
 	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {
@@ -110,7 +115,7 @@ public:
 				sensorSubpath.initialize(m_scene, time, ERadiance, m_pool);
 
 				/* Perform a random walk using alternating steps on each path */
-				Path::alternatingRandomWalkFromPixel(m_scene, m_sampler,
+				alternatingRandomWalkFromPixel(m_scene, m_sampler,
 					emitterSubpath, emitterDepth, sensorSubpath,
 					sensorDepth, offset, m_config.rrDepth, m_pool);
 
@@ -130,6 +135,353 @@ public:
 		/* Make sure that there were no memory leaks */
 		Assert(m_pool.unused());
 	}
+
+	bool sampleNext(PathVertex* current,
+		const Scene *scene, Sampler *sampler,
+		const PathVertex *pred, const PathEdge *predEdge,
+		PathEdge *succEdge, PathVertex *succ,
+		ETransportMode mode, bool russianRoulette, Spectrum *throughput) {
+		Ray ray;
+
+		memset(succEdge, 0, sizeof(PathEdge));
+		memset(succ, 0, sizeof(PathVertex));
+
+		succEdge->medium = (predEdge == NULL) ? NULL : predEdge->medium;
+		current->rrWeight = 1.0f;
+
+		switch (current->type) {
+		case PathVertex::EEmitterSupernode: {
+			BDAssert(mode == EImportance && pred == NULL && predEdge == NULL);
+			PositionSamplingRecord &pRec = succ->getPositionSamplingRecord();
+			const EndpointRecord &eRec = current->getEndpointRecord();
+			pRec = PositionSamplingRecord(eRec.time);
+			Spectrum result = scene->sampleEmitterPosition(pRec, sampler->next2D());
+			if (result.isZero())
+				return false;
+
+			const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+			current->weight[EImportance] = result;
+			current->pdf[EImportance] = pRec.pdf;
+			current->measure = pRec.measure;
+			succ->type = current->EEmitterSample;
+			succ->degenerate = emitter->getType() & Emitter::EDeltaDirection;
+
+			succEdge->weight[EImportance] = Spectrum(1.0f);
+			succEdge->pdf[EImportance] = 1.0f;
+			succEdge->medium = emitter->getMedium();
+
+			return true;
+		}
+			break;
+
+		case PathVertex::ESensorSupernode: {
+			BDAssert(mode == ERadiance && pred == NULL && predEdge == NULL);
+			PositionSamplingRecord &pRec = succ->getPositionSamplingRecord();
+			const EndpointRecord &eRec = current->getEndpointRecord();
+			pRec = PositionSamplingRecord(eRec.time);
+			Spectrum result = scene->sampleSensorPosition(pRec, sampler->next2D());
+			if (result.isZero())
+				return false;
+
+			const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+			current->weight[ERadiance] = result;
+			current->pdf[ERadiance] = pRec.pdf;
+			current->measure = pRec.measure;
+			succ->type = PathVertex::ESensorSample;
+			succ->degenerate = sensor->getType()
+				& Sensor::EDeltaDirection;
+
+			succEdge->weight[ERadiance] = Spectrum(1.0f);
+			succEdge->pdf[ERadiance] = 1.0f;
+			succEdge->medium = sensor->getMedium();
+
+			return true;
+		}
+			break;
+
+		case PathVertex::EEmitterSample: {
+			BDAssert(mode == EImportance && pred->type == PathVertex::EEmitterSupernode);
+			PositionSamplingRecord &pRec = current->getPositionSamplingRecord();
+			const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+			DirectionSamplingRecord dRec;
+
+			Spectrum result = emitter->sampleDirection(dRec, pRec,
+				emitter->needsDirectionSample() ? sampler->next2D() : Point2(0.5f));
+
+			if (result.isZero())
+				return false;
+
+			current->weight[EImportance] = result;
+			current->weight[ERadiance] = result * dRec.pdf * (
+				emitter->isOnSurface() ? 1.0f / absDot(dRec.d, pRec.n) : 1.0f);
+			current->pdf[EImportance] = dRec.pdf;
+			current->pdf[ERadiance] = 1.0f;
+
+			current->measure = dRec.measure;
+			succEdge->medium = emitter->getMedium();
+			ray.time = pRec.time;
+			ray.setOrigin(pRec.p);
+			ray.setDirection(dRec.d);
+		}
+			break;
+
+		case PathVertex::ESensorSample: {
+			BDAssert(mode == ERadiance && pred->type == PathVertex::ESensorSupernode);
+			PositionSamplingRecord &pRec = current->getPositionSamplingRecord();
+			const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+			DirectionSamplingRecord dRec;
+
+			Spectrum result = sensor->sampleDirection(dRec, pRec,
+				sensor->needsDirectionSample() ? sampler->next2D() : Point2(0.5f));
+
+			if (result.isZero())
+				return false;
+
+			current->weight[EImportance] = result * dRec.pdf * (
+				sensor->isOnSurface() ? 1.0f / absDot(dRec.d, pRec.n) : 1.0f);
+			current->weight[ERadiance] = result;
+			current->pdf[EImportance] = 1.0f;
+			current->pdf[ERadiance] = dRec.pdf;
+
+			current->measure = dRec.measure;
+			succEdge->medium = sensor->getMedium();
+			ray.time = pRec.time;
+			ray.setOrigin(pRec.p);
+			ray.setDirection(dRec.d);
+		}
+			break;
+
+		case PathVertex::ESurfaceInteraction: {
+			Intersection its = current->getIntersection();
+			//const BSDF *bsdf = its.getBSDF();
+			Vector wi = normalize(pred->getPosition() - its.p);
+			Vector wo;
+
+			GuidedBRDF gsampler(its, (mode == ERadiance) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
+				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);
+			GuidedBRDF gsampler_inv(its, (mode == ERadiance) ? m_guidingSampler->getImportanceSampler() : m_guidingSampler->getRadianceSampler(),
+				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);
+			if (!gsampler.isValid()) {
+				m_guidingSampler->distributionConstructionFailed(its);
+			}
+
+			/* Sample the BSDF */
+			BSDFSamplingRecord bRec(its, sampler, mode);
+			bRec.wi = its.toLocal(wi);
+			//current->weight[mode] = bsdf->sample(bRec, current->pdf[mode], sampler->next2D());
+			current->weight[mode] = gsampler.sample(wo, current->pdf[mode], sampler);
+			if (current->weight[mode].isZero())
+				return false;
+
+			bRec.sampledType = gsampler.getLastSampledComponent();
+			bRec.wo = its.toLocal(wo);
+			bRec.eta = gsampler.getEta();
+			if (bRec.sampledType == 0) bRec.sampledType |= BSDF::ESmooth;
+
+
+			current->measure = BSDF::getMeasure(bRec.sampledType);
+			current->componentType = (uint16_t)(bRec.sampledType & BSDF::EAll);
+
+			/* Prevent light leaks due to the use of shading normals */
+			Float wiDotGeoN = dot(its.geoFrame.n, wi),
+				woDotGeoN = dot(its.geoFrame.n, wo);
+			if (wiDotGeoN * Frame::cosTheta(bRec.wi) <= 0 ||
+				woDotGeoN * Frame::cosTheta(bRec.wo) <= 0)
+				return false;
+
+			/* Account for medium changes if applicable */
+			if (its.isMediumTransition()) {
+				const Medium *expected = its.getTargetMedium(wi);
+				if (expected != predEdge->medium) {					
+					return false;
+				}
+				succEdge->medium = its.getTargetMedium(wo);
+			}
+
+			/* Compute the reverse quantities */
+			bRec.reverse();
+			current->pdf[1 - mode] = gsampler_inv.pdf(its.toWorld(bRec.wo)); //bsdf->pdf(bRec, (EMeasure)(current->measure));
+			if (current->pdf[1 - mode] == 0) {
+				/* This can happen rarely due to roundoff errors -- be strict */
+				return false;
+			}
+
+			if (!gsampler.isBSDFPureSpecular() && false) {
+				/* Make use of symmetry -- no need to re-evaluate
+				everything (only the pdf and cosine factors changed) */
+				current->weight[1 - mode] = current->weight[mode] * (current->pdf[mode] / current->pdf[1 - mode]);
+				if (current->measure == ESolidAngle)
+					current->weight[1 - mode] *=
+					std::abs(Frame::cosTheta(bRec.wo) / Frame::cosTheta(bRec.wi));
+			}
+			else {
+				current->weight[1 - mode] = gsampler.eval(its.toWorld(bRec.wo)) / current->pdf[1 - mode]; // bsdf->eval(bRec, (EMeasure)(current->measure)) / current->pdf[1 - mode];
+			}
+			bRec.reverse();
+
+			/* Adjoint BSDF for shading normals */
+			if (mode == EImportance)
+				current->weight[EImportance] *= std::abs(
+				(Frame::cosTheta(bRec.wi) * woDotGeoN) /
+				(Frame::cosTheta(bRec.wo) * wiDotGeoN));
+			else
+				current->weight[EImportance] *= std::abs(
+				(Frame::cosTheta(bRec.wo) * wiDotGeoN) /
+				(Frame::cosTheta(bRec.wi) * woDotGeoN));
+
+			/// For BDPT & russian roulette, track radiance * eta^2
+			if (throughput && mode == ERadiance && bRec.eta != 1)
+				(*throughput) *= bRec.eta * bRec.eta;
+
+			ray.time = its.time;
+			ray.setOrigin(its.p);
+			ray.setDirection(wo);
+		}
+			break;		
+
+		default:
+			SLog(EError, "PathVertex::sampleNext(): Encountered an "
+				"unsupported vertex type (%i)!", current->type);
+			return false;
+		}
+
+		if (throughput) {
+			/* For BDPT: keep track of the path throughput to run russian roulette */
+			(*throughput) *= current->weight[mode];
+
+			if (russianRoulette) {
+				Float q = std::min(throughput->max(), (Float) 0.95f);
+
+				if (sampler->next1D() > q) {
+					current->measure = EInvalidMeasure;
+					return false;
+				}
+				else {
+					current->rrWeight = 1.0f / q;
+					(*throughput) *= current->rrWeight;
+				}
+			}
+		}
+
+		if (!succEdge->sampleNext(scene, sampler, current, ray, succ, mode)) {
+			/* Sampling a successor edge + vertex failed, hence the vertex
+			is not committed to a particular measure yet -- revert. */
+			current->measure = EInvalidMeasure;
+			return false;
+		}
+		else {
+			if (throughput)
+				(*throughput) *= succEdge->weight[mode];
+		}
+
+		/* Convert from solid angle to area measure */
+		if (current->measure == ESolidAngle) {
+			current->measure = EArea;
+
+			current->pdf[mode] /= succEdge->length * succEdge->length;
+			if (succ->isOnSurface())
+				current->pdf[mode] *= absDot(ray.d, succ->getGeometricNormal());
+
+			if (predEdge->length != 0.0f) {
+				current->pdf[1 - mode] /= predEdge->length * predEdge->length;
+				if (pred->isOnSurface())
+					current->pdf[1 - mode] *= absDot(predEdge->d, pred->getGeometricNormal());
+			}
+		}
+
+		return true;
+	}
+
+	void alternatingRandomWalkFromPixel(const Scene *scene, Sampler *sampler,
+		Path &emitterPath, int nEmitterSteps, Path &sensorPath, int nSensorSteps,
+		const Point2i &pixelPosition, int rrStart, MemoryPool &pool) {
+		/* Determine the relevant edges and vertices to start the random walk */
+		PathVertex *curVertexS = emitterPath.vertex(0),
+			*curVertexT = sensorPath.vertex(0),
+			*predVertexS = NULL, *predVertexT = NULL;
+		PathEdge   *predEdgeS = NULL, *predEdgeT = NULL;
+
+		PathVertex *v1 = pool.allocVertex(), *v2 = pool.allocVertex();
+		PathEdge *e0 = pool.allocEdge(), *e1 = pool.allocEdge();
+
+		/* Use a special sampling routine for the first two sensor vertices so that
+		the resulting subpath passes through the specified pixel position */
+		int t = curVertexT->sampleSensor(scene,
+			sampler, pixelPosition, e0, v1, e1, v2);
+
+		if (t >= 1) {
+			sensorPath.append(e0, v1);
+		}
+		else {
+			pool.release(e0);
+			pool.release(v1);
+		}
+
+		if (t == 2) {
+			sensorPath.append(e1, v2);
+			predVertexT = v1;
+			curVertexT = v2;
+			predEdgeT = e1;
+		}
+		else {
+			pool.release(e1);
+			pool.release(v2);
+			curVertexT = NULL;
+		}
+
+		Spectrum throughputS(1.0f), throughputT(1.0f);
+
+		int s = 0;
+		do {
+			if (curVertexT && (t < nSensorSteps || nSensorSteps == -1)) {
+				PathVertex *succVertexT = pool.allocVertex();
+				PathEdge *succEdgeT = pool.allocEdge();
+
+				if (sampleNext(curVertexT,
+					scene, sampler, predVertexT,
+					predEdgeT, succEdgeT, succVertexT, ERadiance,
+					rrStart != -1 && t >= rrStart, &throughputT)) {
+					sensorPath.append(succEdgeT, succVertexT);
+					predVertexT = curVertexT;
+					curVertexT = succVertexT;
+					predEdgeT = succEdgeT;
+					t++;
+				}
+				else {
+					pool.release(succVertexT);
+					pool.release(succEdgeT);
+					curVertexT = NULL;
+				}
+			}
+			else {
+				curVertexT = NULL;
+			}
+
+			if (curVertexS && (s < nEmitterSteps || nEmitterSteps == -1)) {
+				PathVertex *succVertexS = pool.allocVertex();
+				PathEdge *succEdgeS = pool.allocEdge();
+
+				if (sampleNext(curVertexS,
+					scene, sampler, predVertexS,
+					predEdgeS, succEdgeS, succVertexS, EImportance,
+					rrStart != -1 && s >= rrStart, &throughputS)) {
+					emitterPath.append(succEdgeS, succVertexS);
+					predVertexS = curVertexS;
+					curVertexS = succVertexS;
+					predEdgeS = succEdgeS;
+					s++;
+				}
+				else {
+					pool.release(succVertexS);
+					pool.release(succEdgeS);
+					curVertexS = NULL;
+				}
+			}
+			else {
+				curVertexS = NULL;
+			}
+		} while (curVertexS || curVertexT);
+	}	
 
 	/// Evaluate the contributions of the given eye and light paths
 	void evaluate(GuidedBDPTWorkResult *wr,
@@ -289,7 +641,7 @@ public:
 				}
 
 				/* Compute the multiple importance sampling weight */
-				Float miWeight = Path::miWeight(scene, emitterSubpath, &connectionEdge,
+				Float weight = miWeight(scene, emitterSubpath, &connectionEdge,
 					sensorSubpath, s, t, m_config.sampleDirect, m_config.lightImage);
 
 				if (sampleDirect) {
@@ -309,9 +661,9 @@ public:
  						? miWeight : 1.0f);// * std::pow(2.0f, s+t-3.0f));
 					wr->putDebugSample(s, t, samplePos, splatValue);
 					wr->putDebugSampleM(s, t, samplePos, value);
-				#endif			
+				#endif
 
-				value *= miWeight;
+					value *= weight;
 				if (t >= 2)
 					sampleValue += value;
 				else
@@ -319,6 +671,366 @@ public:
 			}
 		}
 		wr->putSample(initialSamplePos, sampleValue);
+	}	
+
+	Float evalPdf(const PathVertex* current, const Scene *scene, const PathVertex *pred,
+		const PathVertex *succ, ETransportMode mode, EMeasure measure) const {
+		Vector wo(0.0f);
+		Float dist = 0.0f, result = 0.0f;
+
+		switch (current->type) {
+		case PathVertex::EEmitterSupernode: {
+			if (mode != EImportance || pred != NULL || succ->type != PathVertex::EEmitterSample)
+				return 0.0f;
+			PositionSamplingRecord pRec = succ->getPositionSamplingRecord();
+			pRec.measure = measure;
+			return scene->pdfEmitterPosition(pRec);
+		}
+			break;
+
+		case PathVertex::ESensorSupernode: {
+			if (mode != ERadiance || pred != NULL || succ->type != PathVertex::ESensorSample)
+				return 0.0f;
+			PositionSamplingRecord pRec = succ->getPositionSamplingRecord();
+			pRec.measure = measure;
+			return scene->pdfSensorPosition(pRec);
+		}
+			break;
+
+		case PathVertex::EEmitterSample: {
+			if (mode == ERadiance && succ->type == PathVertex::EEmitterSupernode)
+				return 1.0f;
+			else if (mode != EImportance || pred->type != PathVertex::EEmitterSupernode)
+				return 0.0f;
+
+			const PositionSamplingRecord &pRec = current->getPositionSamplingRecord();
+			const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+			wo = succ->getPosition() - pRec.p;
+			dist = wo.length(); wo /= dist;
+			DirectionSamplingRecord dRec(wo, measure == EArea ? ESolidAngle : measure);
+			result = emitter->pdfDirection(dRec, pRec);
+		}
+			break;
+
+		case PathVertex::ESensorSample: {
+			if (mode == EImportance && succ->type == PathVertex::ESensorSupernode)
+				return 1.0f;
+			else if (mode != ERadiance || pred->type != PathVertex::ESensorSupernode)
+				return 0.0f;
+
+			const PositionSamplingRecord &pRec = current->getPositionSamplingRecord();
+			const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+			wo = succ->getPosition() - pRec.p;
+			dist = wo.length(); wo /= dist;
+			DirectionSamplingRecord dRec(wo, measure == EArea ? ESolidAngle : measure);
+			result = sensor->pdfDirection(dRec, pRec);
+		}
+			break;
+
+		case PathVertex::ESurfaceInteraction: {
+			const Intersection &its = current->getIntersection();			
+			wo = succ->getPosition() - its.p;
+			dist = wo.length(); wo /= dist;
+
+			Point predP = pred->getPosition();
+			Vector wi = normalize(predP - its.p);
+
+			GuidedBRDF gsampler(its, (mode == ERadiance) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
+				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);
+
+			BSDFSamplingRecord bRec(its, its.toLocal(wi), its.toLocal(wo), mode);
+			//result = bsdf->pdf(bRec, measure == EArea ? ESolidAngle : measure);
+			result = gsampler.pdf(wo);
+
+			/* Prevent light leaks due to the use of shading normals */
+			Float wiDotGeoN = dot(its.geoFrame.n, wi),
+				woDotGeoN = dot(its.geoFrame.n, wo);
+
+			if (wiDotGeoN * Frame::cosTheta(bRec.wi) <= 0 ||
+				woDotGeoN * Frame::cosTheta(bRec.wo) <= 0)
+				return 0.0f;
+		}
+			break;		
+
+		default:
+			SLog(EError, "PathVertex::evalPdf(): Encountered an "
+				"unsupported vertex type (%i)!", current->type);
+			return 0.0f;
+		}
+
+		if (measure == EArea) {
+			result /= dist * dist;
+			if (succ->isOnSurface())
+				result *= absDot(wo, succ->getGeometricNormal());
+		}
+
+		return result;
+	}
+
+	Float miWeight(const Scene *scene, const Path &emitterSubpath,
+		const PathEdge *connectionEdge, const Path &sensorSubpath,
+		int s, int t, bool sampleDirect, bool lightImage) {
+		int k = s + t + 1, n = k + 1;
+
+		const PathVertex
+			*vsPred = emitterSubpath.vertexOrNull(s - 1),
+			*vtPred = sensorSubpath.vertexOrNull(t - 1),
+			*vs = emitterSubpath.vertex(s),
+			*vt = sensorSubpath.vertex(t);
+
+		/* pdfImp[i] and pdfRad[i] store the area/volume density of vertex
+		'i' when sampled from the adjacent vertex in the emitter
+		and sensor direction, respectively. */
+
+		Float ratioEmitterDirect = 0.0f, ratioSensorDirect = 0.0f;
+		Float *pdfImp = (Float *)alloca(n * sizeof(Float)),
+			*pdfRad = (Float *)alloca(n * sizeof(Float));
+		bool  *connectable = (bool *)alloca(n * sizeof(bool)),
+			*isNull = (bool *)alloca(n * sizeof(bool));
+
+		/* Keep track of which vertices are connectable / null interactions */
+		int pos = 0;
+		for (int i = 0; i <= s; ++i) {
+			const PathVertex *v = emitterSubpath.vertex(i);
+			connectable[pos] = v->isConnectable();
+			isNull[pos] = v->isNullInteraction() && !connectable[pos];
+			pos++;
+		}
+
+		for (int i = t; i >= 0; --i) {
+			const PathVertex *v = sensorSubpath.vertex(i);
+			connectable[pos] = v->isConnectable();
+			isNull[pos] = v->isNullInteraction() && !connectable[pos];
+			pos++;
+		}
+
+		if (k <= 3)
+			sampleDirect = false;
+
+		EMeasure vsMeasure = EArea, vtMeasure = EArea;
+		if (sampleDirect) {
+			/* When direct sampling is enabled, we may be able to create certain
+			connections that otherwise would have failed (e.g. to an
+			orthographic camera or a directional light source) */
+			const AbstractEmitter *emitter = (s > 0 ? emitterSubpath.vertex(1) : vt)->getAbstractEmitter();
+			const AbstractEmitter *sensor = (t > 0 ? sensorSubpath.vertex(1) : vs)->getAbstractEmitter();
+
+			EMeasure emitterDirectMeasure = emitter->getDirectMeasure();
+			EMeasure sensorDirectMeasure = sensor->getDirectMeasure();
+
+			connectable[0] = emitterDirectMeasure != EDiscrete && emitterDirectMeasure != EInvalidMeasure;
+			connectable[1] = emitterDirectMeasure != EInvalidMeasure;
+			connectable[k - 1] = sensorDirectMeasure != EInvalidMeasure;
+			connectable[k] = sensorDirectMeasure != EDiscrete && sensorDirectMeasure != EInvalidMeasure;
+
+			/* The following is needed to handle orthographic cameras &
+			directional light sources together with direct sampling */
+			if (t == 1)
+				vtMeasure = sensor->needsDirectionSample() ? EArea : EDiscrete;
+			else if (s == 1)
+				vsMeasure = emitter->needsDirectionSample() ? EArea : EDiscrete;
+		}
+
+		/* Collect importance transfer area/volume densities from vertices */
+		pos = 0;
+		pdfImp[pos++] = 1.0;
+
+		for (int i = 0; i<s; ++i)
+			pdfImp[pos++] = emitterSubpath.vertex(i)->pdf[EImportance]
+			* emitterSubpath.edge(i)->pdf[EImportance];
+
+		pdfImp[pos++] = evalPdf(vs, scene, vsPred, vt, EImportance, vsMeasure)
+			* connectionEdge->pdf[EImportance];
+
+		if (t > 0) {
+			pdfImp[pos++] = evalPdf(vt, scene, vs, vtPred, EImportance, vtMeasure)
+				* sensorSubpath.edge(t - 1)->pdf[EImportance];
+
+			for (int i = t - 1; i>0; --i)
+				pdfImp[pos++] = sensorSubpath.vertex(i)->pdf[EImportance]
+				* sensorSubpath.edge(i - 1)->pdf[EImportance];
+		}
+
+		/* Collect radiance transfer area/volume densities from vertices */
+		pos = 0;
+		if (s > 0) {
+			for (int i = 0; i<s - 1; ++i)
+				pdfRad[pos++] = emitterSubpath.vertex(i + 1)->pdf[ERadiance]
+				* emitterSubpath.edge(i)->pdf[ERadiance];
+
+			pdfRad[pos++] = evalPdf(vs, scene, vt, vsPred, ERadiance, vsMeasure)
+				* emitterSubpath.edge(s - 1)->pdf[ERadiance];
+		}
+
+		pdfRad[pos++] = evalPdf(vt, scene, vtPred, vs, ERadiance, vtMeasure)
+			* connectionEdge->pdf[ERadiance];
+
+		for (int i = t; i>0; --i)
+			pdfRad[pos++] = sensorSubpath.vertex(i - 1)->pdf[ERadiance]
+			* sensorSubpath.edge(i - 1)->pdf[ERadiance];
+
+		pdfRad[pos++] = 1.0;
+
+
+		/* When the path contains specular surface interactions, it is possible
+		to compute the correct MI weights even without going through all the
+		trouble of computing the proper generalized geometric terms (described
+		in the SIGGRAPH 2012 specular manifolds paper). The reason is that these
+		all cancel out. But to make sure that that's actually true, we need to
+		convert some of the area densities in the 'pdfRad' and 'pdfImp' arrays
+		into the projected solid angle measure */
+		for (int i = 1; i <= k - 3; ++i) {
+			if (i == s || !(connectable[i] && !connectable[i + 1]))
+				continue;
+
+			const PathVertex *cur = i <= s ? emitterSubpath.vertex(i) : sensorSubpath.vertex(k - i);
+			const PathVertex *succ = i + 1 <= s ? emitterSubpath.vertex(i + 1) : sensorSubpath.vertex(k - i - 1);
+			const PathEdge *edge = i < s ? emitterSubpath.edge(i) : sensorSubpath.edge(k - i - 1);
+
+			pdfImp[i + 1] *= edge->length * edge->length / std::abs(
+				(succ->isOnSurface() ? dot(edge->d, succ->getGeometricNormal()) : 1) *
+				(cur->isOnSurface() ? dot(edge->d, cur->getGeometricNormal()) : 1));
+		}
+
+		for (int i = k - 1; i >= 3; --i) {
+			if (i - 1 == s || !(connectable[i] && !connectable[i - 1]))
+				continue;
+
+			const PathVertex *cur = i <= s ? emitterSubpath.vertex(i) : sensorSubpath.vertex(k - i);
+			const PathVertex *succ = i - 1 <= s ? emitterSubpath.vertex(i - 1) : sensorSubpath.vertex(k - i + 1);
+			const PathEdge *edge = i <= s ? emitterSubpath.edge(i - 1) : sensorSubpath.edge(k - i);
+
+			pdfRad[i - 1] *= edge->length * edge->length / std::abs(
+				(succ->isOnSurface() ? dot(edge->d, succ->getGeometricNormal()) : 1) *
+				(cur->isOnSurface() ? dot(edge->d, cur->getGeometricNormal()) : 1));
+		}
+
+		int emitterRefIndirection = 2, sensorRefIndirection = k - 2;
+
+		/* One more array sweep before the actual useful work starts -- phew! :)
+		"Collapse" edges/vertices that were caused by BSDF::ENull interactions.
+		The BDPT implementation is smart enough to connect straight through those,
+		so they shouldn't be treated as Dirac delta events in what follows */
+		for (int i = 1; i <= k - 3; ++i) {
+			if (!connectable[i] || !isNull[i + 1])
+				continue;
+
+			int start = i + 1, end = start;
+			while (isNull[end + 1])
+				++end;
+
+			if (!connectable[end + 1]) {
+				/// The chain contains a non-ENull interaction
+				isNull[start] = false;
+				continue;
+			}
+
+			const PathVertex *before = i <= s ? emitterSubpath.vertex(i) : sensorSubpath.vertex(k - i);
+			const PathVertex *after = end + 1 <= s ? emitterSubpath.vertex(end + 1) : sensorSubpath.vertex(k - end - 1);
+
+			Vector d = before->getPosition() - after->getPosition();
+			Float lengthSquared = d.lengthSquared();
+			d /= std::sqrt(lengthSquared);
+
+			Float geoTerm = std::abs(
+				(before->isOnSurface() ? dot(before->getGeometricNormal(), d) : 1) *
+				(after->isOnSurface() ? dot(after->getGeometricNormal(), d) : 1)) / lengthSquared;
+
+			pdfRad[start - 1] *= pdfRad[end] * geoTerm;
+			pdfRad[end] = 1;
+			pdfImp[start] *= pdfImp[end + 1] * geoTerm;
+			pdfImp[end + 1] = 1;
+
+			/* When an ENull chain starts right after the emitter / before the sensor,
+			we must keep track of the reference vertex for direct sampling strategies. */
+			if (start == 2)
+				emitterRefIndirection = end + 1;
+			else if (end == k - 2)
+				sensorRefIndirection = start - 1;
+
+			i = end;
+		}
+
+		double initial = 1.0f;
+
+		/* When direct sampling strategies are enabled, we must
+		account for them here as well */
+		if (sampleDirect) {
+			/* Direct connection probability of the emitter */
+			const PathVertex *sample = s>0 ? emitterSubpath.vertex(1) : vt;
+			const PathVertex *ref = emitterRefIndirection <= s
+				? emitterSubpath.vertex(emitterRefIndirection) : sensorSubpath.vertex(k - emitterRefIndirection);
+			EMeasure measure = sample->getAbstractEmitter()->getDirectMeasure();
+
+			if (connectable[1] && connectable[emitterRefIndirection])
+				ratioEmitterDirect = ref->evalPdfDirect(scene, sample, EImportance,
+				measure == ESolidAngle ? EArea : measure) / pdfImp[1];
+
+			/* Direct connection probability of the sensor */
+			sample = t>0 ? sensorSubpath.vertex(1) : vs;
+			ref = sensorRefIndirection <= s ? emitterSubpath.vertex(sensorRefIndirection)
+				: sensorSubpath.vertex(k - sensorRefIndirection);
+			measure = sample->getAbstractEmitter()->getDirectMeasure();
+
+			if (connectable[k - 1] && connectable[sensorRefIndirection])
+				ratioSensorDirect = ref->evalPdfDirect(scene, sample, ERadiance,
+				measure == ESolidAngle ? EArea : measure) / pdfRad[k - 1];
+
+			if (s == 1)
+				initial /= ratioEmitterDirect;
+			else if (t == 1)
+				initial /= ratioSensorDirect;
+		}
+
+		double weight = 1, pdf = initial;
+
+		/* With all of the above information, the MI weight can now be computed.
+		Since the goal is to evaluate the power heuristic, the absolute area
+		product density of each strategy is interestingly not required. Instead,
+		an incremental scheme can be used that only finds the densities relative
+		to the (s,t) strategy, which can be done using a linear sweep. For
+		details, refer to the Veach thesis, p.306. */
+		for (int i = s + 1; i<k; ++i) {
+			double next = pdf * (double)pdfImp[i] / (double)pdfRad[i],
+				value = next;
+
+			if (sampleDirect) {
+				if (i == 1)
+					value *= ratioEmitterDirect;
+				else if (i == sensorRefIndirection)
+					value *= ratioSensorDirect;
+			}
+
+
+			int tPrime = k - i - 1;
+			if (connectable[i] && (connectable[i + 1] || isNull[i + 1]) && (lightImage || tPrime > 1))
+				weight += value*value;
+
+			pdf = next;
+		}
+
+		/* As above, but now compute pdf[i] with i<s (this is done by
+		evaluating the inverse of the previous expressions). */
+		pdf = initial;
+		for (int i = s - 1; i >= 0; --i) {
+			double next = pdf * (double)pdfRad[i + 1] / (double)pdfImp[i + 1],
+				value = next;
+
+			if (sampleDirect) {
+				if (i == 1)
+					value *= ratioEmitterDirect;
+				else if (i == sensorRefIndirection)
+					value *= ratioSensorDirect;
+			}
+
+			int tPrime = k - i - 1;
+			if (connectable[i] && (connectable[i + 1] || isNull[i + 1]) && (lightImage || tPrime > 1))
+				weight += value*value;
+
+			pdf = next;
+		}
+
+		return (Float)(1.0 / weight);
 	}
 
 	ref<WorkProcessor> clone() const {
@@ -334,6 +1046,7 @@ private:
 	MemoryPool m_pool;
 	GuidedBDPTConfiguration m_config;
 	HilbertCurve2D<uint8_t> m_hilbertCurve;
+	ref<GuidingSamplers> m_guidingSampler;
 };
 
 

@@ -124,7 +124,7 @@ private:
 /* Russian roulette encapsulation. Returns the survival probability. 
    param power is an initial particle weight.
 */
-Float russianRoulette( const Spectrum & throughput, const Spectrum & power, Float eta,                       
+inline Float russianRoulette( const Spectrum & throughput, const Spectrum & power, Float eta,                       
                        const WeightWindow & ww, bool useWeightWindow ) {    
     if ( useWeightWindow )  {        
         return ww.rrWeight( throughput * power /* Current particle weight */ );

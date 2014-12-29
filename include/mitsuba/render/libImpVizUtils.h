@@ -22,6 +22,8 @@
 
 
 #pragma once 
+#if !defined(__LIBIMPVIZ_H)
+#define __LIBIMPVIZ_H
 
 /// !!! Include this header before Mitsuba's logger.h file (Log macro mustn't be defined otherwise there is a clash with wxWidgets headers)
 
@@ -177,7 +179,7 @@ inline void statistics_and_visual(
     }    
 }
 
-ref<Bitmap> impBmpToMtsBmp( const Importance::ImBitmap<Float>& iBmp ) {
+inline ref<Bitmap> impBmpToMtsBmp(const Importance::ImBitmap<Float>& iBmp) {
     int w = iBmp.getWidth(),
         h = iBmp.getHeight();
     ref<Bitmap> resBmp = new Bitmap( Bitmap::ELuminance, Bitmap::EFloat32, Vector2i( w, h ) );
@@ -190,10 +192,12 @@ ref<Bitmap> impBmpToMtsBmp( const Importance::ImBitmap<Float>& iBmp ) {
     return resBmp;
 }
 
-void writeImportanceEnviroMap( const std::string& fname, const Importance::ImBitmap<float>& imBitmap ) {
+inline void writeImportanceEnviroMap( const std::string& fname, const Importance::ImBitmap<float>& imBitmap ) {
     ref<Bitmap> bmp = impBmpToMtsBmp( imBitmap );
     ref<FileStream> fs = new FileStream( fname, FileStream::ETruncWrite );
     bmp->write( Bitmap::EOpenEXR, fs );
 }
 
 MTS_NAMESPACE_END
+
+#endif //__LIBIMPVIZ_H

@@ -838,8 +838,8 @@ public:
 	 * certain emitter in <tt>sampleEmitter*</tt>
 	 */
 	inline Float pdfEmitterDiscrete(const Emitter *emitter) const {
-		return emitter->getSamplingWeight() * m_emitterPDF.getNormalization();
-        //return emitter->getPower().max() * m_emitterPDF.getNormalization();
+		//return emitter->getSamplingWeight() * m_emitterPDF.getNormalization();
+        return emitter->getPower().max() * m_emitterPDF.getNormalization();
 	}
 
     inline Float emitterPdfSum() const {
