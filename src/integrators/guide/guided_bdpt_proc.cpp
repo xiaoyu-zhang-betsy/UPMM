@@ -258,9 +258,7 @@ public:
 			Vector wo;
 
 			GuidedBRDF gsampler(its, (mode == ERadiance) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
-				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);
-			GuidedBRDF gsampler_inv(its, (mode == ERadiance) ? m_guidingSampler->getImportanceSampler() : m_guidingSampler->getRadianceSampler(),
-				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);
+				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);					
 			if (!gsampler.isValid()) {
 				m_guidingSampler->distributionConstructionFailed(its);
 			}
@@ -282,6 +280,8 @@ public:
 			current->measure = BSDF::getMeasure(bRec.sampledType);
 			current->componentType = (uint16_t)(bRec.sampledType & BSDF::EAll);
 
+			wo = its.toWorld(bRec.wo);
+
 			/* Prevent light leaks due to the use of shading normals */
 			Float wiDotGeoN = dot(its.geoFrame.n, wi),
 				woDotGeoN = dot(its.geoFrame.n, wo);
@@ -289,23 +289,20 @@ public:
 				woDotGeoN * Frame::cosTheta(bRec.wo) <= 0)
 				return false;
 
-			/* Account for medium changes if applicable */
-			if (its.isMediumTransition()) {
-				const Medium *expected = its.getTargetMedium(wi);
-				if (expected != predEdge->medium) {					
-					return false;
-				}
-				succEdge->medium = its.getTargetMedium(wo);
-			}
-
 			/* Compute the reverse quantities */
 			bRec.reverse();
-			current->pdf[1 - mode] = gsampler_inv.pdf(its.toWorld(bRec.wo)); //bsdf->pdf(bRec, (EMeasure)(current->measure));
+			Intersection its_inv = its;
+			its_inv.wi = bRec.wi;
+			GuidedBRDF gsampler_inv(its_inv, (mode == ERadiance) ? m_guidingSampler->getImportanceSampler() : m_guidingSampler->getRadianceSampler(),
+				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);
+			current->pdf[1 - mode] = gsampler_inv.pdf(its.toWorld(bRec.wo));
+			//current->pdf[1 - mode] = bsdf->pdf(bRec, (EMeasure)(current->measure));
 			if (current->pdf[1 - mode] == 0) {
 				/* This can happen rarely due to roundoff errors -- be strict */
 				return false;
 			}
-
+			
+			//if (!(bsdf->getType() & BSDF::ENonSymmetric)) {
 			if (!gsampler.isBSDFPureSpecular() && false) {
 				/* Make use of symmetry -- no need to re-evaluate
 				everything (only the pdf and cosine factors changed) */
@@ -315,7 +312,8 @@ public:
 					std::abs(Frame::cosTheta(bRec.wo) / Frame::cosTheta(bRec.wi));
 			}
 			else {
-				current->weight[1 - mode] = gsampler.eval(its.toWorld(bRec.wo)) / current->pdf[1 - mode]; // bsdf->eval(bRec, (EMeasure)(current->measure)) / current->pdf[1 - mode];
+				current->weight[1 - mode] = gsampler_inv.eval(its.toWorld(bRec.wo)) / current->pdf[1 - mode];  
+				//current->weight[1 - mode] = bsdf->eval(bRec, (EMeasure)(current->measure)) / current->pdf[1 - mode];
 			}
 			bRec.reverse();
 
@@ -337,7 +335,7 @@ public:
 			ray.setOrigin(its.p);
 			ray.setDirection(wo);
 		}
-			break;		
+			break;
 
 		default:
 			SLog(EError, "PathVertex::sampleNext(): Encountered an "
@@ -452,6 +450,22 @@ public:
 					pool.release(succEdgeT);
 					curVertexT = NULL;
 				}
+
+// 				if (curVertexT->sampleNext(scene, sampler, predVertexT,
+// 					predEdgeT, succEdgeT, succVertexT, ERadiance,
+// 					rrStart != -1 && t >= rrStart, &throughputT)) {
+// 					sensorPath.append(succEdgeT, succVertexT);
+// 					predVertexT = curVertexT;
+// 					curVertexT = succVertexT;
+// 					predEdgeT = succEdgeT;
+// 					t++;
+// 				}
+// 				else {
+// 					pool.release(succVertexT);
+// 					pool.release(succEdgeT);
+// 					curVertexT = NULL;
+// 				}
+
 			}
 			else {
 				curVertexT = NULL;
@@ -476,6 +490,21 @@ public:
 					pool.release(succEdgeS);
 					curVertexS = NULL;
 				}
+
+// 				if (curVertexS->sampleNext(scene, sampler, predVertexS,
+// 					predEdgeS, succEdgeS, succVertexS, EImportance,
+// 					rrStart != -1 && s >= rrStart, &throughputS)) {
+// 					emitterPath.append(succEdgeS, succVertexS);
+// 					predVertexS = curVertexS;
+// 					curVertexS = succVertexS;
+// 					predEdgeS = succEdgeS;
+// 					s++;
+// 				}
+// 				else {
+// 					pool.release(succVertexS);
+// 					pool.release(succEdgeS);
+// 					curVertexS = NULL;
+// 				}
 			}
 			else {
 				curVertexS = NULL;
@@ -616,11 +645,7 @@ public:
 
 				/* Determine the pixel sample position when necessary */
 				if (vt->isSensorSample() && !vt->getSamplePosition(vs, samplePos))
-					continue;
-
-				bool watchThread = false;
-				if (t == 1 && samplePos.x > 190 && samplePos.x < 199 && samplePos.y > 56 && samplePos.y < 62)
-					watchThread = true;
+					continue;				
 
 				/* Account for the terms of the measurement contribution
 				   function that are coupled to the connection edge */
@@ -658,7 +683,7 @@ public:
 					   following piece of code artificially increases the
 					   exposure of longer paths */
 					Spectrum splatValue = value * (m_config.showWeighted
- 						? miWeight : 1.0f);// * std::pow(2.0f, s+t-3.0f));
+ 						? weight : 1.0f);// * std::pow(2.0f, s+t-3.0f));
 					wr->putDebugSample(s, t, samplePos, splatValue);
 					wr->putDebugSampleM(s, t, samplePos, value);
 				#endif
@@ -730,16 +755,19 @@ public:
 		case PathVertex::ESurfaceInteraction: {
 			const Intersection &its = current->getIntersection();			
 			wo = succ->getPosition() - its.p;
-			dist = wo.length(); wo /= dist;
+			dist = wo.length(); wo /= dist;			
 
 			Point predP = pred->getPosition();
 			Vector wi = normalize(predP - its.p);
 
-			GuidedBRDF gsampler(its, (mode == ERadiance) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
+			//const BSDF *bsdf = its.getBSDF();
+			Intersection itsi = its;
+			itsi.wi = itsi.toLocal(wi);
+			GuidedBRDF gsampler(itsi, (mode == ERadiance) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
 				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);
 
 			BSDFSamplingRecord bRec(its, its.toLocal(wi), its.toLocal(wo), mode);
-			//result = bsdf->pdf(bRec, measure == EArea ? ESolidAngle : measure);
+			//result = bsdf->pdf(bRec, measure == EArea ? ESolidAngle : measure);			
 			result = gsampler.pdf(wo);
 
 			/* Prevent light leaks due to the use of shading normals */

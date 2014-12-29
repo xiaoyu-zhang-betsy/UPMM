@@ -187,6 +187,10 @@ public:
 		return AABB();
 	}
 
+	virtual Spectrum getPower() const {
+		return m_power;
+	}
+
 	Shader *createShader(Renderer *renderer) const;
 
 	std::string toString() const {

@@ -64,7 +64,6 @@ public:
 
 	inline void putDebugSampleM(int s, int t, const Point2 &sample,
 		const Spectrum &spec) {
-		return;
 		m_debugBlocksM[strategyIndex(s, t)]->put(sample, (const Float *)&spec);
 	}
 #endif
