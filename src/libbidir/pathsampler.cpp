@@ -26,6 +26,8 @@
 #include <mitsuba/core/sfcurve.h>
 #include <mitsuba/core/statistics.h>
 
+#define EXCLUDE_DIRECT_LIGHTING
+
 MTS_NAMESPACE_BEGIN
 
 StatsCounter avgGatherPoints("Unbiased photon mapping", "Avg. number of gather points", EAverage);
@@ -1172,7 +1174,9 @@ Float misEffectiveEta(int i, Float pi, Float pir , const PathVertex* vPred, cons
 	Float gatherRadius, size_t numLightPath, ETransportMode mode, int j = 999){
 
 	if (i < 1 || j < 1) return 0.f;
+#ifdef EXCLUDE_DIRECT_LIGHTING
 	if (i + j <= 2) return 0.f; // exclude (2,2) photon mapping
+#endif
 
 #ifdef EXCLUDE_DIRECT_LIGHT_UPM
 	if (i == 1 && mode == EImportance)
@@ -2186,7 +2190,9 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 						int s = node.data.depth;
 						if (m_maxDepth != -1 && s + t > m_maxDepth + 2 || s < minS) continue;
 
+#ifdef EXCLUDE_DIRECT_LIGHTING
 						if (s == 2 && t == 2) continue;
+#endif
 
 						if (m_sensorSampler->next1D() < rejectionProb) continue;
 

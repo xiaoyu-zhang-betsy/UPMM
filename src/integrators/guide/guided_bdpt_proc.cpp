@@ -37,7 +37,7 @@ public:
 	GuidedBDPTRenderer(Stream *stream, InstanceManager *manager)
 		: WorkProcessor(stream, manager), m_config(stream) { }
 
-	virtual ~GuidedBDPTRenderer() { }
+	virtual ~GuidedBDPTRenderer() {}
 
 	void serialize(Stream *stream, InstanceManager *manager) const {
 		m_config.serialize(stream);
@@ -65,7 +65,8 @@ public:
 		m_scene->wakeup(NULL, m_resources);
 		m_scene->initializeBidirectional();
 
-		m_guidingSampler = static_cast<GuidingSamplers *>(getResource("guidingSampler"));
+		m_guidingSampler = static_cast<GuidingSamplers *>(getResource("guidingSampler"))->clone();
+		SLog(EInfo, "clone %d", (void*)m_guidingSampler);
 	}
 
 	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {
@@ -130,7 +131,7 @@ public:
 
 		#if defined(MTS_DEBUG_FP)
 			disableFPExceptions();
-		#endif
+		#endif		
 
 		/* Make sure that there were no memory leaks */
 		Assert(m_pool.unused());
@@ -257,6 +258,10 @@ public:
 			Vector wi = normalize(pred->getPosition() - its.p);
 			Vector wo;
 
+			if (mode == ERadiance)
+				m_guidingSampler->getWeightWindow().pathTracing();
+			else
+				m_guidingSampler->getWeightWindow().lightTracing();
 			GuidedBRDF gsampler(its, (mode == ERadiance) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
 				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);					
 			if (!gsampler.isValid()) {
@@ -293,6 +298,10 @@ public:
 			bRec.reverse();
 			Intersection its_inv = its;
 			its_inv.wi = bRec.wi;
+			if (mode != ERadiance)
+				m_guidingSampler->getWeightWindow().pathTracing();
+			else
+				m_guidingSampler->getWeightWindow().lightTracing();
 			GuidedBRDF gsampler_inv(its_inv, (mode == ERadiance) ? m_guidingSampler->getImportanceSampler() : m_guidingSampler->getRadianceSampler(),
 				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);
 			current->pdf[1 - mode] = gsampler_inv.pdf(its.toWorld(bRec.wo));
@@ -699,7 +708,7 @@ public:
 	}	
 
 	Float evalPdf(const PathVertex* current, const Scene *scene, const PathVertex *pred,
-		const PathVertex *succ, ETransportMode mode, EMeasure measure) const {
+		const PathVertex *succ, ETransportMode mode, EMeasure measure) {
 		Vector wo(0.0f);
 		Float dist = 0.0f, result = 0.0f;
 
@@ -763,6 +772,10 @@ public:
 			//const BSDF *bsdf = its.getBSDF();
 			Intersection itsi = its;
 			itsi.wi = itsi.toLocal(wi);
+			if (mode == ERadiance)
+				m_guidingSampler->getWeightWindow().pathTracing();
+			else
+				m_guidingSampler->getWeightWindow().lightTracing();
 			GuidedBRDF gsampler(itsi, (mode == ERadiance) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
 				m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability);
 

@@ -33,6 +33,13 @@ MTS_NAMESPACE_BEGIN
 /** Holds and trains samplers for guiding both paths from light sources and from the camera. */
 class GuidingSamplers : public ConfigurableObject {
 public:
+
+	GuidingSamplers::GuidingSamplers() : ConfigurableObject(Properties()) {
+		m_timer = new Timer();
+		m_trainingTimer = new Timer();
+		m_failureListMutex = new Mutex();
+	}
+
 	GuidingSamplers(const Properties &props)
 		  : ConfigurableObject(props), m_cfg(GuidingConfig(props)),
             m_qmcSamplerID_photons( -1 ), m_qmcSamplerID_importons( -1 ), 
@@ -43,6 +50,28 @@ public:
         m_trainingTimer			= new Timer();
         m_failureListMutex		= new Mutex();
     }
+
+	ref<GuidingSamplers> clone(){
+		ref<GuidingSamplers> sampler = new GuidingSamplers();
+		sampler->m_cfg = m_cfg;
+		sampler->m_qmcSamplerID_photons = m_qmcSamplerID_photons;
+		sampler->m_qmcSamplerID_importons = m_qmcSamplerID_importons;
+		sampler->m_photonTracingState = m_photonTracingState;
+		sampler->m_importonTracingState = m_importonTracingState;
+		sampler->m_radianceSampler = m_radianceSampler;
+		sampler->m_importanceSampler = m_importanceSampler;
+		sampler->m_enviroSampler = m_enviroSampler;
+		sampler->m_scene = m_scene;
+		sampler->m_canceled = false;
+		
+		sampler->m_radianceStats.reset();
+		sampler->m_importanceStats.reset();
+		sampler->m_enviroSamplerStats.reset();
+		sampler->m_failureList.clear();
+
+		sampler->m_ww = m_ww;
+		return sampler.get();
+	}
 
     void trainingPhase( const RenderJob *job, int sceneResID, int sensorResID ) {
         if ( m_cfg.m_mitsuba.useGuidedSampling) {
@@ -175,6 +204,23 @@ public:
         return true;
     }
 
+	void done(){
+		if (m_qmcSamplerID_photons > -1) {
+			m_qmcSamplerID_photons = -1;
+		}
+
+		if (m_qmcSamplerID_importons > -1) {
+			m_qmcSamplerID_importons = -1;
+		}
+
+		m_radianceSampler = NULL;
+		m_importanceSampler = NULL;
+		if (m_enviroSampler) {
+			m_enviroSampler = NULL;
+		}
+		m_failureList.clear();
+	}
+
     void postprocess() {
         if ( !m_cfg.m_mitsuba.useGuidedSampling ) {
             return;
@@ -251,10 +297,11 @@ public:
 
 
     ~GuidingSamplers() {
-        SAssert( m_enviroSampler == NULL );
-        SAssert( m_importanceSampler == NULL );
-        SAssert( m_radianceSampler == NULL );
-        SAssert( m_qmcSamplerID_photons == -1 && m_qmcSamplerID_importons == -1 );
+		SLog(EInfo, "Destruct %d", (void*)this);
+//         SAssert( m_enviroSampler == NULL );
+//         SAssert( m_importanceSampler == NULL );
+//         SAssert( m_radianceSampler == NULL );
+//         SAssert( m_qmcSamplerID_photons == -1 && m_qmcSamplerID_importons == -1 );
     }
 
     /************************************************************************/

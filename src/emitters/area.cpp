@@ -223,9 +223,9 @@ public:
 
 	Shader *createShader(Renderer *renderer) const;
 
-// 	Float getBandwidth() const{
-// 		return 0.f;
-// 	}
+	Float getBandwidth() const{
+		return 0.f;
+	}
 
 	Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
 // 		Vector local = Warp::squareToCosineHemisphere(sample);

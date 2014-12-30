@@ -221,7 +221,8 @@ public:
 
 		/** The Training Phase of guiding distributions preceding the Rendering Phase. */
 		m_gs->trainingPhase(job, sceneResID, sensorResID);
-		m_gs->getWeightWindow().pathTracing();
+		//m_gs->getWeightWindow().pathTracing();
+		m_gs->getWeightWindow().lightTracing();
 
 		ref<GuidedBDPTProcess> process = new GuidedBDPTProcess(job, queue, m_config);
 		m_process = process;
