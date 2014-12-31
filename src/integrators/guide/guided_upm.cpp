@@ -16,6 +16,8 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <mitsuba/render/guiding.h>
+
 #include <mitsuba/bidir/util.h>
 #include <mitsuba/core/plugin.h>
 #include "guided_upm.h"
@@ -160,6 +162,8 @@ public:
 		m_config.useVC = props.getBoolean("useVC", true);
 
 		m_config.clampThreshold = props.getSize("clampThreshold", 100);
+
+		m_gs = new GuidingSamplers(props);
 	}
 
 	/// Unserialize from a binary data stream
@@ -200,17 +204,20 @@ public:
 
 		m_config.initialRadius *= m_config.radiusScale;
 
+		bool res = m_gs->preprocess(scene);
+
 		// set log level
 		mitsuba::Thread *thread = mitsuba::Thread::getThread(); 
 		if (EXPECT_NOT_TAKEN(thread == NULL))
 			throw std::runtime_error("Null thread pointer");
 			mitsuba::Logger *logger = thread->getLogger();
-			logger->setLogLevel(EInfo);
+			logger->setLogLevel(EInfo);			
 
 		return true;
 	}
 
 	void cancel() {
+		m_gs->cancel();
 		ref<RenderJob> nested = m_nestedJob;
 		if (nested)
 			nested->cancel();
@@ -240,14 +247,23 @@ public:
 		m_config.sampleCount = sampleCount;
 		m_config.dump();
 
+		/** The Training Phase of guiding distributions preceding the Rendering Phase. */
+		m_gs->trainingPhase(job, sceneResID, sensorResID);
+		//m_gs->getWeightWindow().pathTracing();
+		m_gs->getWeightWindow().lightTracing();
+
 		ref<GuidedUPMProcess> process = new GuidedUPMProcess(job, queue, m_config);
 		m_process = process;
 
 		process->bindResource("scene", sceneResID);
 		process->bindResource("sensor", sensorResID);
 		process->bindResource("sampler", samplerResID);
+		int guidingSamplerResID = scheduler->registerResource(m_gs);
+		process->bindResource("guidingSampler", guidingSamplerResID);
+
 		scheduler->schedule(process);
 		scheduler->wait(process);
+		scheduler->unregisterResource(guidingSamplerResID);
 		m_process = NULL;
 		process->develop();
 
@@ -262,11 +278,18 @@ public:
 		return process->getReturnStatus() == ParallelProcess::ESuccess;
 	}
 
+	void postprocess(const Scene *scene, RenderQueue *queue,
+		const RenderJob *job, int sceneResID, int cameraResID,
+		int samplerResID) {
+		m_gs->postprocess();
+	}
+
 	MTS_DECLARE_CLASS()
 private:
 	ref<ParallelProcess> m_process;
 	ref<RenderJob> m_nestedJob;
 	GuidedUPMConfiguration m_config;
+	GuidingSamplers* m_gs;
 };
 
 MTS_IMPLEMENT_CLASS_S(GuidedUPMIntegrator, false, Integrator)
