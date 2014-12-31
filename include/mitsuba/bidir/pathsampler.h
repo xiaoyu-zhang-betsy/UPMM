@@ -637,7 +637,8 @@ public:
 protected:
 	/// Virtual destructor
 	virtual ~PathSampler();
-protected:
+//protected:
+public: // temprorily open them for guided upm
 	ETechnique m_technique;
 	ref<const Scene> m_scene;
 	ref<SamplingIntegrator> m_integrator;
