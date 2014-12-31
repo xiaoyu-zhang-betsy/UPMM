@@ -1154,6 +1154,12 @@
     <ClCompile Include="..\src\integrators\guide\guided_bdpt_wr.cpp">
       <Filter>Source Files\integrators\guide</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\integrators\guide\guided_upm.cpp">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\guide\guided_upm_proc.cpp">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup Label="Header Files">
     <ClInclude Include="..\src\converter\converter.h">
@@ -2144,6 +2150,12 @@
       <Filter>Source Files\integrators\guide</Filter>
     </ClInclude>
     <ClInclude Include="..\src\integrators\guide\guided_bdpt_wr.h">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\guide\guided_upm.h">
+      <Filter>Source Files\integrators\guide</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\guide\guided_upm_proc.h">
       <Filter>Source Files\integrators\guide</Filter>
     </ClInclude>
   </ItemGroup>

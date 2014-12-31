@@ -141,6 +141,8 @@
     <ClInclude Include="..\src\integrators\guide\guided_bdpt.h" />
     <ClInclude Include="..\src\integrators\guide\guided_bdpt_proc.h" />
     <ClInclude Include="..\src\integrators\guide\guided_bdpt_wr.h" />
+    <ClInclude Include="..\src\integrators\guide\guided_upm.h" />
+    <ClInclude Include="..\src\integrators\guide\guided_upm_proc.h" />
     <ClInclude Include="..\src\integrators\upm\upm.h" />
     <ClInclude Include="..\src\integrators\upm\upm_proc.h" />
     <ClInclude Include="..\src\integrators\vcm\vcm.h" />
@@ -735,6 +737,8 @@
     <ClCompile Include="..\src\integrators\guide\guided_bdpt_proc.cpp" />
     <ClCompile Include="..\src\integrators\guide\guided_bdpt_wr.cpp" />
     <ClCompile Include="..\src\integrators\guide\guided_path.cpp" />
+    <ClCompile Include="..\src\integrators\guide\guided_upm.cpp" />
+    <ClCompile Include="..\src\integrators\guide\guided_upm_proc.cpp" />
     <ClCompile Include="..\src\integrators\upm\upm.cpp" />
     <ClCompile Include="..\src\integrators\upm\upm_proc.cpp" />
     <ClCompile Include="..\src\integrators\vcm\vcm.cpp" />

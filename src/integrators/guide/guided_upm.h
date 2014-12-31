@@ -16,19 +16,11 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#if !defined(__BDPT_H)
-#define __BDPT_H
+#if !defined(__GUPM_H)
+#define __GUPM_H
 
-#include <mitsuba/mitsuba.h>
-
-/**
- * When the following is set to "1", the Bidirectional Path Tracer
- * will generate a series of debugging images that split up the final
- * rendering into the weighted contributions of the individual sampling
- * strategies.
- */
-
-#define BDPT_DEBUG 1
+#include <mitsuba/bidir/pathsampler.h>
+#include <mitsuba/core/bitmap.h>
 
 MTS_NAMESPACE_BEGIN
 
@@ -37,10 +29,10 @@ MTS_NAMESPACE_BEGIN
 /* ==================================================================== */
 
 /**
- * \brief Stores all configuration parameters of the
- * bidirectional path tracer
+ * \brief Stores all configuration parameters used by
+ * the MLT rendering implementation
  */
-struct BDPTConfiguration {
+struct GuidedUPMConfiguration {
 	int maxDepth, blockSize, borderSize;
 	bool lightImage;
 	bool sampleDirect;
@@ -49,9 +41,20 @@ struct BDPTConfiguration {
 	Vector2i cropSize;
 	int rrDepth;
 
-	inline BDPTConfiguration() { }
+	size_t timeout;
+	int workUnits;
+	Float initialRadius;
+	Float radiusScale;
+	Float radiusAlpha;
+	Float rejectionProb;
+	size_t clampThreshold;
 
-	inline BDPTConfiguration(Stream *stream) {
+	bool useVM;
+	bool useVC;
+
+	inline GuidedUPMConfiguration() { }
+
+	inline GuidedUPMConfiguration(Stream *stream) {
 		maxDepth = stream->readInt();
 		blockSize = stream->readInt();
 		lightImage = stream->readBool();
@@ -60,6 +63,15 @@ struct BDPTConfiguration {
 		sampleCount = stream->readSize();
 		cropSize = Vector2i(stream);
 		rrDepth = stream->readInt();
+		initialRadius = stream->readFloat();
+		radiusScale = stream->readFloat();
+		radiusAlpha = stream->readFloat();
+		rejectionProb = stream->readFloat();
+		workUnits = stream->readInt();
+		timeout = stream->readSize();
+		useVC = stream->readBool();
+		useVM = stream->readBool();
+		clampThreshold = stream->readSize();
 	}
 
 	inline void serialize(Stream *stream) const {
@@ -71,6 +83,15 @@ struct BDPTConfiguration {
 		stream->writeSize(sampleCount);
 		cropSize.serialize(stream);
 		stream->writeInt(rrDepth);
+		stream->writeFloat(initialRadius);
+		stream->writeFloat(radiusScale);
+		stream->writeFloat(radiusAlpha);		
+		stream->writeFloat(rejectionProb);
+		stream->writeInt(workUnits);
+		stream->writeSize(timeout);
+		stream->writeBool(useVC);
+		stream->writeBool(useVM);
+		stream->writeSize(clampThreshold);
 	}
 
 	void dump() const {
@@ -85,12 +106,16 @@ struct BDPTConfiguration {
 		SLog(EDebug, "   Russian roulette depth      : %i", rrDepth);
 		SLog(EDebug, "   Block size                  : %i", blockSize);
 		SLog(EDebug, "   Number of samples           : " SIZE_T_FMT, sampleCount);
-		#if BDPT_DEBUG == 1
-			SLog(EDebug, "   Show weighted contributions : %s", showWeighted ? "yes" : "no");
-		#endif
+		SLog(EDebug, "   Initial radius of vertex merging:   %f", initialRadius);
+		SLog(EDebug, "   Scale of initial radius for gathering:	%f", radiusScale);
+		SLog(EDebug, "   Radius alpha for progressive shrink:	%f", radiusAlpha);
+		SLog(EDebug, "   Probability of uniform rejection of radius search:	%f", rejectionProb);
+		SLog(EDebug, "   Total number of work units  : %i", workUnits);
+		SLog(EDebug, "   Timeout                     : " SIZE_T_FMT, timeout);
+		SLog(EDebug, "   1/p clamp threshold   : " SIZE_T_FMT, clampThreshold);
 	}
 };
 
 MTS_NAMESPACE_END
 
-#endif /* __BDPT_H */
+#endif /* __GUPM_H */

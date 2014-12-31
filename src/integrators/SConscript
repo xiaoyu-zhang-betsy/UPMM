@@ -67,6 +67,8 @@ visEnv.Append(LIBPATH=['#src/libbidir'])
 plugins += visEnv.SharedLibrary('guided_path', ['guide/guided_path.cpp'])
 plugins += visEnv.SharedLibrary('guided_bdpt',
 	['guide/guided_bdpt.cpp', 'guide/guided_bdpt_wr.cpp', 'guide/guided_bdpt_proc.cpp'])
+plugins += visEnv.SharedLibrary('guided_upm',
+	['guide/guided_upm.cpp', 'guide/guided_upm_proc.cpp'])
 	
 Export('plugins')
 
