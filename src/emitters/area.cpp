@@ -227,14 +227,16 @@ public:
 		return 0.f;
 	}
 
-	Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
+	Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds) const{
 // 		Vector local = Warp::squareToCosineHemisphere(sample);
 // 		dRec.d = Frame(pRec.n).toWorld(local);
 // 		dRec.pdf = Warp::squareToCosineHemispherePdf(local);
 // 		dRec.measure = ESolidAngle;
 // 		return Spectrum(1.0f);
 
-		bbox = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
+		Vector4 bbox = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
+		componentProbs.push_back(1.f);
+		componentBounds.push_back(bbox);
 
 		Vector wo = Frame(pRec.n).toLocal(gatherPosition - pRec.p);		
 		Vector dir = wo;
@@ -265,10 +267,13 @@ public:
 			bbox.x = theta0; bbox.y = theta1;
 			bbox.z = phi - dPhi; bbox.w = phi + dPhi;
 		}
+		componentProbs[0] = prob;
+		componentBounds[0] = bbox;
 		return prob;
 	}
-	Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
+	Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, std::vector<Float> componentProbs, std::vector<Vector4> componentBounds) const{
 		Vector dir;
+		Vector4 bbox = componentBounds[0];
 		if (bbox.x == 0.f && bbox.y == 0.5f * M_PI && bbox.z == 0.f && bbox.w == 2.f * M_PI){
 			// uniform sampling
 			dir = Warp::squareToCosineHemisphere(sample);

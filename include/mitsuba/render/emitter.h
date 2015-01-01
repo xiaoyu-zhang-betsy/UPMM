@@ -608,11 +608,11 @@ public:
 		return 99999.f;
 	}
 
-	virtual Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
+	virtual Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds) const{
 		SLog(EWarn, "Not implment emitter->gatherAreaPdf");
 		return 1.f;
 	}
-	virtual Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
+	virtual Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, std::vector<Float> componentProbs, std::vector<Vector4> componentBounds) const{
 		SLog(EWarn, "Not implment emitter->sampleGatherArea");
 		Spectrum ret = sampleDirection(dRec, pRec, sample);
 		if (ret.isZero())

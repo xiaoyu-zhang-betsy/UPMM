@@ -499,11 +499,11 @@ public:
 	//! @}
 	// =============================================================
 
-	virtual Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
+	virtual Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds) const{
 		SLog(EWarn, "Not implment bsdf->gatherAreaPdf");
 		return 0.f;
 	}
-	virtual Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
+	virtual Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, std::vector<Float> componentProbs, std::vector<Vector4> componentBounds) const{
 		SLog(EWarn, "Not implment bsdf->sampleGatherArea");
 		return Vector(0.f);
 	}

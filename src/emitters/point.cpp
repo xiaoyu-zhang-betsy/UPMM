@@ -168,9 +168,12 @@ public:
 		return 0.f;
 	}
 
-	virtual Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
+	virtual Float gatherAreaPdf(PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds) const{
 		Vector dir = gatherPosition - pRec.p;
 		Float dis = dir.length();
+		Vector4 bbox = Vector4(0.f, M_PI, 0.f, 2.f * M_PI);
+		componentProbs.push_back(1.f);
+		componentBounds.push_back(bbox);
 		if (dis < gatherRadius) return 1.f;
 		dir /= dis;
 		Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);
@@ -179,10 +182,12 @@ public:
 		Float prob = 0.5f * (1.f - cos(dTheta));
 		bbox.x = 0.f; bbox.y = dTheta;
 
+		componentProbs[0] = prob;
+		componentBounds[0] = bbox;
 		return prob;		
 	}
-	virtual Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
-
+	virtual Vector sampleGatherArea(DirectionSamplingRecord &dRec, PositionSamplingRecord pRec, Point gatherPosition, Float gatherRadius, Point2 sample, std::vector<Float> componentProbs, std::vector<Vector4> componentBounds) const{
+		Vector4 bbox = componentBounds[0];
 // 		Float z = 1.0f - 2.0f * sample.y;
 // 		Float r = math::safe_sqrt(1.0f - z*z);
 // 		Float sinPhi, cosPhi;

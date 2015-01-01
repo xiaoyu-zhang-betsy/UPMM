@@ -183,9 +183,11 @@ public:
 
 	Shader *createShader(Renderer *renderer) const;
 
-	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
+	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds) const{
 		if (Frame::cosTheta(wi) <= 0) return 0.f;
-		bbox = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
+		Vector4 bbox = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
+		componentProbs.push_back(1.f);
+		componentBounds.push_back(bbox);
 		Vector dir = wo;
 		Float dis = dir.length();
 		if (dis < gatherRadius) return 1.f;
@@ -213,16 +215,19 @@ public:
 			bbox.x = theta0; bbox.y = theta1;
 			bbox.z = phi - dPhi; bbox.w = phi + dPhi;
 		}
+		componentProbs[0] = prob;
+		componentBounds[0] = bbox;
 		return prob;		
 	}
 	
-	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
+	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, std::vector<Float> componentProbs, std::vector<Vector4> componentBounds) const{
 		if (Frame::cosTheta(wi) <= 0) return Vector(0.f);
 		Vector dir;
 		uniformShootRatio.incrementBase();
 		thetaShootRatio.incrementBase();
 		phiShootRatio.incrementBase();
 
+		Vector4 bbox = componentBounds[0];
 		if (bbox.x == 0.f && bbox.y == 0.5f * M_PI && bbox.z == 0.f && bbox.w == 2.f * M_PI){
 			// uniform sampling
 			dir = Warp::squareToCosineHemisphere(sample);

@@ -1556,14 +1556,17 @@ std::ostream &operator<<(std::ostream &os, PathVertex::EVertexType type) {
 }
 
 
-Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector4 &bbox, Vector4 *bboxd){
+Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds){
 	switch (type) {
 	case ESensorSample: {
 		// Assume perspective camera
 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
 		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
-		bbox = sensor->evaluateSphereBounds(p, radius);
-		return (bbox.y - bbox.x) * (bbox.w - bbox.z);
+		Vector4 bbox = sensor->evaluateSphereBounds(p, radius);
+		Float prob = (bbox.y - bbox.x) * (bbox.w - bbox.z);
+		componentProbs.push_back(prob);
+		componentBounds.push_back(bbox);
+		return prob;
 	}
 		break;
 	case ESurfaceInteraction: {
@@ -1571,14 +1574,14 @@ Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector
 		Vector wo = p - its.p;
 		Vector wi = normalize(pPred->getPosition() - its.p);
 		const BSDF *bsdf = its.getBSDF();
-		return bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, bbox, bboxd);
+		return bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentProbs, componentBounds);
 	}
 		break;
 
 	case EEmitterSample: {
 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
-		return emitter->gatherAreaPdf(pRec, p, radius, bbox, bboxd);
+		return emitter->gatherAreaPdf(pRec, p, radius, componentProbs, componentBounds);
 	}
 
 	default:
@@ -1590,8 +1593,8 @@ Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, Vector
 bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 	const PathVertex *pred, const PathEdge *predEdge,
 	PathEdge *succEdge, PathVertex *succ,
-	ETransportMode mode, 
-	Point gatherPosition, Float gatherRadius, Vector4 bbox, Vector4 bboxd,
+	ETransportMode mode, Point gatherPosition, Float gatherRadius, 
+	std::vector<Float> componentProbs, std::vector<Vector4> componentBounds,
 	bool russianRoulette, Spectrum *throughput) {
 	Ray ray;
 
@@ -1609,6 +1612,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 
 		/* Sample the image plane */
 		Point2 smp = sampler->next2D();
+		Vector4 bbox = componentBounds[0];
 		smp.x = (bbox.y - bbox.x) * smp.x + bbox.x;
 		smp.y = (bbox.w - bbox.z) * smp.y + bbox.z;
 		Spectrum result = sensor->sampleDirection(dRec, pRec, smp);
@@ -1626,7 +1630,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		Vector wo = gatherPosition - its.p;
 
 		/* Sample the BSDF */
-		Vector dir = bsdf->sampleGatherArea(its.toLocal(wi), its.toLocal(wo), gatherRadius, sampler->next2D(), bbox, bboxd);
+		Vector dir = bsdf->sampleGatherArea(its.toLocal(wi), its.toLocal(wo), gatherRadius, sampler->next2D(), componentProbs, componentBounds);
 		if (dir == Vector(0.f)) return false;
 		wo = its.toWorld(dir);
 
@@ -1641,7 +1645,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
 		DirectionSamplingRecord dRec;
 
-		Vector dir = emitter->sampleGatherArea(dRec, pRec, gatherPosition, gatherRadius, sampler->next2D(), bbox, bboxd);
+		Vector dir = emitter->sampleGatherArea(dRec, pRec, gatherPosition, gatherRadius, sampler->next2D(), componentProbs, componentBounds);
 		if (dir == Vector(0.f)) return false;
 
 		ray.time = pRec.time;

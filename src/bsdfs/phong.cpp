@@ -103,14 +103,14 @@ public:
 		m_specularSamplingWeight = sAvg / (dAvg + sAvg);
 
 		//hack to force single component
-		if (m_specularSamplingWeight < 0.5f){
-			m_specularSamplingWeight = 0.f;
-			m_specularReflectance = new ConstantSpectrumTexture(Spectrum(0.f));
-		}
-		else{
-			m_specularSamplingWeight = 1.f;
-			m_diffuseReflectance = new ConstantSpectrumTexture(Spectrum(0.f));
-		}
+// 		if (m_specularSamplingWeight < 0.5f){
+// 			m_specularSamplingWeight = 0.f;
+// 			m_specularReflectance = new ConstantSpectrumTexture(Spectrum(0.f));
+// 		}
+// 		else{
+// 			m_specularSamplingWeight = 1.f;
+// 			m_diffuseReflectance = new ConstantSpectrumTexture(Spectrum(0.f));
+// 		}
 
 		m_usesRayDifferentials =
 			m_diffuseReflectance->usesRayDifferentials() ||
@@ -305,17 +305,24 @@ public:
 
 	Shader *createShader(Renderer *renderer) const;
 
-	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, Vector4 &bbox, Vector4 *bboxd) const{
+	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds) const{
 		if (Frame::cosTheta(wi) <= 0)
-			return 0.f;
+			return 0.f;		
 
-		bbox = Vector4(1.f, 0.f, 0.f, 1.f);
-		*bboxd = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
+		// initial spec component
+		Vector4 bbox = Vector4(1.f, 0.f, 0.f, 1.f);		
+		componentProbs.push_back(1.f);
+		componentBounds.push_back(bbox);
+		// initial diffuse component
+		Vector4 bboxd = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
+		componentProbs.push_back(1.f);
+		componentBounds.push_back(bboxd);
+		
 		Float dis = wo.length();
 		if (dis < gatherRadius)
 			return 1.f;
-
-		Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);
+		
+		Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);		
 
 		// specular component
 		Vector wir = reflect(wi);
@@ -328,7 +335,6 @@ public:
 		theta1 = std::min(theta1, (Float)(0.5 * M_PI));
 		Float cos0 = std::max((Float)0.0, std::min((Float)1.0, pow(cos(theta0), exponent + 1.f)));
 		Float cos1 = std::max((Float)0.0, std::min((Float)1.0, pow(cos(theta1), exponent + 1.f)));
-
 		Vector dirProj = Vector(dir.x, dir.y, 0.f);
 		Float disProj = dirProj.length() * dis;
 		Float sqrDisTangent = disProj * disProj - gatherRadius * gatherRadius;
@@ -351,6 +357,8 @@ public:
 			// sample the full sphere cap of polar			
 			probSpec = 1.f - cos1;
 		}
+		componentProbs[0] = probSpec;
+		componentBounds[0] = bbox;
 
 		// diffuse component
 		dir = wo / dis;
@@ -361,7 +369,7 @@ public:
 		disProj = dirProj.length() * dis;
 		sqrDisTangent = disProj * disProj - gatherRadius * gatherRadius;
 		Float probDiff = 1.f;		
-		bboxd->x = theta0; bboxd->y = theta1;
+		bboxd.x = theta0; bboxd.y = theta1;
 		if (sqrDisTangent >= 0.f){
 			// sample the bbox of the cone			
 			Float cosdPhi = sqrt(sqrDisTangent) / disProj;
@@ -370,21 +378,20 @@ public:
 			cos0 = cos(2.f * theta0);
 			cos1 = cos(2.f * theta1);
 			probDiff = 0.5f * dPhi * (cos0 - cos1) / M_PI;
-			bboxd->z = phi - dPhi; bboxd->w = phi + dPhi;
+			bboxd.z = phi - dPhi; bboxd.w = phi + dPhi;
 		} else {
 			// sample the full sphere cap of polar
 			cos1 = cos(2.f * theta1);
 			probDiff = 0.5f * (1.f - cos1);
-		}
+		}		
+		componentProbs[1] = probDiff;
+		componentBounds[1] = bboxd;
 
 		Float prob = probSpec * m_specularSamplingWeight + probDiff * (1.f - m_specularSamplingWeight);
-		if (prob < 0.f){
-			float fuck = 1.f;
-		}
 		return prob;
 	}
-
-	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, Vector4 bbox, Vector4 bboxd) const{
+	
+	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, std::vector<Float> componentProbs, std::vector<Vector4> componentBounds) const{
 		if (Frame::cosTheta(wi) <= 0)
 			return Vector(0.f);
 
@@ -393,17 +400,19 @@ public:
 		phiShootRatio.incrementBase();
 
 		bool choseSpecular = true;
-		if (sample.x <= m_specularSamplingWeight) {
-			sample.x /= m_specularSamplingWeight;
+		Float t = (m_specularSamplingWeight * componentProbs[0]) / (m_specularSamplingWeight * componentProbs[0] + (1 - m_specularSamplingWeight) * componentProbs[1]);
+		if (sample.x <= t) {
+			sample.x /= t;
 		}
 		else {
-			sample.x = (sample.x - m_specularSamplingWeight)
-				/ (1 - m_specularSamplingWeight);
+			sample.x = (sample.x - t) / (1 - t);
 			choseSpecular = false;
 		}
 
+		Vector dir;
 		if (choseSpecular){
 			/* Update statistics */
+			Vector4 bbox = componentBounds[0];
 			if (bbox.x == 1.f && bbox.y == 0.f && bbox.z == 0.f && bbox.w == 1.f)
 				++uniformShootRatio;
 			else if (bbox.z == 0.f && bbox.w == 1.f)
@@ -424,14 +433,15 @@ public:
 				cosAlpha
 				);
 			/* Rotate into the correct coordinate system */
-			wo = Frame(R).toWorld(localDir);
-			if (Frame::cosTheta(wo) <= 0)
+			dir = Frame(R).toWorld(localDir);
+			if (Frame::cosTheta(dir) <= 0)
 				return Vector(0.0f);
 		}
 		else{
+			Vector4 bboxd = componentBounds[1];
 			if (bboxd.x == 0.f && bboxd.y == 0.5f * M_PI && bboxd.z == 0.f && bboxd.w == 2.f * M_PI){
 				// uniform sampling
-				wo = Warp::squareToCosineHemisphere(sample);
+				dir = Warp::squareToCosineHemisphere(sample);
 				++uniformShootRatio;
 			}
 			else if (bboxd.z == 0.f && bboxd.w == 2.f * M_PI){
@@ -456,7 +466,7 @@ public:
 				}
 				smp.x = (smp.x + 1.f) * 0.5f;
 				smp.y = (smp.y + 1.f) * 0.5f;
-				wo = Warp::squareToCosineHemisphere(smp);
+				dir = Warp::squareToCosineHemisphere(smp);
 				++thetaShootRatio;
 			}
 			else{
@@ -474,12 +484,12 @@ public:
 				math::sincos(iphi, &sinPhi, &cosPhi);
 				if (EXPECT_NOT_TAKEN(z == 0))
 					z = 1e-10f;
-				wo = Vector(r * cosPhi, r* sinPhi, z);
+				dir = Vector(r * cosPhi, r* sinPhi, z);
 				++phiShootRatio;
 			}
 		}
 
-		return wo;
+		return dir;
 	}
 
 	Float getBandwidth() const{

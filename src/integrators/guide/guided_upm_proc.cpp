@@ -774,14 +774,13 @@ public:
 								contrib *= invp;
 							}
 							else{
-								Vector4 smplBBox = Vector4(0.f);
-								Vector4 smplBBoxDiff = Vector4(0.f);
-
+								std::vector<Float> componentProbs;
+								std::vector<Vector4> componentBounds;
 								Float brdfIntegral;
 								if (cameraDirConnection)
-									brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, smplBBox, &smplBBoxDiff);
+									brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentProbs, componentBounds);
 								else
-									brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, smplBBox, &smplBBoxDiff);
+									brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentProbs, componentBounds);
 
 								if (brdfIntegral == 0.f) continue;
 								invBrdfIntegral = 1.f / brdfIntegral;
@@ -793,12 +792,12 @@ public:
 									// restricted sampling evaluation shoots
 									Float pointDistSquared;
 									if (cameraDirConnection){
-										if (!vtPred->sampleShoot(m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, smplBBox, smplBBoxDiff))
+										if (!vtPred->sampleShoot(m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentProbs, componentBounds))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
 									}
 									else{
-										if (!vsPred->sampleShoot(m_scene, m_pathSampler->m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, smplBBox, smplBBoxDiff))
+										if (!vsPred->sampleShoot(m_scene, m_pathSampler->m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentProbs, componentBounds))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
 									}
