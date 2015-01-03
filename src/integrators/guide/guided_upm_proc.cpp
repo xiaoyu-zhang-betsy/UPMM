@@ -778,9 +778,9 @@ public:
 								std::vector<Vector4> componentBounds;
 								Float brdfIntegral;
 								if (cameraDirConnection)
-									brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentCDFs, componentBounds);
+									brdfIntegral = gatherAreaPdf(vtPred, vs->getPosition(), gatherRadius, vtPred2, componentCDFs, componentBounds);
 								else
-									brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentCDFs, componentBounds);
+									brdfIntegral = gatherAreaPdf(vsPred, vt->getPosition(), gatherRadius, vsPred2, componentCDFs, componentBounds);
 
 								if (brdfIntegral == 0.f) continue;
 								invBrdfIntegral = 1.f / brdfIntegral;
@@ -1033,7 +1033,51 @@ public:
 		default:
 			Log(EError, "PathSampler::sample(): invalid technique!");
 		}
-	}	
+	}
+
+	Float gatherAreaPdf(PathVertex* current, Point p, Float radius, PathVertex* pPred,
+		std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds){
+		switch (current->type) {
+		case PathVertex::ESensorSample: {
+			// Assume perspective camera
+			PositionSamplingRecord &pRec = current->getPositionSamplingRecord();
+			const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+			Vector4 bbox = sensor->evaluateSphereBounds(p, radius);
+			Float prob = (bbox.y - bbox.x) * (bbox.w - bbox.z);
+			componentCDFs.push_back(Vector2(prob, 0.f));
+			componentBounds.push_back(bbox);
+			return prob;
+		}
+		case PathVertex::ESurfaceInteraction: {
+// 			Vector2 rootnode = Vector2();
+// 			int numNode = 2;
+// 			componentCDFs.push_back(Vector2(0.f/* later fill in */, *(float*)&numNode));		// level root node			
+//			componentCDFs.push_back(Vector2(0.f/* later fill in */, 0.f/* later fill in */));			// bsdf node
+// 			componentCDFs.push_back(Vector2(0.f/* later fill in */, 0.f/* later fill in */));			// GMM node
+
+// 			int ptrNode = componentCDFs.size();
+// 			componentCDFs[1].y = *(float*)&ptrBound
+			const Intersection &its = current->getIntersection();
+			Vector wo = p - its.p;
+			Vector wi = normalize(pPred->getPosition() - its.p);
+			const BSDF *bsdf = its.getBSDF();
+			Float probBsdf = bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds);
+
+			return probBsdf;
+		}
+		case PathVertex::EEmitterSample: {
+			// assume no sampling from emitter, bounded CDF and bounded sampling left untouched
+			BDAssert(false);
+			// 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+			// 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+			// 		return emitter->gatherAreaPdf(pRec, p, radius, componentCDFs, componentBounds);
+		}
+		default:
+			SLog(EError, "PathVertex::sampsamplingProbabilityleNext(): Encountered an "
+				"unsupported vertex type (%i)!", current->type);
+			return 0.f;
+		}
+	}
 
 	Float evalPdf(const PathVertex* current, const Scene *scene, const PathVertex *pred,
 		const PathVertex *succ, ETransportMode mode, EMeasure measure) {

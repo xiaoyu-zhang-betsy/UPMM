@@ -423,7 +423,7 @@ public:
 			if (sample.x <= (cdfi + pdfi) * invTotalPdf){
 				// choose this component
 				chosenLobe = i;
-				int ptrBound = *(int*)&nodei.y;
+				int ptrBound = -*(int*)&nodei.y;
 				bbox = componentBounds[ptrBound];
 				sample.x = (sample.x - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
 				break;

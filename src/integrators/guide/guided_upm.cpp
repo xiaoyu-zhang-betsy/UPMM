@@ -281,7 +281,7 @@ public:
 	void postprocess(const Scene *scene, RenderQueue *queue,
 		const RenderJob *job, int sceneResID, int cameraResID,
 		int samplerResID) {
-		m_gs->postprocess();
+		//m_gs->postprocess();
 	}
 
 	MTS_DECLARE_CLASS()
