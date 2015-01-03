@@ -499,19 +499,17 @@ public:
 	//! @}
 	// =============================================================
 
-	virtual Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds) const{
+	virtual Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, 
+		std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds) const{
 		SLog(EWarn, "Not implment bsdf->gatherAreaPdf");
 		return 0.f;
 	}
-	virtual Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, std::vector<Float> componentProbs, std::vector<Vector4> componentBounds) const{
+	virtual Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, 
+		int ptrTree, std::vector<Vector2> componentCDFs, std::vector<Vector4> componentBounds) const{
 		SLog(EWarn, "Not implment bsdf->sampleGatherArea");
 		return Vector(0.f);
 	}
 	virtual Float getBandwidth() const{
-		return 0.f;
-	}
-	virtual Float getAreaMaxPdf(Vector wi, Vector wo, Float gatherRadius) const{
-		SLog(EWarn, "Not implment bsdf->getAreaMaxProb");
 		return 0.f;
 	}
 

@@ -1556,7 +1556,8 @@ std::ostream &operator<<(std::ostream &os, PathVertex::EVertexType type) {
 }
 
 
-Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds){
+Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, 
+	std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds){
 	switch (type) {
 	case ESensorSample: {
 		// Assume perspective camera
@@ -1564,26 +1565,24 @@ Float PathVertex::gatherAreaPdf(Point p, Float radius, PathVertex* pPred, std::v
 		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
 		Vector4 bbox = sensor->evaluateSphereBounds(p, radius);
 		Float prob = (bbox.y - bbox.x) * (bbox.w - bbox.z);
-		componentProbs.push_back(prob);
+		componentCDFs.push_back(Vector2(prob, 0.f));
 		componentBounds.push_back(bbox);
 		return prob;
 	}
-		break;
 	case ESurfaceInteraction: {
 		const Intersection &its = getIntersection();
 		Vector wo = p - its.p;
 		Vector wi = normalize(pPred->getPosition() - its.p);
 		const BSDF *bsdf = its.getBSDF();
-		return bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentProbs, componentBounds);
+		return bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds);
 	}
-		break;
-
 	case EEmitterSample: {
-		PositionSamplingRecord &pRec = getPositionSamplingRecord();
-		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
-		return emitter->gatherAreaPdf(pRec, p, radius, componentProbs, componentBounds);
+		// assume no sampling from emitter, bounded CDF and bounded sampling left untouched
+		BDAssert(false);
+// 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+// 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+// 		return emitter->gatherAreaPdf(pRec, p, radius, componentCDFs, componentBounds);
 	}
-
 	default:
 		SLog(EError, "PathVertex::sampsamplingProbabilityleNext(): Encountered an "
 			"unsupported vertex type (%i)!", type);
@@ -1594,8 +1593,7 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 	const PathVertex *pred, const PathEdge *predEdge,
 	PathEdge *succEdge, PathVertex *succ,
 	ETransportMode mode, Point gatherPosition, Float gatherRadius, 
-	std::vector<Float> componentProbs, std::vector<Vector4> componentBounds,
-	bool russianRoulette, Spectrum *throughput) {
+	std::vector<Vector2> componentCDFs, std::vector<Vector4> componentBounds) {
 	Ray ray;
 
 	memset(succEdge, 0, sizeof(PathEdge));
@@ -1630,7 +1628,8 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		Vector wo = gatherPosition - its.p;
 
 		/* Sample the BSDF */
-		Vector dir = bsdf->sampleGatherArea(its.toLocal(wi), its.toLocal(wo), gatherRadius, sampler->next2D(), componentProbs, componentBounds);
+		Vector dir = bsdf->sampleGatherArea(its.toLocal(wi), its.toLocal(wo), gatherRadius, sampler->next2D(), 
+			0, componentCDFs, componentBounds);
 		if (dir == Vector(0.f)) return false;
 		wo = its.toWorld(dir);
 
@@ -1641,16 +1640,18 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 		break;
 
 	case EEmitterSample: {
-		PositionSamplingRecord &pRec = getPositionSamplingRecord();
-		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
-		DirectionSamplingRecord dRec;
-
-		Vector dir = emitter->sampleGatherArea(dRec, pRec, gatherPosition, gatherRadius, sampler->next2D(), componentProbs, componentBounds);
-		if (dir == Vector(0.f)) return false;
-
-		ray.time = pRec.time;
-		ray.setOrigin(pRec.p);
-		ray.setDirection(dir);
+		// assume no sampling from emitter, bounded CDF and bounded sampling left untouched
+		BDAssert(false);
+// 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+// 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+// 		DirectionSamplingRecord dRec;
+// 
+// 		Vector dir = emitter->sampleGatherArea(dRec, pRec, gatherPosition, gatherRadius, sampler->next2D(), componentProbs, componentBounds);
+// 		if (dir == Vector(0.f)) return false;
+// 
+// 		ray.time = pRec.time;
+// 		ray.setOrigin(pRec.p);
+// 		ray.setDirection(dir);
 	}
 		break;
 
@@ -1669,37 +1670,6 @@ bool PathVertex::sampleShoot(const Scene *scene, Sampler *sampler,
 	return true;
 }
 
-Float PathVertex::getAreaMaxPdf(Point p, Float radius, const PathVertex* pPred) const{
-	switch (type) {
-// 	case ESensorSample: {
-// 		// Assume perspective camera
-// 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
-// 		const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
-// 		bbox = sensor->evaluateSphereBounds(p, radius);
-// 		return (bbox.y - bbox.x) * (bbox.w - bbox.z);
-// 	}
-// 		break;
-	case ESurfaceInteraction: {
-		const Intersection &its = getIntersection();
-		Vector wo = p - its.p;
-		Vector wi = normalize(pPred->getPosition() - its.p);
-		const BSDF *bsdf = its.getBSDF();
-		return bsdf->getAreaMaxPdf(its.toLocal(wi), its.toLocal(wo), radius);
-	}
-		break;
-
-// 	case EEmitterSample: {
-// 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
-// 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
-// 		return emitter->gatherAreaPdf(pRec, p, radius, bbox, bboxd);
-// 	}
-
-	default:
-		SLog(EError, "PathVertex::sampsamplingProbabilityleNext(): Encountered an "
-			"unsupported vertex type (%i)!", type);
-		return 0.f;
-	}
-}
 
 MTS_NAMESPACE_END
 

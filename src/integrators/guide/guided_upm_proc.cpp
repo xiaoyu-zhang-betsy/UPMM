@@ -774,13 +774,13 @@ public:
 								contrib *= invp;
 							}
 							else{
-								std::vector<Float> componentProbs;
+								std::vector<Vector2> componentCDFs;
 								std::vector<Vector4> componentBounds;
 								Float brdfIntegral;
 								if (cameraDirConnection)
-									brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentProbs, componentBounds);
+									brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentCDFs, componentBounds);
 								else
-									brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentProbs, componentBounds);
+									brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentCDFs, componentBounds);
 
 								if (brdfIntegral == 0.f) continue;
 								invBrdfIntegral = 1.f / brdfIntegral;
@@ -792,12 +792,12 @@ public:
 									// restricted sampling evaluation shoots
 									Float pointDistSquared;
 									if (cameraDirConnection){
-										if (!vtPred->sampleShoot(m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentProbs, componentBounds))
+										if (!vtPred->sampleShoot(m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentCDFs, componentBounds))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
 									}
 									else{
-										if (!vsPred->sampleShoot(m_scene, m_pathSampler->m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentProbs, componentBounds))
+										if (!vsPred->sampleShoot(m_scene, m_pathSampler->m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentCDFs, componentBounds))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
 									}
@@ -1033,7 +1033,7 @@ public:
 		default:
 			Log(EError, "PathSampler::sample(): invalid technique!");
 		}
-	}
+	}	
 
 	Float evalPdf(const PathVertex* current, const Scene *scene, const PathVertex *pred,
 		const PathVertex *succ, ETransportMode mode, EMeasure measure) {
