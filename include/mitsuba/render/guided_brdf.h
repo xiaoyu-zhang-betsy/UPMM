@@ -210,6 +210,39 @@ public:
 		}
 	}
 
+	Float gatherAreaPdfGMM(Vector wo_, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds){
+		std::vector<Importance::Vector2> tempComponentCDFs, tempComponentBounds;
+		Importance::Vector3 wo(wo_.x, wo_.y, wo_.z);
+
+		Float prob = m_impDistrib->gatherAreaPdf(wo, radius, tempComponentCDFs, tempComponentBounds);
+
+		for (int i = 0; i < tempComponentCDFs.size(); i++){
+			Importance::Vector2 iv = tempComponentCDFs[i];
+			Vector2 v = Vector2(iv.x, iv.y);
+			componentCDFs.push_back(v);
+		}
+		for (int i = 0; i < (tempComponentBounds.size() >> 1); i++){
+			Importance::Vector2 iv0 = tempComponentBounds[i * 2];
+			Importance::Vector2 iv1 = tempComponentBounds[i * 2 + 1];
+			Vector4 v = Vector4(iv0.x, iv0.y, iv1.x, iv1.y);
+			componentBounds.push_back(v);
+		}
+		return prob;
+	}
+
+	Vector sampleGatherArea(Vector wo_, Float radius, int ptrNode, std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds){
+		std::vector<Importance::Vector2> tempComponentCDFs, tempComponentBounds;
+// 		for (int i = 0; i < componentCDFs.size() - ptrNode; i++){
+// 			Vector2 v = componentCDFs[ptrNode + i];
+// 			Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
+// 			tempComponentCDFs.push_back(vi);
+// 		}
+// 		for (int i = 0; i < componentBounds.size())
+// 
+// 		m_impDistrib->sampleGatherArea(wo, radius, tempComponentCDFs, tempComponentBounds);
+		return Vector(0.f);
+	}
+
     /// Type of component sampled using last bsdf sampling
     unsigned int getLastSampledComponent() const {
         return m_lastSampledComponent;

@@ -73,6 +73,11 @@ namespace Importance {
         /*  Distribution interface                                              */
         //////////////////////////////////////////////////////////////////////////
 
+		Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds) const{
+			IMPORTANCE_ASSERT(false);
+			return 1.f;
+		}
+
         Float pdf( const Vector3 & dir ) const {                        
             if ( nParticles == 0 ) {
                 Vector3 lDir = Frame( m_normal ).toLocal( dir );

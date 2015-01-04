@@ -50,6 +50,36 @@ namespace Importance {
 
     typedef Vector2t<VectorTraits< Float4 > > QuadVector2;
 
+	const double gaussianConstant[6] = { 0.2316419, 0.319381530, -0.356563782, 1.781477937, -1.821255978, 1.330274429 };
+	inline double normalDistribution(double x){
+		return exp(-0.5 * x * x) / sqrt(2.0 * IMP_PI);
+	}
+	inline double gaussianCDF(double x){
+		bool negx = false;
+		if (x < 0.0){
+			x = -x;
+			negx = true;
+		}
+		double phi = normalDistribution(x);
+		double t = 1.0 / (1.0 + gaussianConstant[0] * x);
+		double tsum = 0.0;
+		double ti = 1.0;
+		for (int i = 1; i <= 5; i++){
+			ti *= t;
+			tsum += ti * gaussianConstant[i];
+		}
+		double res = (negx) ? phi * tsum : 1.0 - phi * tsum;
+		res = std::min(1.0, std::max(0.0, res));
+		return res;
+	}
+	inline Vector3 fromPolarCoords(Float theta, Float phi){
+		Float z = cos(theta);
+		Float sintheta = sin(theta);
+		Float y = sin(phi) * sintheta;
+		Float x = cos(phi) * sintheta;
+		return Vector3(x, y, z);
+	}
+
     template<typename TScalar>
     class GaussianSamplingLobes {
     public:
@@ -121,6 +151,113 @@ namespace Importance {
             IMPORTANCE_ASSERT( cov.m[ 1 ].isReal() );
             IMPORTANCE_ASSERT( cov.m[ 2 ].isReal() );
         }
+
+		IMPORTANCE_INLINE Vector2 toLobe(int index, Vector2 dir) const{
+			float c2 = cov.m[1][index] * cov.m[1][index];
+			float invDetSqrt = 1.0f / std::sqrt(cov.m[0][index] * cov.m[2][index] - c2);
+			Vector2 x;
+			if (cov.m[0][index] > cov.m[2][index])
+			{
+				float a22 = std::sqrt(cov.m[0][index]);
+				float a12 = -cov.m[1][index] / a22;
+				float a11 = std::sqrt(cov.m[2][index] - c2 / cov.m[0][index]);
+				// 				dir.x = invDetSqrt * (a11 * x.x + a12 * x.y) + mean.x[index];
+				// 				dir.y = invDetSqrt * a22 * x.y + mean.y[index];
+				x.y = (dir.y - mean.y[index]) / (invDetSqrt * a22);
+				x.x = ((dir.x - mean.x[index]) / invDetSqrt - a12 * x.y) / a11;
+			}
+			else
+			{
+				float a11 = std::sqrt(cov.m[2][index]);
+				float a21 = -cov.m[1][index] / a11;
+				float a22 = std::sqrt(cov.m[0][index] - c2 / cov.m[2][index]);
+// 				dir.x = invDetSqrt * a11 * x.x + mean.x[index];
+// 				dir.y = invDetSqrt * (a21 * x.x + a22 * x.y) + mean.y[index];
+				x.x = (dir.x - mean.x[index]) / (invDetSqrt * a11);
+				x.y = ((dir.y - mean.y[index]) / invDetSqrt - a21 * x.x) / a22;
+			}
+			return x;
+		}
+
+		IMPORTANCE_INLINE Float gatherAreaPdf(int index, std::vector<Vector2> criticalPoints, std::vector<Vector2> componentBounds) const{
+			if (criticalPoints.size() == 0){
+				// uniform sampling, add default bound and return
+				componentBounds.push_back(Vector2(-10000.f, -10000.f));
+				componentBounds.push_back(Vector2(10000.f, 10000.f));
+				return 1.f;
+			}
+
+			Vector2 xmax = Vector2(-10000.f, -10000.f);
+			Vector2 xmin = Vector2(10000.f, 10000.f);
+			for (int i = 0; i < criticalPoints.size(); i++){
+				Vector2 dir = criticalPoints[i];
+				Vector2 x = toLobe(index, dir);
+				xmin.x = std::min(xmin.x, x.x);
+				xmin.y = std::min(xmin.y, x.y);
+				xmax.x = std::max(xmax.x, x.x);
+				xmax.y = std::max(xmax.y, x.y);
+			}
+			componentBounds.push_back(xmin);
+			componentBounds.push_back(xmax);
+
+			Float prob = (gaussianCDF(xmax.x) - gaussianCDF(xmin.x)) * (gaussianCDF(xmax.y) - gaussianCDF(xmin.y));
+
+			if (prob < 0){
+				Float g0 = gaussianCDF(xmax.x);
+				Float g1 = gaussianCDF(xmin.x);
+				Float g2 = gaussianCDF(xmax.y);
+				Float g3 = gaussianCDF(xmin.y);
+				Float m0 = g0 - g1;
+				Float m1 = g2 - g3;
+				float fuck = 1.f;
+
+				g0 = gaussianCDF(xmax.x);
+				g1 = gaussianCDF(xmin.x);
+				g2 = gaussianCDF(xmax.y);
+				g3 = gaussianCDF(xmin.y);
+			}
+			if (prob == 0.f){
+				float fuck = 1.f;
+			}
+			return prob;
+		}
+
+		IMPORTANCE_INLINE Vector2 sampleGatherArea(int index, Vector2 xmin, Vector2 xmax) const{
+			MPORTANCE_ASSERT(random.x >= 0.f && random.x <= 1.f);
+			// First sample x from two normal distributions using Box-Muller method
+			random.x = std::max(random.x, std::numeric_limits<Float>::min());
+			const Float mult = std::sqrt(-2.0f * Ff::log(random.x));
+			const Float angle = 2 * IMP_PI * random.y;
+			Float sin_angle, cos_angle;
+			Ff::sincos(angle, sin_angle, cos_angle);
+			const Vector2 x = Vector2(mult * cos_angle, mult * sin_angle);
+			if (!(x.x >= xmin.x && x.x <= xmax.x && x.y >= xmin.y && x.y <= xmax.y)){
+				// outside bound, return invalid direction
+				return Vector2(-10000.f, -10000.f);
+			}
+			// Once I have vector x from N(0,1) I can transform it to v = A * x + mean, where A is matrix from equation Covariance = A * A^TScalar
+			float c2 = cov.m[1][index] * cov.m[1][index];
+			float invDetSqrt = 1.0f / std::sqrt(cov.m[0][index] * cov.m[2][index] - c2);
+			Vector2 dir;
+			if (cov.m[0][index] > cov.m[2][index])
+			{
+				float a22 = std::sqrt(cov.m[0][index]);
+				float a12 = -cov.m[1][index] / a22;
+				float a11 = std::sqrt(cov.m[2][index] - c2 / cov.m[0][index]);
+				dir.x = invDetSqrt * (a11 * x.x + a12 * x.y) + mean.x[index];
+				dir.y = invDetSqrt * a22 * x.y + mean.y[index];
+			}
+			else
+			{
+				float a11 = std::sqrt(cov.m[2][index]);
+				float a21 = -cov.m[1][index] / a11;
+				float a22 = std::sqrt(cov.m[0][index] - c2 / cov.m[2][index]);
+				dir.x = invDetSqrt * a11 * x.x + mean.x[index];
+				dir.y = invDetSqrt * (a21 * x.x + a22 * x.y) + mean.y[index];
+			}
+
+			return dir;
+		}
     };
 
     template<int TLobesCount, typename TLobeType, typename TMapping>
@@ -132,6 +269,99 @@ namespace Importance {
         ImStaticArray<TLobeType, TLobesCount/TLobeType::WIDTH> lobes;
         Frame localFrame;
         int storedLobes;
+
+		Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds) const{
+			// initiate sampling components
+			int numNode = storedLobes;
+			int pnode0 = componentCDFs.size();
+			componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node				
+			for (int i = 0; i < numNode; i++)
+				componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
+
+			// local bound			
+			std::vector<Vector3> criticalVectors;
+			Vector3 woLocal = localFrame.toLocal(wo);
+			Float dist = woLocal.length();
+			if (dist > radius){
+				// project to phi plane
+				Vector3 woProj = Vector3(woLocal.x, woLocal.y, 0.f);
+				Float distProj = woProj.length();
+				Float sqrDisTangent = distProj * distProj - radius * radius;
+				// project to theta plane
+				woLocal /= dist;
+				Float dTheta = acos(sqrt(dist * dist - radius * radius) / dist);
+				Float theta = acos(woLocal.z);
+				Float theta0 = std::max(0.f, theta - dTheta);
+				Float theta1 = theta + dTheta;
+				if (sqrDisTangent > 0.f){
+					// not covering north pole, theta-phi bounding
+					Float cosdPhi = sqrt(sqrDisTangent) / distProj;
+					Float dPhi = acos(cosdPhi);
+					Float phi = atan2(woProj.y, woProj.x);
+					Float phi0 = phi - dPhi;
+					Float phi1 = phi + dPhi;
+					Vector3 d0 = fromPolarCoords(theta0, phi0);
+					Vector3 d1 = fromPolarCoords(theta1, phi0);
+					Vector3 d2 = fromPolarCoords(theta0, phi1);
+					Vector3 d3 = fromPolarCoords(theta1, phi1);
+					criticalVectors.push_back(d0);
+					criticalVectors.push_back(d1);
+					criticalVectors.push_back(d2);
+					criticalVectors.push_back(d3);
+					for (int i = 0; i < 8; i++){
+						// cover the mapping changing point at 1/4 PI, add corner points
+						Float deltaPhi = (-1.75f + 0.5f * (Float)i) * IMP_PI;
+						if (deltaPhi > phi0 && deltaPhi < phi1){
+							Vector3 d4 = fromPolarCoords(theta0, deltaPhi);
+							Vector3 d5 = fromPolarCoords(theta1, deltaPhi);
+							criticalVectors.push_back(d4);
+							criticalVectors.push_back(d5);
+							break;
+						}
+						if (deltaPhi > phi1) break;
+					}					
+				}
+				else{ 
+					// covering north pole, theta bounding
+					Vector3 d0 = fromPolarCoords(theta1, 0.25f * IMP_PI);
+					Vector3 d1 = fromPolarCoords(theta1, 0.75f * IMP_PI);
+					Vector3 d2 = fromPolarCoords(theta1, 1.25f * IMP_PI);
+					Vector3 d3 = fromPolarCoords(theta1, 1.75f * IMP_PI);
+					criticalVectors.push_back(d0);
+					criticalVectors.push_back(d1);
+					criticalVectors.push_back(d2);
+					criticalVectors.push_back(d3);
+				}
+			}
+			else{
+				// uniform sampling without bounding
+			}
+			std::vector<Vector2> criticalPoints;
+			for (int i = 0; i < criticalVectors.size(); i++){
+				Vector2 x;
+				getMapping().toSquare(criticalVectors[i], x);
+				criticalPoints.push_back(x);
+			}
+
+			// calculate bounding and pdf for each lobe
+			Float totalProb = 0.f;
+			int actualGroup = 0, actualLobe = 0;
+			for (int i = 0; i < numNode; i++){
+				int ptrBound = -componentBounds.size();
+				componentCDFs[pnode0 + i + 1].y = *(float*)&ptrBound;
+				Float probLobe = lobes[actualGroup].gatherAreaPdf(actualLobe, criticalPoints, componentBounds);
+				Float probi = probLobe * lobes[actualGroup].weights[actualLobe];
+				componentCDFs[pnode0 + i + 1].x = probi;
+				totalProb += probi;
+				actualLobe++;
+				if (actualLobe == TLobeType::WIDTH) {
+					actualLobe = 0;
+					actualGroup++;
+				}
+			}
+			componentCDFs[pnode0].x = totalProb;
+			return totalProb;
+		}
 
         IMPORTANCE_INLINE Vector3 sampleDirection(Vector2 random) const {
             const float searched = random.y;

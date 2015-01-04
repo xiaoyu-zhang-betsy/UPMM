@@ -63,6 +63,12 @@ namespace Importance {
             }
         }   
 
+		virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds){
+			IMPORTANCE_ASSERT(false);
+			return 1.f;
+		}
+
+
         virtual void release() {
             model.release();
         }

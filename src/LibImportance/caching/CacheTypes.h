@@ -98,6 +98,28 @@ public:
         }
     }
 
+	virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds){		
+		int numNode = found;
+		componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node	
+		for (int i = 0; i < numNode; i++)
+			componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
+
+		Float totalProb = 0.f;
+		Float previousWeight = 0.f;
+		for (int i = 0; i < numNode; i++){
+			int ptrNode = componentCDFs.size();
+			componentCDFs[i + 1].y = *(float*)&ptrNode;			
+			Float probDistrib = records[i]->gatherAreaPdf(wo, radius, componentCDFs, componentBounds);
+			Float probi = probDistrib * (cdf[i] - previousWeight);
+			componentCDFs[i + 1].x = probi;
+			totalProb += probi;
+			previousWeight = cdf[i];
+		}
+
+		componentCDFs[0].x = totalProb;
+		return totalProb;
+	}
+
     virtual void release() {}
 
     virtual std::string toString() const {

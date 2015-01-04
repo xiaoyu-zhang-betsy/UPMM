@@ -28,9 +28,17 @@
 #include <mitsuba/core/bitmap.h>
 #include <mitsuba/core/fstream.h>
 
+#include <mitsuba/core/sfcurve.h>
+#include <mitsuba/core/statistics.h>
+
 #define EXCLUDE_DIRECT_LIGHTING
 
 MTS_NAMESPACE_BEGIN
+
+StatsCounter maxInvpShoots("Unbiased photon mapping", "Max. number of 1/p shoots", EMaximumValue);
+StatsCounter numInvpShoots("Unbiased photon mapping", "Total number of 1/p shoots");
+StatsCounter avgInvpShoots("Unbiased photon mapping", "Avg. number of 1/p shoots", EAverage);
+StatsCounter numClampShoots("Unbiased photon mapping", "Percentage of clamped invp evaluations(bias)", EPercentage);
 
 /* ==================================================================== */
 /*                         Worker implementation                        */
@@ -816,6 +824,14 @@ public:
 										}
 									}
 								}
+								avgInvpShoots.incrementBase();
+								avgInvpShoots += totalShoot;
+								maxInvpShoots.recordMaximum(totalShoot);
+								numInvpShoots += totalShoot;
+								numClampShoots.incrementBase();
+								if (totalShoot >= clampThreshold)
+									++numClampShoots;
+
 								invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
 								contrib *= invp;
 							}
@@ -1057,41 +1073,36 @@ public:
 			return prob;
 		}
 		case PathVertex::ESurfaceInteraction: {
-// 			const Intersection &its = current->getIntersection();
-// 			Vector wo = p - its.p;
-// 			Vector wi = normalize(pPred->getPosition() - its.p);
-// 			const BSDF *bsdf = its.getBSDF();
-// 			return bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds);
+			const Intersection &its = current->getIntersection();
+			Vector wo = p - its.p;
+			Vector wi = normalize(pPred->getPosition() - its.p);
 
-			if (true){
-				Vector2 rootnode = Vector2();
-				int numNode = 2;
-				componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node			
-				componentCDFs.push_back(Vector2(0.f/* bsdf pdf, later fill in */, 0.f/* pointer to bsdf node, later fill in */));			// bsdf node
-				componentCDFs.push_back(Vector2(0.f/* GMM pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));			// GMM node
-				Float bsdfSamplingWeight = m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability;
+			Vector2 rootnode = Vector2();
+			int numNode = 2;
+			componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node			
+			componentCDFs.push_back(Vector2(0.f/* bsdf pdf, later fill in */, 0.f/* pointer to bsdf node, later fill in */));			// bsdf node
+			componentCDFs.push_back(Vector2(0.f/* GMM pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));			// GMM node
+			Float bsdfSamplingWeight = m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability;
+			if (gsampler.m_pureSpecularBSDF || gsampler.m_impDistrib == NULL || gsampler.m_pureSpecularBSDF)
+				bsdfSamplingWeight = 1.f;
 
-				if (gsampler.m_pureSpecularBSDF || gsampler.m_impDistrib == NULL)
-					bsdfSamplingWeight = 1.f;
+			int ptrNode = componentCDFs.size();
+			componentCDFs[1].y = *(float*)&ptrNode;	
+			const BSDF *bsdf = its.getBSDF();
+			Float probBsdf = bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds);
+			componentCDFs[1].x = probBsdf * bsdfSamplingWeight;
 
-				int ptrNode = componentCDFs.size();
-				componentCDFs[1].y = *(float*)&ptrNode;
-				const Intersection &its = current->getIntersection();
-				Vector wo = p - its.p;
-				Vector wi = normalize(pPred->getPosition() - its.p);
-				const BSDF *bsdf = its.getBSDF();
-				Float probBsdf = bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds);
-				componentCDFs[1].x = probBsdf * bsdfSamplingWeight;
-
-				ptrNode = componentCDFs.size();
-				componentCDFs[2].y = *(float*)&ptrNode;
-				Float probGMM = 1.f;
-				componentCDFs[2].x = probGMM * (1.f - bsdfSamplingWeight);
-
-				Float prob = probBsdf * bsdfSamplingWeight + probGMM * (1.f - bsdfSamplingWeight);
-				componentCDFs[0].x = prob;
-				return prob;
+			ptrNode = componentCDFs.size();
+			componentCDFs[2].y = *(float*)&ptrNode;
+			Float probGMM = 1.f;
+			if (1.f - bsdfSamplingWeight > 0.f){
+				probGMM = gsampler.gatherAreaPdfGMM(wo, radius, componentCDFs, componentBounds);
 			}
+			componentCDFs[2].x = probGMM * (1.f - bsdfSamplingWeight);
+
+			Float prob = probBsdf * bsdfSamplingWeight + probGMM * (1.f - bsdfSamplingWeight);
+			componentCDFs[0].x = prob;
+			return prob;
 		}
 		case PathVertex::EEmitterSample: {
 			// assume no sampling from emitter, bounded CDF and bounded sampling left untouched
@@ -1137,8 +1148,8 @@ public:
 			ray.time = pRec.time;
 			ray.setOrigin(pRec.p);
 			ray.setDirection(dRec.d);
-		}
 			break;
+		}		
 
 		case PathVertex::ESurfaceInteraction: {
 			const Intersection &its = current->getIntersection();
@@ -1173,16 +1184,18 @@ public:
 				if (dir == Vector(0.f)) return false;
 				wo = its.toWorld(dir);				
 			}
-			else{
+			else{				
 				Float pdf = 0.f;
-				gsampler.sampleGMM(wo, pdf, sampler);
-				if (pdf == 0.f) return false;
+				Vector dir = gsampler.sampleGatherArea(wo, gatherRadius, ptrNode, componentCDFs, componentBounds);
+				if (dir == Vector(0.f)) return false;
+
+				Importance::Vector3 diri = Importance::Vector3(dir.x, dir.y, dir.z);
 			}
 			ray.time = its.time;
 			ray.setOrigin(its.p);
 			ray.setDirection(wo);
-		}
 			break;
+		}			
 
 		case PathVertex::EEmitterSample: {
 			// assume no sampling from emitter, bounded CDF and bounded sampling left untouched
@@ -1197,8 +1210,8 @@ public:
 			// 		ray.time = pRec.time;
 			// 		ray.setOrigin(pRec.p);
 			// 		ray.setDirection(dir);
-		}
 			break;
+		}			
 
 		default:
 			SLog(EError, "PathVertex::sampleNext(): Encountered an "

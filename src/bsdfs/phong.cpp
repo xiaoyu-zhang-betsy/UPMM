@@ -367,7 +367,9 @@ public:
 		dir = wo / dis;
 		theta = acos(dir.z);
 		theta0 = theta - dTheta;
-		theta1 = std::min((Float)(0.5 * M_PI), theta + dTheta);
+		theta1 = theta + dTheta;
+		theta0 = std::max(theta0, (Float)0.0);
+		theta1 = std::min(theta1, (Float)(0.5 * M_PI));
 		dirProj = Vector(dir.x, dir.y, 0.f);
 		disProj = dirProj.length() * dis;
 		sqrDisTangent = disProj * disProj - gatherRadius * gatherRadius;

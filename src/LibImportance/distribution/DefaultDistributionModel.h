@@ -82,7 +82,7 @@ namespace Importance {
 
         IMPORTANCE_INLINE float getPhotonMaxDistance() const {
             return m_cacheStats.maxDistance;
-        }
+        }		
 
     public:
         /// Caching statistics 
