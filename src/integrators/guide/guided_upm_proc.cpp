@@ -28,6 +28,7 @@
 #include <mitsuba/core/bitmap.h>
 #include <mitsuba/core/fstream.h>
 
+#define EXCLUDE_DIRECT_LIGHTING
 
 MTS_NAMESPACE_BEGIN
 
@@ -58,7 +59,7 @@ public:
 	}
 
 	ref<WorkResult> createWorkResult() const {
-		return new UPMWorkResult(m_film->getCropSize().x, m_film->getCropSize().y, m_config.maxDepth, m_film->getReconstructionFilter());
+		return new UPMWorkResult(m_film->getCropSize().x, m_film->getCropSize().y, m_config.maxDepth, m_film->getReconstructionFilter(), true);
 	}
 
 	void prepare() {
@@ -563,7 +564,7 @@ public:
 						&vt, &vtPred, NULL, NULL,
 						gatherRadius, m_lightPathNum, useVC, useVM);
 
-#if UPM_DEBUG == 1
+#if GUPM_DEBUG == 1
 					wr->putDebugSample(s, 1, samplePos, value * miWeight);
 					wr->putDebugSampleM(s, 1, samplePos, value);
 #endif
@@ -571,14 +572,14 @@ public:
 					value *= miWeight;
 					if (value.isZero()) continue;
 
-					if ((samplePos.x >= 242 && samplePos.x < 243 && samplePos.y >= 76 && samplePos.y < 77)
-						&& (s == 4) && value[1] > 0.5f){
-						float fucka = 1.f;
-						Float miWeight2 = miWeightVC(m_scene, s, 1, emitterState, sensorState,
-							vsPred3, vsPred2, vsPred, vs,
-							&vt, &vtPred, NULL, NULL,
-							gatherRadius, m_lightPathNum, useVC, useVM);
-					}
+// 					if ((samplePos.x >= 242 && samplePos.x < 243 && samplePos.y >= 76 && samplePos.y < 77)
+// 						&& (s == 4) && value[1] > 0.5f){
+// 						float fucka = 1.f;
+// 						Float miWeight2 = miWeightVC(m_scene, s, 1, emitterState, sensorState,
+// 							vsPred3, vsPred2, vsPred, vs,
+// 							&vt, &vtPred, NULL, NULL,
+// 							gatherRadius, m_lightPathNum, useVC, useVM);
+// 					}
 
 					vt.getSamplePosition(vs, samplePos);
 					wr->putSample(samplePos, &value[0]);
@@ -777,10 +778,16 @@ public:
 								std::vector<Vector2> componentCDFs;
 								std::vector<Vector4> componentBounds;
 								Float brdfIntegral;
+								
+								bool gsampler_valid = (cameraDirConnection && vtPred->isSurfaceInteraction() || !cameraDirConnection && vsPred->isSurfaceInteraction());
+								Intersection gits = (cameraDirConnection) ? vtPred->getIntersection() : vsPred->getIntersection();
+								GuidedBRDF gsampler(gits, (cameraDirConnection) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
+									m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability, gsampler_valid);
+
 								if (cameraDirConnection)
-									brdfIntegral = gatherAreaPdf(vtPred, vs->getPosition(), gatherRadius, vtPred2, componentCDFs, componentBounds);
+									brdfIntegral = gatherAreaPdf(vtPred, vs->getPosition(), gatherRadius, vtPred2, componentCDFs, componentBounds, gsampler);
 								else
-									brdfIntegral = gatherAreaPdf(vsPred, vt->getPosition(), gatherRadius, vsPred2, componentCDFs, componentBounds);
+									brdfIntegral = gatherAreaPdf(vsPred, vt->getPosition(), gatherRadius, vsPred2, componentCDFs, componentBounds, gsampler);
 
 								if (brdfIntegral == 0.f) continue;
 								invBrdfIntegral = 1.f / brdfIntegral;
@@ -792,12 +799,12 @@ public:
 									// restricted sampling evaluation shoots
 									Float pointDistSquared;
 									if (cameraDirConnection){
-										if (!vtPred->sampleShoot(m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentCDFs, componentBounds))
+										if (!sampleShoot(vtPred, m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentCDFs, componentBounds, gsampler))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
 									}
 									else{
-										if (!vsPred->sampleShoot(m_scene, m_pathSampler->m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentCDFs, componentBounds))
+										if (!sampleShoot(vsPred, m_scene, m_pathSampler->m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentCDFs, componentBounds, gsampler))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
 									}
@@ -823,7 +830,7 @@ public:
 								vt, vtPred, vtPred2, vtPred3,
 								cameraDirConnection, gatherRadius, m_pathSampler->m_lightPathNum, useVC, useVM);
 
-#if UPM_DEBUG == 1
+#if GUPM_DEBUG == 1
 							if (cameraDirConnection){
 								wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
 								wr->putDebugSampleM(s, t - 1, samplePos, contrib);
@@ -836,7 +843,7 @@ public:
 
 							contrib *= miWeight;
 
-#ifdef UPM_DEBUG_HARD
+#ifdef GUPM_DEBUG_HARD
 							if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
 								Log(EWarn, "Invalid sample value[UPM]: %f %f %f, invp = %f, miWeight = %f",
 									contrib[0], contrib[1], contrib[2], invp, miWeight);
@@ -994,7 +1001,7 @@ public:
 							vt, vtPred, vtPred2, vtPred3,
 							gatherRadius, m_pathSampler->m_lightPathNum, useVC, useVM);
 
-#if UPM_DEBUG == 1
+#if GUPM_DEBUG == 1
 						wr->putDebugSample(s, t, samplePos, value * miWeight);
 						wr->putDebugSampleM(s, t, samplePos, value);
 #endif			
@@ -1004,7 +1011,7 @@ public:
 
 
 
-#ifdef UPM_DEBUG_HARD
+#ifdef GUPM_DEBUG_HARD
 						if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f){
 							Log(EWarn, "Invalid sample value[VC]: %f %f %f", value[0], value[1], value[2]);
 							continue;
@@ -1036,7 +1043,8 @@ public:
 	}
 
 	Float gatherAreaPdf(PathVertex* current, Point p, Float radius, PathVertex* pPred,
-		std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds){
+		std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds,
+		GuidedBRDF gsampler){
 		switch (current->type) {
 		case PathVertex::ESensorSample: {
 			// Assume perspective camera
@@ -1049,21 +1057,41 @@ public:
 			return prob;
 		}
 		case PathVertex::ESurfaceInteraction: {
-// 			Vector2 rootnode = Vector2();
-// 			int numNode = 2;
-// 			componentCDFs.push_back(Vector2(0.f/* later fill in */, *(float*)&numNode));		// level root node			
-//			componentCDFs.push_back(Vector2(0.f/* later fill in */, 0.f/* later fill in */));			// bsdf node
-// 			componentCDFs.push_back(Vector2(0.f/* later fill in */, 0.f/* later fill in */));			// GMM node
+// 			const Intersection &its = current->getIntersection();
+// 			Vector wo = p - its.p;
+// 			Vector wi = normalize(pPred->getPosition() - its.p);
+// 			const BSDF *bsdf = its.getBSDF();
+// 			return bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds);
 
-// 			int ptrNode = componentCDFs.size();
-// 			componentCDFs[1].y = *(float*)&ptrBound
-			const Intersection &its = current->getIntersection();
-			Vector wo = p - its.p;
-			Vector wi = normalize(pPred->getPosition() - its.p);
-			const BSDF *bsdf = its.getBSDF();
-			Float probBsdf = bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds);
+			if (true){
+				Vector2 rootnode = Vector2();
+				int numNode = 2;
+				componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node			
+				componentCDFs.push_back(Vector2(0.f/* bsdf pdf, later fill in */, 0.f/* pointer to bsdf node, later fill in */));			// bsdf node
+				componentCDFs.push_back(Vector2(0.f/* GMM pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));			// GMM node
+				Float bsdfSamplingWeight = m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability;
 
-			return probBsdf;
+				if (gsampler.m_pureSpecularBSDF || gsampler.m_impDistrib == NULL)
+					bsdfSamplingWeight = 1.f;
+
+				int ptrNode = componentCDFs.size();
+				componentCDFs[1].y = *(float*)&ptrNode;
+				const Intersection &its = current->getIntersection();
+				Vector wo = p - its.p;
+				Vector wi = normalize(pPred->getPosition() - its.p);
+				const BSDF *bsdf = its.getBSDF();
+				Float probBsdf = bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds);
+				componentCDFs[1].x = probBsdf * bsdfSamplingWeight;
+
+				ptrNode = componentCDFs.size();
+				componentCDFs[2].y = *(float*)&ptrNode;
+				Float probGMM = 1.f;
+				componentCDFs[2].x = probGMM * (1.f - bsdfSamplingWeight);
+
+				Float prob = probBsdf * bsdfSamplingWeight + probGMM * (1.f - bsdfSamplingWeight);
+				componentCDFs[0].x = prob;
+				return prob;
+			}
 		}
 		case PathVertex::EEmitterSample: {
 			// assume no sampling from emitter, bounded CDF and bounded sampling left untouched
@@ -1077,6 +1105,114 @@ public:
 				"unsupported vertex type (%i)!", current->type);
 			return 0.f;
 		}
+	}
+
+	bool sampleShoot(PathVertex* current, const Scene *scene, Sampler *sampler,
+		const PathVertex *pred, const PathEdge *predEdge,
+		PathEdge *succEdge, PathVertex *succ,
+		ETransportMode mode, Point gatherPosition, Float gatherRadius,
+		std::vector<Vector2> componentCDFs, std::vector<Vector4> componentBounds, 
+		GuidedBRDF gsampler) {
+		Ray ray;
+
+		memset(succEdge, 0, sizeof(PathEdge));
+		memset(succ, 0, sizeof(PathVertex));
+
+		size_t totalSmpl = 0, clampThreshold = 10000000;
+
+		switch (current->type) {
+		case PathVertex::ESensorSample: {
+			BDAssert(mode == ERadiance && pred->type == PathVertex::ESensorSupernode);
+			PositionSamplingRecord &pRec = current->getPositionSamplingRecord();
+			const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
+			DirectionSamplingRecord dRec;
+
+			/* Sample the image plane */
+			Point2 smp = sampler->next2D();
+			Vector4 bbox = componentBounds[0];
+			smp.x = (bbox.y - bbox.x) * smp.x + bbox.x;
+			smp.y = (bbox.w - bbox.z) * smp.y + bbox.z;
+			Spectrum result = sensor->sampleDirection(dRec, pRec, smp);
+
+			ray.time = pRec.time;
+			ray.setOrigin(pRec.p);
+			ray.setDirection(dRec.d);
+		}
+			break;
+
+		case PathVertex::ESurfaceInteraction: {
+			const Intersection &its = current->getIntersection();
+			const BSDF *bsdf = its.getBSDF();
+			Vector wi = normalize(pred->getPosition() - its.p);
+			Vector wo = gatherPosition - its.p;
+
+			// sample CDF tree
+			Float rndsmp = sampler->next1D();
+			Vector2 rootnode = componentCDFs[0];
+			Float invTotalPdf = 1.f / rootnode.x;
+			int numNode = *(int*)&rootnode.y;
+			Float cdfi = 0.f;
+			int chosenLobe = -1;
+			int ptrNode = -1;
+			for (int i = 0; i < numNode; i++){
+				Vector2 nodei = componentCDFs[1 + i];
+				Float pdfi = nodei.x;
+				if (rndsmp <= (cdfi + pdfi) * invTotalPdf){
+					// choose this component
+					chosenLobe = i;
+					ptrNode = *(int*)&nodei.y;
+					//rndsmp = (rndsmp - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
+					break;
+				}
+				cdfi += pdfi;
+			}
+			if (chosenLobe == 0){
+				/* Sample the BSDF */
+				Vector dir = bsdf->sampleGatherArea(its.toLocal(wi), its.toLocal(wo), gatherRadius, sampler->next2D(),
+					ptrNode, componentCDFs, componentBounds);
+				if (dir == Vector(0.f)) return false;
+				wo = its.toWorld(dir);				
+			}
+			else{
+				Float pdf = 0.f;
+				gsampler.sampleGMM(wo, pdf, sampler);
+				if (pdf == 0.f) return false;
+			}
+			ray.time = its.time;
+			ray.setOrigin(its.p);
+			ray.setDirection(wo);
+		}
+			break;
+
+		case PathVertex::EEmitterSample: {
+			// assume no sampling from emitter, bounded CDF and bounded sampling left untouched
+			BDAssert(false);
+			// 		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+			// 		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+			// 		DirectionSamplingRecord dRec;
+			// 
+			// 		Vector dir = emitter->sampleGatherArea(dRec, pRec, gatherPosition, gatherRadius, sampler->next2D(), componentProbs, componentBounds);
+			// 		if (dir == Vector(0.f)) return false;
+			// 
+			// 		ray.time = pRec.time;
+			// 		ray.setOrigin(pRec.p);
+			// 		ray.setDirection(dir);
+		}
+			break;
+
+		default:
+			SLog(EError, "PathVertex::sampleNext(): Encountered an "
+				"unsupported vertex type (%i)!", current->type);
+			return false;
+		}
+
+		if (!succEdge->sampleNext(scene, sampler, current, ray, succ, mode)) {
+			/* Sampling a successor edge + vertex failed, hence the vertex
+			is not committed to a particular measure yet -- revert. */
+			return false;
+		}
+
+		return true;
 	}
 
 	Float evalPdf(const PathVertex* current, const Scene *scene, const PathVertex *pred,
@@ -1654,7 +1790,7 @@ void GuidedUPMProcess::bindResource(const std::string &name, int id) {
 		if (m_progress)
 			delete m_progress;
 		m_progress = new ProgressReporter("Rendering", m_config.workUnits, m_job);
-		m_result = new UPMWorkResult(m_film->getCropSize().x, m_film->getCropSize().y, m_config.maxDepth, NULL);
+		m_result = new UPMWorkResult(m_film->getCropSize().x, m_film->getCropSize().y, m_config.maxDepth, NULL, true);
 		m_result->clear();		
 		m_developBuffer = new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, m_film->getCropSize());
 	}

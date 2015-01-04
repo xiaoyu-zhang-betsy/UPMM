@@ -267,7 +267,7 @@ public:
 		m_process = NULL;
 		process->develop();
 
-#if GuidedUPM_DEBUG == 1
+#if GUPM_DEBUG == 1
 		fs::path path = scene->getDestinationFile();
 		if (m_config.lightImage)
 			process->getResult()->dump(cropSize.x, cropSize.y, m_config.maxDepth, path.parent_path(), path.stem(), m_config.useVC, m_config.useVM);

@@ -35,9 +35,12 @@ public:
 	GuidedBRDF(
 		mitsuba::Intersection       its,
 		Importance::Sampler*        importanceSampler,
-		Float                       bsdfSamplingProbability)
+		Float                       bsdfSamplingProbability,
+		bool valid = true)
 		: m_its(its), m_importanceSampler(importanceSampler),
 		m_bsdfSamplingProbability(bsdfSamplingProbability), m_impDistrib(NULL), m_eta(-1.f) {
+
+		if (!valid) return;
 
 		/* Prepare distribution if guided path-tracing is set on*/
 		m_bsdf = its.getBSDF();
@@ -184,6 +187,29 @@ public:
         }
     }
 
+	Spectrum sampleGMM(Vector & direction, Float & pdf, Sampler *sampler) {
+		// Sample the distribution
+		Importance::Vector3 res;
+		Point2 s1 = sampler->next2D();
+		Importance::Vector2 samples(s1.x, s1.y);
+		m_impDistrib->sampleDirections(&samples, &res, &pdf, 1);
+		pdf *= (1.0f - m_bsdfSamplingProbability);
+		direction = MTS_VECTOR(res);
+		/// Evaluate BRDF in the new direction * cos(theta) 
+		BSDFSamplingRecord bRec(m_its, m_its.toLocal(direction));
+		m_eta = m_bsdf->getEta();
+		m_lastSampledComponent = 0;
+		Float bsdfPdf = m_bsdf->pdf(bRec);
+		pdf += bsdfPdf * m_bsdfSamplingProbability;
+		if (pdf != 0.0f) {
+			Spectrum out = m_bsdf->eval(bRec);
+			return  out / pdf;
+		}
+		else {
+			return Spectrum(0.0f);
+		}
+	}
+
     /// Type of component sampled using last bsdf sampling
     unsigned int getLastSampledComponent() const {
         return m_lastSampledComponent;
@@ -202,7 +228,7 @@ public:
             m_impDistrib = NULL;
         }
     }
-private:
+public:
     /// Intersection from which we want to generate next ray
     mitsuba::Intersection & m_its;
     /// BSDF at intersection

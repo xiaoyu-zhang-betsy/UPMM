@@ -247,7 +247,7 @@ struct MTS_EXPORT_BIDIR SplatListImp {
 /* ==================================================================== */
 class UPMWorkResult : public WorkResult {
 public:
-	UPMWorkResult(const int width, const int height, const int maxDepth, const ReconstructionFilter *rfilter){
+	UPMWorkResult(const int width, const int height, const int maxDepth, const ReconstructionFilter *rfilter, bool guided = false): m_guided(guided){
 		/* Stores the 'camera image' -- this can be blocked when
 		spreading out work to multiple workers */
 		Vector2i blockSize = Vector2i(width, height);
@@ -335,7 +335,7 @@ public:
 		bool useVC, bool useVM) const {
 		Float weight = 1.f / (Float)sampleCount;
 		char* algorithm;
-		if (useVM && useVC) algorithm = "upmc";
+		if (useVM && useVC) algorithm = (m_guided) ? "gupm" : "upmc";
 		else if (useVC) algorithm = "vc";
 		else if (useVM) algorithm = "upm";
 		else
@@ -440,6 +440,7 @@ protected:
 #endif
 	size_t sampleCount;
 	ref<ImageBlock> m_block; // , m_lightImage;
+	bool m_guided;
 };
 
 /**
