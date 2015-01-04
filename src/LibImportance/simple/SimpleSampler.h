@@ -68,6 +68,11 @@ namespace Importance {
 			return 1.f;
 		}
 
+		virtual Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds){
+			IMPORTANCE_ASSERT(false);
+			return Vector3(0.f);
+		}
+
 
         virtual void release() {
             model.release();

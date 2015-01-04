@@ -785,6 +785,8 @@ public:
 							else{
 								std::vector<Vector2> componentCDFs;
 								std::vector<Vector2> componentBounds;
+								std::vector<Importance::Vector2> componentCDFsImp;
+								std::vector<Importance::Vector2> componentBoundsImp;
 								Float brdfIntegral;
 								
 								bool gsampler_valid = (cameraDirConnection && vtPred->isSurfaceInteraction() || !cameraDirConnection && vsPred->isSurfaceInteraction());
@@ -797,6 +799,18 @@ public:
 								else
 									brdfIntegral = gatherAreaPdf(vsPred, vt->getPosition(), gatherRadius, vsPred2, componentCDFs, componentBounds, gsampler);
 
+								// copy cdfs and bounds to fucking IMP vector types
+								for (int i = 0; i < componentCDFs.size(); i++){
+									Vector2 v = componentCDFs[i];
+									Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
+									componentCDFsImp.push_back(vi);
+								}
+								for (int i = 0; i < componentBounds.size(); i++){
+									Vector2 v = componentBounds[i];
+									Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
+									componentBoundsImp.push_back(vi);
+								}
+
 								if (brdfIntegral == 0.f) continue;
 								invBrdfIntegral = 1.f / brdfIntegral;
 								size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
@@ -807,12 +821,14 @@ public:
 									// restricted sampling evaluation shoots
 									Float pointDistSquared;
 									if (cameraDirConnection){
-										if (!sampleShoot(vtPred, m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentCDFs, componentBounds, gsampler))
+										if (!sampleShoot(vtPred, m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, 
+											componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp, gsampler))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
 									}
 									else{
-										if (!sampleShoot(vsPred, m_scene, m_pathSampler->m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentCDFs, componentBounds, gsampler))
+										if (!sampleShoot(vsPred, m_scene, m_pathSampler->m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, 
+											componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp, gsampler))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
 									}
@@ -1098,7 +1114,7 @@ public:
 			componentCDFs[2].y = *(float*)&ptrNode;
 			Float probGMM = 1.f;
 			if (1.f - bsdfSamplingWeight > 0.f){
-				probGMM = gsampler.gatherAreaPdfGMM(wo, radius, componentCDFs, componentBounds);
+				probGMM = gsampler.gatherAreaPdf(wo, radius, componentCDFs, componentBounds);
 			}
 			componentCDFs[2].x = probGMM * (1.f - bsdfSamplingWeight);
 
@@ -1125,6 +1141,7 @@ public:
 		PathEdge *succEdge, PathVertex *succ,
 		ETransportMode mode, Point gatherPosition, Float gatherRadius,
 		std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds, 
+		std::vector<Importance::Vector2> componentCDFsImp, std::vector<Importance::Vector2> componentBoundsImp,
 		GuidedBRDF gsampler) {
 		Ray ray;
 
@@ -1190,7 +1207,8 @@ public:
 			}
 			else{				
 				Float pdf = 0.f;
-				Vector dir = gsampler.sampleGatherArea(wo, gatherRadius, ptrNode, componentCDFs, componentBounds);
+				Vector dir = gsampler.sampleGatherArea(wo, gatherRadius, 
+					ptrNode, componentCDFsImp, componentBoundsImp, sampler);
 				if (dir == Vector(0.f)) return false;
 			}
 			ray.time = its.time;

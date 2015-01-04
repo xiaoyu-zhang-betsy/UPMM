@@ -179,7 +179,7 @@ namespace Importance {
 			return x;
 		}
 
-		IMPORTANCE_INLINE Float gatherAreaPdf(int index, std::vector<Vector2> criticalPoints, std::vector<Vector2> componentBounds) const{
+		IMPORTANCE_INLINE Float gatherAreaPdf(int index, std::vector<Vector2> criticalPoints, std::vector<Vector2> &componentBounds) const{
 			if (criticalPoints.size() == 0){
 				// uniform sampling, add default bound and return
 				componentBounds.push_back(Vector2(-10000.f, -10000.f));
@@ -222,8 +222,8 @@ namespace Importance {
 			return prob;
 		}
 
-		IMPORTANCE_INLINE Vector2 sampleGatherArea(int index, Vector2 xmin, Vector2 xmax) const{
-			MPORTANCE_ASSERT(random.x >= 0.f && random.x <= 1.f);
+		IMPORTANCE_INLINE Vector2 sampleGatherArea(int index, Vector2 random, Vector2 xmin, Vector2 xmax) const{
+			IMPORTANCE_ASSERT(random.x >= 0.f && random.x <= 1.f);
 			// First sample x from two normal distributions using Box-Muller method
 			random.x = std::max(random.x, std::numeric_limits<Float>::min());
 			const Float mult = std::sqrt(-2.0f * Ff::log(random.x));
@@ -270,7 +270,9 @@ namespace Importance {
         Frame localFrame;
         int storedLobes;
 
-		Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds) const{
+		Float gatherAreaPdf(Vector3 wo, Float radius, 
+			std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, 
+			int baseCDFs, int baseBounds) const{
 			// initiate sampling components
 			int numNode = storedLobes;
 			int pnode0 = componentCDFs.size();
@@ -347,7 +349,7 @@ namespace Importance {
 			Float totalProb = 0.f;
 			int actualGroup = 0, actualLobe = 0;
 			for (int i = 0; i < numNode; i++){
-				int ptrBound = -componentBounds.size();
+				int ptrBound = -(componentBounds.size() + baseBounds);
 				componentCDFs[pnode0 + i + 1].y = *(float*)&ptrBound;
 				Float probLobe = lobes[actualGroup].gatherAreaPdf(actualLobe, criticalPoints, componentBounds);
 				Float probi = probLobe * lobes[actualGroup].weights[actualLobe];
@@ -361,6 +363,50 @@ namespace Importance {
 			}
 			componentCDFs[pnode0].x = totalProb;
 			return totalProb;
+		}
+
+		Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, 
+			std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
+			// sample CDF tree
+			Vector2 rootnode = componentCDFs[ptrNode];
+			Float invTotalPdf = 1.f / rootnode.x;
+			int numNode = *(int*)&rootnode.y;
+			if (numNode == 0){
+				float fuck = 1.f;
+			}
+			Float cdfi = 0.f;
+			int chosenLobe = -1;
+			Vector2 xmin, xmax;
+			for (int i = 0; i < numNode; i++){
+				Vector2 nodei = componentCDFs[ptrNode + 1 + i];
+				Float pdfi = nodei.x;
+				if (samples.x <= (cdfi + pdfi) * invTotalPdf){
+					// choose this component
+					chosenLobe = i;
+					int ptrBound = -*(int*)&nodei.y;
+					xmin = componentBounds[ptrBound];
+					xmax = componentBounds[ptrBound + 1];
+					samples.x = (samples.x - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
+					break;
+				}
+				cdfi += pdfi;
+			}
+			if (chosenLobe < 0 || chosenLobe >= storedLobes){
+				float fuck = 1.f;
+			}
+
+			int actualGroup = chosenLobe / TLobeType::WIDTH;
+			int actualLobe = chosenLobe - actualGroup * TLobeType::WIDTH;
+
+			const Vector2 point = lobes[actualGroup].sampleGatherArea(actualLobe, samples, xmin, xmax);
+			if (point.x == -10000.f && point.y == -10000.f)
+				return Vector3(-10000.f, -10000.f, -10000.f);
+			IMPORTANCE_ASSERT(lobes[actualGroup].pdf(TScalar(point.x), TScalar(point.y))[actualLobe] > 0.f);
+			Vector3 res;
+			getMapping().fromSquare(localFrame, point, res);
+			IMPORTANCE_ASSERT(res.isReal());
+			//IMPORTANCE_ASSERT( pdf( res ) > 0.f );
+			return res;
 		}
 
         IMPORTANCE_INLINE Vector3 sampleDirection(Vector2 random) const {

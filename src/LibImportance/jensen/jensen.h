@@ -175,6 +175,10 @@ namespace Importance {
 			IMPORTANCE_ASSERT(false);
 			return 1.f;
 		}
+		Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
+			IMPORTANCE_ASSERT(false);
+			return Vector3(0.f);
+		}
 
         Importance::Vector3 sampleDirection( const Importance::Vector2 & sample ) const {
 #ifdef LIBIMP_DEBUG

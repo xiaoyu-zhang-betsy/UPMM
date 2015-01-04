@@ -78,6 +78,10 @@ namespace Importance {
 			IMPORTANCE_ASSERT(false);
 			return 1.f;
 		}
+		Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
+			IMPORTANCE_ASSERT(false);
+			return Vector3(0.f);
+		}
         
         Float pdf( const Vector3 & dir ) const {                                    
             if ( nParticles == 0 ) {

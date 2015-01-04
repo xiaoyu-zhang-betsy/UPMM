@@ -210,7 +210,7 @@ public:
 		}
 	}
 
-	Float gatherAreaPdfGMM(Vector wo_, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds){
+	Float gatherAreaPdf(Vector wo_, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds){
 		std::vector<Importance::Vector2> tempComponentCDFs, tempComponentBounds;
 		Importance::Vector3 wo(wo_.x, wo_.y, wo_.z);
 
@@ -230,17 +230,17 @@ public:
 		return prob;
 	}
 
-	Vector sampleGatherArea(Vector wo_, Float radius, int ptrNode, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds){
-		std::vector<Importance::Vector2> tempComponentCDFs, tempComponentBounds;
-// 		for (int i = 0; i < componentCDFs.size() - ptrNode; i++){
-// 			Vector2 v = componentCDFs[ptrNode + i];
-// 			Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
-// 			tempComponentCDFs.push_back(vi);
-// 		}
-// 		for (int i = 0; i < componentBounds.size())
-// 
-// 		m_impDistrib->sampleGatherArea(wo, radius, tempComponentCDFs, tempComponentBounds);
-		return Vector(0.f);
+	Vector sampleGatherArea(Vector wo_, Float radius, int ptrNode, 
+		std::vector<Importance::Vector2> &componentCDFs, std::vector<Importance::Vector2> &componentBounds, 
+		Sampler *sampler){
+		Importance::Vector3 wo(wo_.x, wo_.y, wo_.z);
+		Importance::Vector3 diri(-10000.f);
+		while (diri.x == -10000.f && diri.y == -10000.f && diri.z == -10000.f){
+			Point2 s1 = sampler->next2D();
+			Importance::Vector2 samples(s1.x, s1.y);
+			diri = m_impDistrib->sampleGatherArea(samples, wo, radius, ptrNode, componentCDFs, componentBounds);
+		}
+		return Vector(diri.x, diri.y, diri.z);
 	}
 
     /// Type of component sampled using last bsdf sampling
