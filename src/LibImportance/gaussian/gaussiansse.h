@@ -270,7 +270,7 @@ namespace Importance {
         Frame localFrame;
         int storedLobes;
 
-		Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds) const{
+		Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds) const{
 			// initiate sampling components
 			int numNode = storedLobes;
 			int pnode0 = componentCDFs.size();

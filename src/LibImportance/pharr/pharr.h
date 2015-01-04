@@ -74,7 +74,7 @@ namespace Importance {
         /*  Distribution interface                                              */
         //////////////////////////////////////////////////////////////////////////
 
-		Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds) const{
+		Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds) const{
 			IMPORTANCE_ASSERT(false);
 			return 1.f;
 		}

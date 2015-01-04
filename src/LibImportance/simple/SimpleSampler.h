@@ -63,7 +63,7 @@ namespace Importance {
             }
         }   
 
-		virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds){
+		virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds){
 			IMPORTANCE_ASSERT(false);
 			return 1.f;
 		}

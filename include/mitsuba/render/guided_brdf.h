@@ -210,27 +210,27 @@ public:
 		}
 	}
 
-	Float gatherAreaPdfGMM(Vector wo_, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds){
+	Float gatherAreaPdfGMM(Vector wo_, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds){
 		std::vector<Importance::Vector2> tempComponentCDFs, tempComponentBounds;
 		Importance::Vector3 wo(wo_.x, wo_.y, wo_.z);
 
-		Float prob = m_impDistrib->gatherAreaPdf(wo, radius, tempComponentCDFs, tempComponentBounds);
+		Float prob = m_impDistrib->gatherAreaPdf(wo, radius, 
+			tempComponentCDFs, tempComponentBounds, componentCDFs.size(), componentBounds.size());
 
 		for (int i = 0; i < tempComponentCDFs.size(); i++){
 			Importance::Vector2 iv = tempComponentCDFs[i];
 			Vector2 v = Vector2(iv.x, iv.y);
 			componentCDFs.push_back(v);
 		}
-		for (int i = 0; i < (tempComponentBounds.size() >> 1); i++){
-			Importance::Vector2 iv0 = tempComponentBounds[i * 2];
-			Importance::Vector2 iv1 = tempComponentBounds[i * 2 + 1];
-			Vector4 v = Vector4(iv0.x, iv0.y, iv1.x, iv1.y);
+		for (int i = 0; i < tempComponentBounds.size(); i++){
+			Importance::Vector2 iv = tempComponentBounds[i];
+			Vector2 v = Vector2(iv.x, iv.y);
 			componentBounds.push_back(v);
 		}
 		return prob;
 	}
 
-	Vector sampleGatherArea(Vector wo_, Float radius, int ptrNode, std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds){
+	Vector sampleGatherArea(Vector wo_, Float radius, int ptrNode, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds){
 		std::vector<Importance::Vector2> tempComponentCDFs, tempComponentBounds;
 // 		for (int i = 0; i < componentCDFs.size() - ptrNode; i++){
 // 			Vector2 v = componentCDFs[ptrNode + i];

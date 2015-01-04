@@ -784,7 +784,7 @@ public:
 							}
 							else{
 								std::vector<Vector2> componentCDFs;
-								std::vector<Vector4> componentBounds;
+								std::vector<Vector2> componentBounds;
 								Float brdfIntegral;
 								
 								bool gsampler_valid = (cameraDirConnection && vtPred->isSurfaceInteraction() || !cameraDirConnection && vsPred->isSurfaceInteraction());
@@ -1059,8 +1059,7 @@ public:
 	}
 
 	Float gatherAreaPdf(PathVertex* current, Point p, Float radius, PathVertex* pPred,
-		std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds,
-		GuidedBRDF gsampler){
+		std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, GuidedBRDF gsampler){
 		switch (current->type) {
 		case PathVertex::ESensorSample: {
 			// Assume perspective camera
@@ -1069,7 +1068,10 @@ public:
 			Vector4 bbox = sensor->evaluateSphereBounds(p, radius);
 			Float prob = (bbox.y - bbox.x) * (bbox.w - bbox.z);
 			componentCDFs.push_back(Vector2(prob, 0.f));
-			componentBounds.push_back(bbox);
+			Vector2 xmin = Vector2(bbox.x, bbox.z);
+			Vector2 xmax = Vector2(bbox.y, bbox.w);
+			componentBounds.push_back(xmin);
+			componentBounds.push_back(xmax);
 			return prob;
 		}
 		case PathVertex::ESurfaceInteraction: {
@@ -1122,7 +1124,7 @@ public:
 		const PathVertex *pred, const PathEdge *predEdge,
 		PathEdge *succEdge, PathVertex *succ,
 		ETransportMode mode, Point gatherPosition, Float gatherRadius,
-		std::vector<Vector2> componentCDFs, std::vector<Vector4> componentBounds, 
+		std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds, 
 		GuidedBRDF gsampler) {
 		Ray ray;
 
@@ -1140,7 +1142,9 @@ public:
 
 			/* Sample the image plane */
 			Point2 smp = sampler->next2D();
-			Vector4 bbox = componentBounds[0];
+			Vector2 xmin = componentBounds[0];
+			Vector2 xmax = componentBounds[1];
+			Vector4 bbox = Vector4(xmin.x, xmax.x, xmin.y, xmax.y);
 			smp.x = (bbox.y - bbox.x) * smp.x + bbox.x;
 			smp.y = (bbox.w - bbox.z) * smp.y + bbox.z;
 			Spectrum result = sensor->sampleDirection(dRec, pRec, smp);
@@ -1188,8 +1192,6 @@ public:
 				Float pdf = 0.f;
 				Vector dir = gsampler.sampleGatherArea(wo, gatherRadius, ptrNode, componentCDFs, componentBounds);
 				if (dir == Vector(0.f)) return false;
-
-				Importance::Vector3 diri = Importance::Vector3(dir.x, dir.y, dir.z);
 			}
 			ray.time = its.time;
 			ray.setOrigin(its.p);

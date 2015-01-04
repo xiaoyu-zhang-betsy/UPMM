@@ -309,6 +309,140 @@ public:
 		return dir;
 	}	
 
+	// for guided UPM
+	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius,
+		std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds) const{
+		if (Frame::cosTheta(wi) <= 0) return 0.f;
+		Vector4 bbox = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);
+		Vector dir = wo;
+		Float dis = dir.length();
+		if (dis < gatherRadius){
+			int numNode = 1;
+			int ptrBound = -componentBounds.size();
+			componentCDFs.push_back(Vector2(1.f, *(float*)&numNode));		// level root node
+			componentCDFs.push_back(Vector2(1.f, *(float*)&ptrBound));		// single CDF node
+			Vector2 xmin = Vector2(bbox.x, bbox.z);
+			Vector2 xmax = Vector2(bbox.y, bbox.w);
+			componentBounds.push_back(xmin);
+			componentBounds.push_back(xmax);
+			return 1.f;
+		}
+		dir /= dis;
+		Float dTheta = acos(sqrt(dis * dis - gatherRadius * gatherRadius) / dis);
+		Float theta = acos(dir.z);
+		Float theta0 = theta - dTheta;
+		Float theta1 = std::min(0.5f * M_PI, theta + dTheta);
+		Float prob = 0.f;
+		if (theta0 < 0.f){
+			// sample the full sphere cap of polar
+			Float cos1 = cos(2.f * theta1);
+			prob = 0.5f * (1.f - cos1);
+			bbox.x = theta0; bbox.y = theta1;
+		}
+		else{
+			// sample the bbox of the cone
+			Vector dirProj = Vector(wo.x, wo.y, 0.f);
+			Float disProj = dirProj.length();
+			Float dPhi = acos(sqrt(disProj * disProj - gatherRadius * gatherRadius) / disProj);
+			Float phi = atan2(dirProj.y, dirProj.x);
+			Float cos0 = cos(2.f * theta0);
+			Float cos1 = cos(2.f * theta1);
+			prob = 0.5f * dPhi * (cos0 - cos1) / M_PI;
+			bbox.x = theta0; bbox.y = theta1;
+			bbox.z = phi - dPhi; bbox.w = phi + dPhi;
+		}
+		int numNode = 1;
+		int ptrBound = -componentBounds.size();
+		componentCDFs.push_back(Vector2(prob, *(float*)&numNode));		// level root node
+		componentCDFs.push_back(Vector2(prob, *(float*)&ptrBound));			// single CDF node
+		Vector2 xmin = Vector2(bbox.x, bbox.z);
+		Vector2 xmax = Vector2(bbox.y, bbox.w);
+		componentBounds.push_back(xmin);
+		componentBounds.push_back(xmax);
+		return prob;
+	}
+	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample,
+		int ptrTree, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
+		if (Frame::cosTheta(wi) <= 0) return Vector(0.f);
+		uniformShootRatio.incrementBase();
+		thetaShootRatio.incrementBase();
+		phiShootRatio.incrementBase();
+
+		// sample CDF tree
+		Vector2 rootnode = componentCDFs[ptrTree];
+		Float invTotalPdf = 1.f / rootnode.x;
+		int numNode = *(int*)&rootnode.y;
+		Float cdfi = 0.f;
+		int chosenLobe = -1;
+		Vector4 bbox;
+		for (int i = 0; i < numNode; i++){
+			Vector2 nodei = componentCDFs[ptrTree + 1 + i];
+			Float pdfi = nodei.x;
+			if (sample.x <= (cdfi + pdfi) * invTotalPdf){
+				// choose this component
+				chosenLobe = i;
+				int ptrBound = -*(int*)&nodei.y;
+				Vector2 xmin = componentBounds[ptrBound];
+				Vector2 xmax = componentBounds[ptrBound + 1];
+				bbox = Vector4(xmin.x, xmax.x, xmin.y, xmax.y);
+				sample.x = (sample.x - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
+				break;
+			}
+			cdfi += pdfi;
+		}
+
+		Vector dir;
+		if (bbox.x == 0.f && bbox.y == 0.5f * M_PI && bbox.z == 0.f && bbox.w == 2.f * M_PI){
+			// uniform sampling
+			dir = Warp::squareToCosineHemisphere(sample);
+			++uniformShootRatio;
+		}
+		else if (bbox.z == 0.f && bbox.w == 2.f * M_PI){
+			// Sampling the whole sphere cap
+			Point2 smp = sample;
+			Float r0 = sin(std::max((Float)0.0, bbox.x));
+			Float r1 = sin(bbox.y);
+			smp.x = smp.x * 2.f - 1.f;
+			smp.y = smp.y * 2.f - 1.f;
+			Float baser = r0;
+			if (smp.x * smp.x > smp.y * smp.y){
+				Float r2r1 = smp.y / smp.x;
+				if (smp.x < 0.f) baser = -baser;
+				smp.x = smp.x * (r1 - r0) + baser;
+				smp.y = r2r1 * smp.x;
+			}
+			else{
+				Float r1r2 = smp.x / smp.y;
+				if (smp.y < 0.f) baser = -baser;
+				smp.y = smp.y * (r1 - r0) + baser;
+				smp.x = r1r2 * smp.y;
+			}
+			smp.x = (smp.x + 1.f) * 0.5f;
+			smp.y = (smp.y + 1.f) * 0.5f;
+			dir = Warp::squareToCosineHemisphere(smp);
+			++thetaShootRatio;
+		}
+		else{
+			// sampling a bbox in theta-phi space
+			Float sin0 = sin(std::max((Float)0.0, bbox.x));
+			Float sin1 = sin(bbox.y);
+			Float phi0 = bbox.z;
+			Float phi1 = bbox.w;
+			Point2 smp = sample;
+			Float isin = smp.x * (sin1 - sin0) + sin0;
+			Float iphi = smp.y * (phi1 - phi0) + phi0;
+			Float r = isin;
+			Float z = sqrt(1.f - isin * isin);
+			Float cosPhi, sinPhi;
+			math::sincos(iphi, &sinPhi, &cosPhi);
+			if (EXPECT_NOT_TAKEN(z == 0))
+				z = 1e-10f;
+			dir = Vector(r * cosPhi, r* sinPhi, z);
+			++phiShootRatio;
+		}
+		return dir;
+	}
+
 	Float getBandwidth() const{
 		return 0.f;
 	}

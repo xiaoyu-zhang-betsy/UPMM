@@ -71,7 +71,7 @@ namespace Importance {
             return res;
         }
 
-		virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds) = 0;
+		virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds) = 0;
 		//virtual Float sampleShoot(Vector3 wo, Float radius, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) = 0;
 
         virtual void release() = 0;
