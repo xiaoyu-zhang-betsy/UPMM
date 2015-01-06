@@ -156,27 +156,7 @@ namespace Importance {
 		double res = (negx) ? phi * tsum : 1.0 - phi * tsum;
 		res = std::min(1.0, std::max(0.0, res));
 		return res;
-	}
-	inline Vector3 fromPolarCoords(Float theta, Float phi){
-		Float z = cos(theta);
-		Float sintheta = sin(theta);
-		Float y = sin(phi) * sintheta;
-		Float x = cos(phi) * sintheta;
-		return Vector3(x, y, z);
-	}
-	inline Vector3 fromPolarCoordsTheta(Float costheta, Float sintheta, Float phi){
-		Float z = costheta;		
-		Float y = sin(phi) * sintheta;
-		Float x = cos(phi) * sintheta;
-		return Vector3(x, y, z);
-	}
-	inline Vector3 fromPolarCoordsPhi(Float theta, Float cosphi, Float sinphi){
-		Float z = cos(theta);
-		Float sintheta = sin(theta);
-		Float y = sinphi * sintheta;
-		Float x = cosphi * sintheta;
-		return Vector3(x, y, z);
-	}
+	}	
 
     template<typename TScalar>
     class GaussianSamplingLobes {
@@ -296,6 +276,58 @@ namespace Importance {
 				xmax.x = std::max(xmax.x, x.x);
 				xmax.y = std::max(xmax.y, x.y);
 			}
+			/*
+			float c2 = cov.m[1][index] * cov.m[1][index];
+			float invDetSqrt = 1.0f / std::sqrt(cov.m[0][index] * cov.m[2][index] - c2);			
+			if (cov.m[0][index] > cov.m[2][index])
+			{
+				float a22 = std::sqrt(cov.m[0][index]);
+				float a12 = -cov.m[1][index] / a22;
+				float a11 = std::sqrt(cov.m[2][index] - c2 / cov.m[0][index]);
+				float f0 = 1.f / (invDetSqrt * a22);
+				float f1 = 1.f / invDetSqrt;
+				float f2 = 1.f / a11;
+
+				for (int i = 0; i < criticalPoints.size(); i++){
+					Vector2 x;
+					Vector2 dir = criticalPoints[i];
+
+					//x.y = (dir.y - mean.y[index]) / (invDetSqrt * a22);
+					//x.x = ((dir.x - mean.x[index]) / invDetSqrt - a12 * x.y) / a11;
+					x.y = (dir.y - mean.y[index]) * f0;
+					x.x = ((dir.x - mean.x[index]) * f1 - a12 * x.y) * f2;
+
+					xmin.x = std::min(xmin.x, x.x);
+					xmin.y = std::min(xmin.y, x.y);
+					xmax.x = std::max(xmax.x, x.x);
+					xmax.y = std::max(xmax.y, x.y);
+				}
+			}
+			else
+			{
+				float a11 = std::sqrt(cov.m[2][index]);
+				float a21 = -cov.m[1][index] / a11;
+				float a22 = std::sqrt(cov.m[0][index] - c2 / cov.m[2][index]);
+
+				float f0 = 1.f / (invDetSqrt * a11);
+				float f1 = 1.f / invDetSqrt;
+				float f2 = 1.f / a22;
+				for (int i = 0; i < criticalPoints.size(); i++){
+					Vector2 x;
+					Vector2 dir = criticalPoints[i];
+
+// 					x.x = (dir.x - mean.x[index]) / (invDetSqrt * a11);
+// 					x.y = ((dir.y - mean.y[index]) / invDetSqrt - a21 * x.x) / a22;
+					x.x = (dir.x - mean.x[index]) * f0;
+					x.y = ((dir.y - mean.y[index]) * f1 - a21 * x.x) *f2;
+
+					xmin.x = std::min(xmin.x, x.x);
+					xmin.y = std::min(xmin.y, x.y);
+					xmax.x = std::max(xmax.x, x.x);
+					xmax.y = std::max(xmax.y, x.y);
+				}
+			}
+			*/
 
 			// calculate the cdfs of this bbox and the probability integral
 			Float cdfx0 = gaussianCDF(xmin.x);
@@ -345,7 +377,7 @@ namespace Importance {
 			}
 
 			return dir;
-		}
+		}		
     };
 
     template<int TLobesCount, typename TLobeType, typename TMapping>
@@ -358,6 +390,46 @@ namespace Importance {
         Frame localFrame;
         int storedLobes;
 
+		Vector2 fromPolarToSquareThetaPhi(Float costheta, Float sintheta, Float cosphi, Float sinphi) const{
+			Float z = costheta;
+			Float y = sinphi * sintheta;
+			Float x = cosphi * sintheta;
+			Vector3 dir(x, y, z);
+			Vector2 ret;
+			getMapping().toSquare(dir, ret);
+			return ret;
+		}
+		Vector2 fromPolarToSquare(Float theta, Float phi) const{
+			Float z = cos(theta);
+			Float sintheta = sin(theta);
+			Float y = sin(phi) * sintheta;
+			Float x = cos(phi) * sintheta;
+			Vector3 dir(x, y, z);
+			Vector2 ret;
+			getMapping().toSquare(dir, ret);
+			return ret;
+		}
+		Vector2 fromPolarToSquareTheta(Float costheta, Float sintheta, Float phi) const{
+			Float z = costheta;
+			Float y = sin(phi) * sintheta;
+			Float x = cos(phi) * sintheta;
+			Vector3 dir(x, y, z);
+			Vector2 ret;
+			getMapping().toSquare(dir, ret);
+			return ret;
+		}
+		Vector2 fromPolarToSquarePhi(Float theta, Float cosphi, Float sinphi) const{
+			Float z = cos(theta);
+			Float sintheta = sin(theta);
+			Float y = sinphi * sintheta;
+			Float x = cosphi * sintheta;
+			Vector3 dir(x, y, z);
+			Vector2 ret;
+			getMapping().toSquare(dir, ret);
+			return ret;
+		}
+		
+
 		Float gatherAreaPdf(Vector3 wo, Float radius, 
 			std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, 
 			int baseCDFs, int baseBounds) const{
@@ -369,7 +441,7 @@ namespace Importance {
 				componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
 
 			// local bound			
-			std::vector<Vector3> criticalVectors;
+			std::vector<Vector2> criticalPoints;
 			Vector3 woLocal = localFrame.toLocal(wo);
 			Float dist = woLocal.length();
 			if (dist > radius){
@@ -389,59 +461,54 @@ namespace Importance {
 					Float dPhi = acos(cosdPhi);
 					Float phi = atan2(woProj.y, woProj.x);
 					Float phi0 = phi - dPhi;
-					Float phi1 = phi + dPhi;
-					Float costheta0 = cos(theta0);					Float costheta1 = cos(theta1);					Float sintheta0 = sin(theta0);					Float sintheta1 = sin(theta1);					Float cosphi0 = cos(phi0);					Float cosphi1 = cos(phi1);					Float sinphi0 = sin(phi0);					Float sinphi1 = sin(phi1);					Vector3 d0 = Vector3(cosphi0 * sintheta0, sinphi0 * sintheta0, costheta0);					Vector3 d1 = Vector3(cosphi0 * sintheta1, sinphi0 * sintheta1, costheta1);					Vector3 d2 = Vector3(cosphi1 * sintheta0, sinphi1 * sintheta0, costheta0);					Vector3 d3 = Vector3(cosphi1 * sintheta1, sinphi1 * sintheta1, costheta1); 
-					criticalVectors.push_back(d0);
-					criticalVectors.push_back(d1);
-					criticalVectors.push_back(d2);
-					criticalVectors.push_back(d3);
+					Float phi1 = phi + dPhi;			
+
+					Float costheta0, costheta1, cosphi0, cosphi1;
+					Float sintheta0, sintheta1, sinphi0, sinphi1;
+					Ff::sincos(theta0, sintheta0, costheta0);
+					Ff::sincos(theta1, sintheta1, costheta1);
+					Ff::sincos(phi0, sinphi0, cosphi0);
+					Ff::sincos(phi1, sinphi1, cosphi1);					
+
+					Vector2 d0 = fromPolarToSquareThetaPhi(costheta0, sintheta0, cosphi0, sinphi0);					Vector2 d1 = fromPolarToSquareThetaPhi(costheta0, sintheta0, cosphi1, sinphi1);					Vector2 d2 = fromPolarToSquareThetaPhi(costheta1, sintheta1, cosphi0, sinphi0);					Vector2 d3 = fromPolarToSquareThetaPhi(costheta1, sintheta1, cosphi1, sinphi1); 
+					criticalPoints.push_back(d0);
+					criticalPoints.push_back(d1);
+					criticalPoints.push_back(d2);
+					criticalPoints.push_back(d3);
+					
 					for (int i = 0; i < 8; i++){
 						// cover the mapping changing point at 1/4 PI, add corner points
 						Float deltaPhi = (-1.75f + 0.5f * (Float)i) * IMP_PI;
 						if (deltaPhi > phi0 && deltaPhi < phi1){
-// 							Vector3 d4 = fromPolarCoords(theta0, deltaPhi);
-// 							Vector3 d5 = fromPolarCoords(theta1, deltaPhi);
+							Float sinphi, cosphi;
+							Ff::sincos(deltaPhi, sinphi, cosphi);
+							Vector2 d4 = fromPolarToSquareThetaPhi(costheta0, sintheta0, cosphi, sinphi);
+							Vector2 d5 = fromPolarToSquareThetaPhi(costheta1, sintheta1, cosphi, sinphi);
 
-							Float sinphi = sin(deltaPhi);
-							Float cosphi = cos(deltaPhi);
-							Vector3 d4 = fromPolarCoordsPhi(theta0, cosphi, sinphi);
-							Vector3 d5 = fromPolarCoordsPhi(theta1, cosphi, sinphi);
-
-							criticalVectors.push_back(d4);
-							criticalVectors.push_back(d5);
+							criticalPoints.push_back(d4);
+							criticalPoints.push_back(d5);
 							break;
 						}
 						if (deltaPhi > phi1) break;
-					}					
+					}
 				}
 				else{ 
 					// covering north pole, theta bounding
-// 					Vector3 d0 = fromPolarCoords(theta1, 0.25f * IMP_PI);
-// 					Vector3 d1 = fromPolarCoords(theta1, 0.75f * IMP_PI);
-// 					Vector3 d2 = fromPolarCoords(theta1, 1.25f * IMP_PI);
-// 					Vector3 d3 = fromPolarCoords(theta1, 1.75f * IMP_PI);
+					Float costheta1, sintheta1;
+					Ff::sincos(theta1, sintheta1, costheta1);
+					Vector2 d0 = fromPolarToSquareTheta(costheta1, sintheta1, 0.25f * IMP_PI);
+					Vector2 d1 = fromPolarToSquareTheta(costheta1, sintheta1, 0.75f * IMP_PI);
+					Vector2 d2 = fromPolarToSquareTheta(costheta1, sintheta1, 1.25f * IMP_PI);
+					Vector2 d3 = fromPolarToSquareTheta(costheta1, sintheta1, 1.75f * IMP_PI);
 
-					Float costheta1 = cos(theta1);
-					Float sintheta1 = sin(theta1);
-					Vector3 d0 = fromPolarCoordsTheta(costheta1, sintheta1, 0.25f * IMP_PI);
-					Vector3 d1 = fromPolarCoordsTheta(costheta1, sintheta1, 0.75f * IMP_PI);
-					Vector3 d2 = fromPolarCoordsTheta(costheta1, sintheta1, 1.25f * IMP_PI);
-					Vector3 d3 = fromPolarCoordsTheta(costheta1, sintheta1, 1.75f * IMP_PI);
-
-					criticalVectors.push_back(d0);
-					criticalVectors.push_back(d1);
-					criticalVectors.push_back(d2);
-					criticalVectors.push_back(d3);
+					criticalPoints.push_back(d0);
+					criticalPoints.push_back(d1);
+					criticalPoints.push_back(d2);
+					criticalPoints.push_back(d3);
 				}
 			}
 			else{
 				// uniform sampling without bounding
-			}
-			std::vector<Vector2> criticalPoints;
-			for (int i = 0; i < criticalVectors.size(); i++){
-				Vector2 x;
-				getMapping().toSquare(criticalVectors[i], x);
-				criticalPoints.push_back(x);
 			}
 
 			// calculate bounding and pdf for each lobe
@@ -470,7 +537,7 @@ namespace Importance {
 
 		Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, 
 			std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
-			// sample CDF tree
+			// sample lobes CDF
 			Vector2 rootnode = componentCDFs[ptrNode];
 			int numNode = *(int*)&rootnode.y;
 			if (numNode == 0){

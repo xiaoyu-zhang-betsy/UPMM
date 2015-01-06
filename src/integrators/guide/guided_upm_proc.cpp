@@ -36,6 +36,8 @@
 MTS_NAMESPACE_BEGIN
 
 StatsCounter numGatherPoints("Unbiased photon mapping", "Total gather points (extended paths)");
+StatsCounter numSharedEvaluation("Unbiased photon mapping", "Total number of shared evaluation");
+StatsCounter numIndividualEvaluation("Unbiased photon mapping", "Total number of individual evaluation");
 
 StatsCounter maxInvpShoots("Unbiased photon mapping", "Max. number of 1/p shoots", EMaximumValue);
 StatsCounter numInvpShoots("Unbiased photon mapping", "Total number of 1/p shoots");
@@ -51,6 +53,21 @@ StatsCounter maxGMMShoots("Unbiased photon mapping", "Max number of a single GMM
 
 const bool EnableCovAwareMis = true;
 const bool MaxClampedConnectionPdf = false;
+
+void copyBoundInfo(std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds, std::vector<Importance::Vector2> &componentCDFsImp, std::vector<Importance::Vector2> &componentBoundsImp){
+	componentCDFsImp.clear();
+	componentBoundsImp.clear();
+	for (int i = 0; i < componentCDFs.size(); i++){
+		Vector2 v = componentCDFs[i];
+		Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
+		componentCDFsImp.push_back(vi);
+	}
+	for (int i = 0; i < componentBounds.size(); i++){
+		Vector2 v = componentBounds[i];
+		Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
+		componentBoundsImp.push_back(vi);
+	}
+}
 
 class GuidedUPMRenderer : public WorkProcessor {
 public:
@@ -678,9 +695,16 @@ public:
 				PathEdge *succEdge = m_pathSampler->m_pool.allocEdge();
 				Point2 samplePos(0.0f);
 				std::vector<uint32_t> searchResults;
-				//std::vector<Point> searchPos;
+				std::vector<Point> searchPosCamera;
+				std::vector<uint32_t> searchPosIndex;
+				std::vector<bool> searchPosDone;
+				// std::vector<Point> searchPosLight; // can't do shared shoot for inverse connection
 				std::vector<uint32_t> acceptCnt;
 				std::vector<size_t> shootCnt;
+				std::vector<Vector2> componentCDFs;
+				std::vector<Vector2> componentBounds;
+				std::vector<Importance::Vector2> componentCDFsImp;
+				std::vector<Importance::Vector2> componentBoundsImp;
 
 				int minT = 2; int minS = 2;
 
@@ -699,38 +723,106 @@ public:
 					if (!vt->isDegenerate()){
 						BDAssert(vt->type == PathVertex::ESurfaceInteraction);
 
-						searchResults.clear();
-						m_pathSampler->m_lightPathTree.search(vt->getPosition(), gatherRadius, searchResults);						
+						searchResults.clear();						
+						m_pathSampler->m_lightPathTree.search(vt->getPosition(), gatherRadius, searchResults);	
+						numGatherPoints += searchResults.size();
 						if (searchResults.size() == 0){
 							continue;
 						}
 
-						//searchPos.resize(searchResults.size());
+						// prepare for shared shoot
+						searchPosCamera.clear();
+						searchPosIndex.clear();
+						searchPosDone.clear();
 						acceptCnt.resize(searchResults.size());
 						shootCnt.resize(searchResults.size());
 						for (int i = 0; i < searchResults.size(); i++){
 							acceptCnt[i] = 0;
 							shootCnt[i] = 0;
+							//
+							LightPathNode node = m_pathSampler->m_lightPathTree[searchResults[i]];
+							size_t vertexIndex = node.data.vertexIndex;
+							vsPred = vsPred_;
+							m_pathSampler->m_lightVerticesExt[vertexIndex - 1].expand(vsPred);
+							bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
+							if (cameraDirConnection){
+								LightVertexExt lvertexExt = m_pathSampler->m_lightVerticesExt[vertexIndex];
+								searchPosCamera.push_back(lvertexExt.position);
+								searchPosIndex.push_back(i);
+								searchPosDone.push_back(false);
+							}
 						}
 
 						// evaluate sampling domain pdf normalization
-						int shareShootThreshold = 32;
-						Float invBrdfIntegral = 1.f;
-						bool shareShoot = false;			
+						// camera direction----->						
+						float confidence = 0.95f;
+						Float expectShoot = log(1.f - pow(confidence, 1.f / float(searchPosCamera.size()))) / log(0.75f);
+						size_t totalShootShared = 0;
+						Float invBrdfIntegralShare = 1.f;
+						if (searchPosCamera.size() > expectShoot){
+							bool cameraDirConnection = true;
+							// prepare distribution sampler
+							bool gsampler_valid = (cameraDirConnection && vtPred->isSurfaceInteraction() || !cameraDirConnection && vsPred->isSurfaceInteraction());
+							Intersection gits = (cameraDirConnection) ? vtPred->getIntersection() : vsPred->getIntersection();
+							GuidedBRDF gsampler(gits, (cameraDirConnection) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
+								m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability, gsampler_valid);
 
-						numGatherPoints += searchResults.size();
+							// compute bounded pdf
+							componentCDFs.clear();
+							componentBounds.clear();
+							ref<Timer> timerA = new Timer();							
+							Float brdfIntegral = gatherAreaPdf(vtPred, vt->getPosition(), gatherRadius * 2.f, vtPred2, componentCDFs, componentBounds, gsampler);
+							wr->m_timeBoundProb += timerA->getSeconds();
+
+							// copy cdfs and bounds to fucking IMP vector types
+							copyBoundInfo(componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp);
+
+							// sample shoot to evaluate 1/p against 2 x radius shared area
+							if (brdfIntegral == 0.f) continue;
+							invBrdfIntegralShare = 1.f / brdfIntegral;
+							uint32_t finishCnt = 0;
+							Float distSquared = gatherRadius * gatherRadius;
+							ref<Timer> timerB = new Timer();							
+							while (finishCnt < searchResults.size() && totalShootShared < expectShoot * 2){
+								totalShootShared++;
+
+								// bounded sampling shoots
+								if (!sampleShoot(vtPred, m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f,
+									componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp, gsampler))
+									continue;
+
+								// check shoot validation against all shared connections
+								Point pshoot = succVertex->getPosition();
+								for (int i = 0; i < searchPosCamera.size(); i++){
+									if (searchPosDone[i]) continue;
+									Float pointDistSquared = (succVertex->getPosition() - searchPosCamera[i]).lengthSquared();
+									if (pointDistSquared < distSquared){
+										searchPosDone[i] = true;
+										uint32_t index = searchPosIndex[i];
+										acceptCnt[index]++;
+										if (shootCnt[index] == 0)
+											finishCnt++;
+										shootCnt[index] = totalShootShared;											
+									}
+								}
+							}
+							wr->m_timeBoundSample += timerB->getSeconds();
+							avgInvpShoots.incrementBase();
+							avgInvpShoots += totalShootShared;
+							maxInvpShoots.recordMaximum(totalShootShared);
+							numInvpShoots += totalShootShared;
+							numSharedEvaluation++;
+						}
+						
 						MisState sensorState = sensorStates[t - 1];
 						MisState sensorStatePred = sensorStates[t - 2];
 						for (int k = 0; k < searchResults.size(); k++){
 							LightPathNode node = m_pathSampler->m_lightPathTree[searchResults[k]];
 							int s = node.data.depth;
 							if (m_pathSampler->m_maxDepth != -1 && s + t > m_pathSampler->m_maxDepth + 2 || s < minS) continue;
-
 #ifdef EXCLUDE_DIRECT_LIGHTING
 							if (s == 2 && t == 2) continue;
 #endif
-
-							if (m_pathSampler->m_sensorSampler->next1D() < rejectionProb) continue;
 
 							size_t vertexIndex = node.data.vertexIndex;
 							LightVertex vi = m_pathSampler->m_lightVertices[vertexIndex];
@@ -757,6 +849,7 @@ public:
 							// decide the direction to do connection
 							bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
 
+							// get screen space position
 							samplePos = initialSamplePos;
 							if (vtPred->isSensorSample()){
 								if (!vtPred->getSamplePosition(cameraDirConnection ? vs : vt, samplePos))
@@ -782,25 +875,25 @@ public:
 								contrib *= connectionEdge.evalCached(vt, vsPred, PathEdge::EGeneralizedGeometricTerm);
 							}
 
-							contrib /= (1.f - rejectionProb);
-
 							Float invp = 0.f;
-							if (shareShoot){
-								invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
+							if (acceptCnt[k] > 0){
+								// use cached data from shared shoot
+								invp = (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegralShare;
 								contrib *= invp;
 							}
 							else{
-								std::vector<Vector2> componentCDFs;
-								std::vector<Vector2> componentBounds;
-								std::vector<Importance::Vector2> componentCDFsImp;
-								std::vector<Importance::Vector2> componentBoundsImp;
+								// sample shoot to evaluate 1/p against individual area
 								Float brdfIntegral;
+								componentCDFs.clear();
+								componentBounds.clear();
 								
+								// prepare distribution sampler
 								bool gsampler_valid = (cameraDirConnection && vtPred->isSurfaceInteraction() || !cameraDirConnection && vsPred->isSurfaceInteraction());
 								Intersection gits = (cameraDirConnection) ? vtPred->getIntersection() : vsPred->getIntersection();
 								GuidedBRDF gsampler(gits, (cameraDirConnection) ? m_guidingSampler->getRadianceSampler() : m_guidingSampler->getImportanceSampler(),
 									m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability, gsampler_valid);
 
+								// compute bounded pdf
 								ref<Timer> timerA = new Timer();
 								if (cameraDirConnection)
 									brdfIntegral = gatherAreaPdf(vtPred, vs->getPosition(), gatherRadius, vtPred2, componentCDFs, componentBounds, gsampler);
@@ -809,19 +902,10 @@ public:
 								wr->m_timeBoundProb += timerA->getSeconds();
 
 								// copy cdfs and bounds to fucking IMP vector types
-								for (int i = 0; i < componentCDFs.size(); i++){
-									Vector2 v = componentCDFs[i];
-									Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
-									componentCDFsImp.push_back(vi);
-								}
-								for (int i = 0; i < componentBounds.size(); i++){
-									Vector2 v = componentBounds[i];
-									Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
-									componentBoundsImp.push_back(vi);
-								}
+								copyBoundInfo(componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp);								
 
 								if (brdfIntegral == 0.f) continue;
-								invBrdfIntegral = 1.f / brdfIntegral;
+								Float invBrdfIntegral = 1.f / brdfIntegral;
 								size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
 								Float distSquared = gatherRadius * gatherRadius;
 								ref<Timer> timerB = new Timer();
@@ -858,6 +942,7 @@ public:
 								numClampShoots.incrementBase();
 								if (totalShoot >= clampThreshold)
 									++numClampShoots;
+								numIndividualEvaluation++;
 
 								invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
 								contrib *= invp;
