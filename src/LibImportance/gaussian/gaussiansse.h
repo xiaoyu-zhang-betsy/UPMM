@@ -50,6 +50,91 @@ namespace Importance {
 
     typedef Vector2t<VectorTraits< Float4 > > QuadVector2;
 
+	static const double a[] =
+	{
+		-3.969683028665376e+01,
+		2.209460984245205e+02,
+		-2.759285104469687e+02,
+		1.383577518672690e+02,
+		-3.066479806614716e+01,
+		2.506628277459239e+00
+	};
+
+	static const double b[] =
+	{
+		-5.447609879822406e+01,
+		1.615858368580409e+02,
+		-1.556989798598866e+02,
+		6.680131188771972e+01,
+		-1.328068155288572e+01
+	};
+
+	static const double c[] =
+	{
+		-7.784894002430293e-03,
+		-3.223964580411365e-01,
+		-2.400758277161838e+00,
+		-2.549732539343734e+00,
+		4.374664141464968e+00,
+		2.938163982698783e+00
+	};
+
+	static const double d[] =
+	{
+		7.784695709041462e-03,
+		3.224671290700398e-01,
+		2.445134137142996e+00,
+		3.754408661907416e+00
+	};
+
+#define LOW 0.02425
+#define HIGH 0.97575
+	inline double inverseGaussianCDF(double p)
+	{
+		double q, r;
+
+		errno = 0;
+
+		if (p < 0 || p > 1)
+		{
+			errno = EDOM;
+			return 0.0;
+		}
+		else if (p == 0)
+		{
+			errno = ERANGE;
+			return -HUGE_VAL /* minus "infinity" */;
+		}
+		else if (p == 1)
+		{
+			errno = ERANGE;
+			return HUGE_VAL /* "infinity" */;
+		}
+		else if (p < LOW)
+		{
+			/* Rational approximation for lower region */
+			q = sqrt(-2 * log(p));
+			return (((((c[0] * q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) /
+				((((d[0] * q + d[1])*q + d[2])*q + d[3])*q + 1);
+		}
+		else if (p > HIGH)
+		{
+			/* Rational approximation for upper region */
+			q = sqrt(-2 * log(1 - p));
+			return -(((((c[0] * q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) /
+				((((d[0] * q + d[1])*q + d[2])*q + d[3])*q + 1);
+		}
+		else
+		{
+			/* Rational approximation for central region */
+			q = p - 0.5;
+			r = q*q;
+			return (((((a[0] * r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5])*q /
+				(((((b[0] * r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1);
+		}
+	}
+
+
 	const double gaussianConstant[6] = { 0.2316419, 0.319381530, -0.356563782, 1.781477937, -1.821255978, 1.330274429 };
 	inline double normalDistribution(double x){
 		return exp(-0.5 * x * x) / sqrt(2.0 * IMP_PI);
@@ -77,6 +162,19 @@ namespace Importance {
 		Float sintheta = sin(theta);
 		Float y = sin(phi) * sintheta;
 		Float x = cos(phi) * sintheta;
+		return Vector3(x, y, z);
+	}
+	inline Vector3 fromPolarCoordsTheta(Float costheta, Float sintheta, Float phi){
+		Float z = costheta;		
+		Float y = sin(phi) * sintheta;
+		Float x = cos(phi) * sintheta;
+		return Vector3(x, y, z);
+	}
+	inline Vector3 fromPolarCoordsPhi(Float theta, Float cosphi, Float sinphi){
+		Float z = cos(theta);
+		Float sintheta = sin(theta);
+		Float y = sinphi * sintheta;
+		Float x = cosphi * sintheta;
 		return Vector3(x, y, z);
 	}
 
@@ -110,7 +208,7 @@ namespace Importance {
             // First sample x from two normal distributions using Box-Muller method
             random.x = std::max( random.x, std::numeric_limits<Float>::min() );
             const Float mult = std::sqrt( - 2.0f * Ff::log( random.x ) );
-            const Float angle = 2 * IMP_PI * random.y;
+            const Float angle = 2 * IMP_PI * random.y; // TODO: test -pi to pi sampling
             Float sin_angle, cos_angle;
             Ff::sincos( angle, sin_angle, cos_angle );
             const Vector2 x = Vector2( mult * cos_angle, mult * sin_angle );
@@ -180,13 +278,14 @@ namespace Importance {
 		}
 
 		IMPORTANCE_INLINE Float gatherAreaPdf(int index, std::vector<Vector2> criticalPoints, std::vector<Vector2> &componentBounds) const{
-			if (criticalPoints.size() == 0){
-				// uniform sampling, add default bound and return
-				componentBounds.push_back(Vector2(-10000.f, -10000.f));
-				componentBounds.push_back(Vector2(10000.f, 10000.f));
+			// uniform sampling, add default bound and return
+			if (criticalPoints.size() == 0){				
+				componentBounds.push_back(Vector2(0.f, 1.f));
+				componentBounds.push_back(Vector2(0.f, 1.f));
 				return 1.f;
 			}
 
+			// project corner points to inside lobe coords
 			Vector2 xmax = Vector2(-10000.f, -10000.f);
 			Vector2 xmin = Vector2(10000.f, 10000.f);
 			for (int i = 0; i < criticalPoints.size(); i++){
@@ -197,44 +296,33 @@ namespace Importance {
 				xmax.x = std::max(xmax.x, x.x);
 				xmax.y = std::max(xmax.y, x.y);
 			}
-			componentBounds.push_back(xmin);
-			componentBounds.push_back(xmax);
 
-			Float prob = (gaussianCDF(xmax.x) - gaussianCDF(xmin.x)) * (gaussianCDF(xmax.y) - gaussianCDF(xmin.y));
-
-			if (prob < 0){
-				Float g0 = gaussianCDF(xmax.x);
-				Float g1 = gaussianCDF(xmin.x);
-				Float g2 = gaussianCDF(xmax.y);
-				Float g3 = gaussianCDF(xmin.y);
-				Float m0 = g0 - g1;
-				Float m1 = g2 - g3;
-				float fuck = 1.f;
-
-				g0 = gaussianCDF(xmax.x);
-				g1 = gaussianCDF(xmin.x);
-				g2 = gaussianCDF(xmax.y);
-				g3 = gaussianCDF(xmin.y);
+			// calculate the cdfs of this bbox and the probability integral
+			Float cdfx0 = gaussianCDF(xmin.x);
+			Float cdfx1 = gaussianCDF(xmax.x);
+			Float cdfy0 = gaussianCDF(xmin.y);
+			Float cdfy1 = gaussianCDF(xmax.y);
+			Float prob = (cdfx1 - cdfx0) * (cdfy1 - cdfy0);			
+			if (prob <= 0.f){
+				componentBounds.push_back(Vector2(0.f, 1.f));
+				componentBounds.push_back(Vector2(0.f, 1.f));
+				return 0.f;
 			}
-			if (prob == 0.f){
-				float fuck = 1.f;
-			}
+			componentBounds.push_back(Vector2(cdfx0, cdfx1));
+			componentBounds.push_back(Vector2(cdfy0, cdfy1));
 			return prob;
 		}
 
-		IMPORTANCE_INLINE Vector2 sampleGatherArea(int index, Vector2 random, Vector2 xmin, Vector2 xmax) const{
-			IMPORTANCE_ASSERT(random.x >= 0.f && random.x <= 1.f);
+		IMPORTANCE_INLINE Vector2 sampleGatherArea(int index, Vector2 random, 
+			Vector2 bound0, Vector2 bound1) const{			
 			// First sample x from two normal distributions using Box-Muller method
-			random.x = std::max(random.x, std::numeric_limits<Float>::min());
-			const Float mult = std::sqrt(-2.0f * Ff::log(random.x));
-			const Float angle = 2 * IMP_PI * random.y;
-			Float sin_angle, cos_angle;
-			Ff::sincos(angle, sin_angle, cos_angle);
-			const Vector2 x = Vector2(mult * cos_angle, mult * sin_angle);
-			if (!(x.x >= xmin.x && x.x <= xmax.x && x.y >= xmin.y && x.y <= xmax.y)){
-				// outside bound, return invalid direction
-				return Vector2(-10000.f, -10000.f);
-			}
+			random.x = random.x * (bound0.y - bound0.x) + bound0.x;
+			random.y = random.y * (bound1.y - bound1.x) + bound1.x;
+ 			IMPORTANCE_ASSERT(random.x > 0.f && random.x < 1.f);
+ 			IMPORTANCE_ASSERT(random.y > 0.f && random.y < 1.f);
+			Float gx = inverseGaussianCDF(random.x);
+			Float gy = inverseGaussianCDF(random.y);
+			const Vector2 x = Vector2(gx, gy);			
 			// Once I have vector x from N(0,1) I can transform it to v = A * x + mean, where A is matrix from equation Covariance = A * A^TScalar
 			float c2 = cov.m[1][index] * cov.m[1][index];
 			float invDetSqrt = 1.0f / std::sqrt(cov.m[0][index] * cov.m[2][index] - c2);
@@ -302,10 +390,7 @@ namespace Importance {
 					Float phi = atan2(woProj.y, woProj.x);
 					Float phi0 = phi - dPhi;
 					Float phi1 = phi + dPhi;
-					Vector3 d0 = fromPolarCoords(theta0, phi0);
-					Vector3 d1 = fromPolarCoords(theta1, phi0);
-					Vector3 d2 = fromPolarCoords(theta0, phi1);
-					Vector3 d3 = fromPolarCoords(theta1, phi1);
+					Float costheta0 = cos(theta0);					Float costheta1 = cos(theta1);					Float sintheta0 = sin(theta0);					Float sintheta1 = sin(theta1);					Float cosphi0 = cos(phi0);					Float cosphi1 = cos(phi1);					Float sinphi0 = sin(phi0);					Float sinphi1 = sin(phi1);					Vector3 d0 = Vector3(cosphi0 * sintheta0, sinphi0 * sintheta0, costheta0);					Vector3 d1 = Vector3(cosphi0 * sintheta1, sinphi0 * sintheta1, costheta1);					Vector3 d2 = Vector3(cosphi1 * sintheta0, sinphi1 * sintheta0, costheta0);					Vector3 d3 = Vector3(cosphi1 * sintheta1, sinphi1 * sintheta1, costheta1); 
 					criticalVectors.push_back(d0);
 					criticalVectors.push_back(d1);
 					criticalVectors.push_back(d2);
@@ -314,8 +399,14 @@ namespace Importance {
 						// cover the mapping changing point at 1/4 PI, add corner points
 						Float deltaPhi = (-1.75f + 0.5f * (Float)i) * IMP_PI;
 						if (deltaPhi > phi0 && deltaPhi < phi1){
-							Vector3 d4 = fromPolarCoords(theta0, deltaPhi);
-							Vector3 d5 = fromPolarCoords(theta1, deltaPhi);
+// 							Vector3 d4 = fromPolarCoords(theta0, deltaPhi);
+// 							Vector3 d5 = fromPolarCoords(theta1, deltaPhi);
+
+							Float sinphi = sin(deltaPhi);
+							Float cosphi = cos(deltaPhi);
+							Vector3 d4 = fromPolarCoordsPhi(theta0, cosphi, sinphi);
+							Vector3 d5 = fromPolarCoordsPhi(theta1, cosphi, sinphi);
+
 							criticalVectors.push_back(d4);
 							criticalVectors.push_back(d5);
 							break;
@@ -325,10 +416,18 @@ namespace Importance {
 				}
 				else{ 
 					// covering north pole, theta bounding
-					Vector3 d0 = fromPolarCoords(theta1, 0.25f * IMP_PI);
-					Vector3 d1 = fromPolarCoords(theta1, 0.75f * IMP_PI);
-					Vector3 d2 = fromPolarCoords(theta1, 1.25f * IMP_PI);
-					Vector3 d3 = fromPolarCoords(theta1, 1.75f * IMP_PI);
+// 					Vector3 d0 = fromPolarCoords(theta1, 0.25f * IMP_PI);
+// 					Vector3 d1 = fromPolarCoords(theta1, 0.75f * IMP_PI);
+// 					Vector3 d2 = fromPolarCoords(theta1, 1.25f * IMP_PI);
+// 					Vector3 d3 = fromPolarCoords(theta1, 1.75f * IMP_PI);
+
+					Float costheta1 = cos(theta1);
+					Float sintheta1 = sin(theta1);
+					Vector3 d0 = fromPolarCoordsTheta(costheta1, sintheta1, 0.25f * IMP_PI);
+					Vector3 d1 = fromPolarCoordsTheta(costheta1, sintheta1, 0.75f * IMP_PI);
+					Vector3 d2 = fromPolarCoordsTheta(costheta1, sintheta1, 1.25f * IMP_PI);
+					Vector3 d3 = fromPolarCoordsTheta(costheta1, sintheta1, 1.75f * IMP_PI);
+
 					criticalVectors.push_back(d0);
 					criticalVectors.push_back(d1);
 					criticalVectors.push_back(d2);
@@ -362,6 +461,10 @@ namespace Importance {
 				}
 			}
 			componentCDFs[pnode0].x = totalProb;
+			Float invTotalProb = 1.f / totalProb;
+			for (int i = 0; i < numNode; i++){
+				componentCDFs[pnode0 + i + 1].x *= invTotalProb;
+			}
 			return totalProb;
 		}
 
@@ -369,43 +472,35 @@ namespace Importance {
 			std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
 			// sample CDF tree
 			Vector2 rootnode = componentCDFs[ptrNode];
-			Float invTotalPdf = 1.f / rootnode.x;
 			int numNode = *(int*)&rootnode.y;
 			if (numNode == 0){
 				float fuck = 1.f;
 			}
 			Float cdfi = 0.f;
 			int chosenLobe = -1;
-			Vector2 xmin, xmax;
+			Vector2 bound0, bound1;
 			for (int i = 0; i < numNode; i++){
 				Vector2 nodei = componentCDFs[ptrNode + 1 + i];
 				Float pdfi = nodei.x;
-				if (samples.x <= (cdfi + pdfi) * invTotalPdf){
+				if (samples.x <= (cdfi + pdfi) ){
 					// choose this component
 					chosenLobe = i;
-					int ptrBound = -*(int*)&nodei.y;
-					xmin = componentBounds[ptrBound];
-					xmax = componentBounds[ptrBound + 1];
-					samples.x = (samples.x - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
+					int ptrBound = -*(int*)&nodei.y;					
+					bound0 = componentBounds[ptrBound];
+					bound1 = componentBounds[ptrBound + 1];
+					samples.x = (samples.x - cdfi) / pdfi;
 					break;
 				}
 				cdfi += pdfi;
-			}
-			if (chosenLobe < 0 || chosenLobe >= storedLobes){
-				float fuck = 1.f;
 			}
 
 			int actualGroup = chosenLobe / TLobeType::WIDTH;
 			int actualLobe = chosenLobe - actualGroup * TLobeType::WIDTH;
 
-			const Vector2 point = lobes[actualGroup].sampleGatherArea(actualLobe, samples, xmin, xmax);
-			if (point.x == -10000.f && point.y == -10000.f)
-				return Vector3(-10000.f, -10000.f, -10000.f);
-			IMPORTANCE_ASSERT(lobes[actualGroup].pdf(TScalar(point.x), TScalar(point.y))[actualLobe] > 0.f);
+			const Vector2 point = lobes[actualGroup].sampleGatherArea(actualLobe, samples, bound0, bound1);
 			Vector3 res;
 			getMapping().fromSquare(localFrame, point, res);
 			IMPORTANCE_ASSERT(res.isReal());
-			//IMPORTANCE_ASSERT( pdf( res ) > 0.f );
 			return res;
 		}
 

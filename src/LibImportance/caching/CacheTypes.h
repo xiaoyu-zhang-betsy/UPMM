@@ -99,54 +99,60 @@ public:
     }
 
 	virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds){
-		int numNode = found;
-		componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node	
-		for (int i = 0; i < numNode; i++)
-			componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
-
-		Float totalProb = 0.f;
-		Float previousWeight = 0.f;
-		for (int i = 0; i < numNode; i++){
-			int ptrNode = componentCDFs.size() + baseCDFs;
-			componentCDFs[i + 1].y = *(float*)&ptrNode;			
-			Float probDistrib = records[i]->gatherAreaPdf(wo, radius, componentCDFs, componentBounds, baseCDFs, baseBounds);
-			Float probi = probDistrib * (cdf[i] - previousWeight);
-			componentCDFs[i + 1].x = probi;
-			totalProb += probi;
-			previousWeight = cdf[i];
+		Float totalProb = 0.f;		
+		if (found > 1){
+			int numNode = found;
+			Float previousWeight = 0.f;
+			componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node	
+			for (int i = 0; i < numNode; i++)
+				componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
+			for (int i = 0; i < numNode; i++){
+				int ptrNode = componentCDFs.size() + baseCDFs;
+				componentCDFs[i + 1].y = *(float*)&ptrNode;
+				Float probDistrib = records[i]->gatherAreaPdf(wo, radius, componentCDFs, componentBounds, baseCDFs, baseBounds);
+				Float probi = probDistrib * (cdf[i] - previousWeight);
+				componentCDFs[i + 1].x = probi;
+				totalProb += probi;
+				previousWeight = cdf[i];
+			}
+			componentCDFs[0].x = totalProb;
+			Float invTotalProb = 1.f / totalProb;
+			for (int i = 0; i < numNode; i++){
+				componentCDFs[i + 1].x *= invTotalProb;
+			}
 		}
-
-		componentCDFs[0].x = totalProb;
+		else{
+			totalProb = records[0]->gatherAreaPdf(wo, radius, componentCDFs, componentBounds, baseCDFs, baseBounds);
+		}
 		return totalProb;
 	}
 	virtual Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds){
 		// sample CDF tree
-		Vector2 rootnode = componentCDFs[ptrNode];
-		Float invTotalPdf = 1.f / rootnode.x;
-		int numNode = *(int*)&rootnode.y;
-		if (numNode == 0){
-			float fuck = 1.f;
-		}
-		Float cdfi = 0.f;
 		int chosenLobe = -1;
-		int ptrChilde = -1;
-		for (int i = 0; i < numNode; i++){
-			Vector2 nodei = componentCDFs[ptrNode + 1 + i];
-			Float pdfi = nodei.x;
-			if (samples.x <= (cdfi + pdfi) * invTotalPdf){
-				// choose this component
-				chosenLobe = i;
-				ptrChilde = *(int*)&nodei.y;				
-				samples.x = (samples.x - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
-				break;
+		int ptrChild = -1;
+		if (found > 1){
+			Vector2 rootnode = componentCDFs[ptrNode];			
+			int numNode = *(int*)&rootnode.y;			
+			Float cdfi = 0.f;			
+			for (int i = 0; i < numNode; i++){
+				Vector2 nodei = componentCDFs[ptrNode + 1 + i];
+				Float pdfi = nodei.x;
+				if ( samples.x <= (cdfi + pdfi) ){
+					// choose this component
+					chosenLobe = i;
+					ptrChild = *(int*)&nodei.y;
+					samples.x = (samples.x - cdfi) / pdfi;
+					break;
+				}
+				cdfi += pdfi;
 			}
-			cdfi += pdfi;
 		}
-		if (chosenLobe < 0 || chosenLobe >= found){
-			float fuck = 1.f;
+		else{
+			chosenLobe = 0;
+			ptrChild = ptrNode;
 		}
 
-		Vector3 dir = records[chosenLobe]->sampleGatherArea(samples, wo, radius, ptrChilde, componentCDFs, componentBounds);
+		Vector3 dir = records[chosenLobe]->sampleGatherArea(samples, wo, radius, ptrChild, componentCDFs, componentBounds);
 		return dir;
 	}
 

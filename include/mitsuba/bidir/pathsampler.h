@@ -279,6 +279,9 @@ public:
 		}
 #endif
 		sampleCount = 0;
+		m_timeTraceKernel = 0.f;
+		m_timeBoundProb = 0.f;
+		m_timeBoundSample = 0.f;
 	}
 
 	// Clear the contents of the work result
@@ -441,6 +444,11 @@ protected:
 	size_t sampleCount;
 	ref<ImageBlock> m_block; // , m_lightImage;
 	bool m_guided;
+
+public:
+	Float m_timeTraceKernel;
+	Float m_timeBoundProb;
+	Float m_timeBoundSample;
 };
 
 /**

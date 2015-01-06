@@ -76,12 +76,12 @@ public:
     void trainingPhase( const RenderJob *job, int sceneResID, int sensorResID ) {
         if ( m_cfg.m_mitsuba.useGuidedSampling) {
             if ( !m_cfg.m_mitsuba.usePingPong ) {
-                SLog( EInfo, "Ping-pong is switched off - setting number of training passes to 1." );
+                //SLog( EInfo, "Ping-pong is switched off - setting number of training passes to 1." );
                 m_cfg.m_mitsuba.nPasses = 1;
             }
         }
         else {
-            SLog( EInfo, "Path guiding is switched off - setting number of training passes to 0." );
+            //SLog( EInfo, "Path guiding is switched off - setting number of training passes to 0." );
             m_cfg.m_mitsuba.nPasses = 0;
         }
 
@@ -94,7 +94,7 @@ public:
                 ref<BgParticlesVec> bgParticles;
                 SLog( EInfo, "Training (pass %i/%i): tracing importons", iPass+1, m_cfg.m_mitsuba.nPasses);
                 ref<PhotonMap> importonsMap = particleTracingPass( job, sceneResID, sensorResID, m_radianceSampler, GuidedEmitParticleProcess::EFromSensor, &bgParticles );
-                SLog( EInfo, "Training: importance cache update" );
+                //SLog( EInfo, "Training: importance cache update" );
                 if ( !m_importanceSampler) {
                     m_importanceSampler = Importance::SamplerFactory::createSampler( m_cfg.m_importance );
                     SAssert(m_importanceSampler);
@@ -110,11 +110,11 @@ public:
                     // Find environment sampler
                     const EnviroMapInterface * enviroMap = dynamic_cast<const EnviroMapInterface *>(m_scene->getEnvironmentEmitter());
                     if ( enviroMap == NULL ) {
-                        SLog( EWarn, "The environment light source was not found." );
+                        //SLog( EWarn, "The environment light source was not found." );
                         m_cfg.m_mitsuba.useEnvironmentSampler = false;
                     } else {
                         if ( !m_enviroSampler ) {
-                            SLog( EInfo, "Training: creating environment sampler");													
+                            //SLog( EInfo, "Training: creating environment sampler");													
                             m_enviroSampler = Importance::SamplerFactory::createEnviroSampler( m_cfg.m_importance );
                             SAssert(m_enviroSampler);
                             enviroMap->setEnviroSampler(m_enviroSampler);
@@ -123,7 +123,7 @@ public:
                                 &m_enviroSamplerStats,
                                 enviroMap );
                             if ( !isOk ) {
-                                SLog( EWarn, "Initialization of environment sampler has failed. \n %s", m_enviroSampler->toString().c_str() );
+                                //SLog( EWarn, "Initialization of environment sampler has failed. \n %s", m_enviroSampler->toString().c_str() );
                                 delete m_enviroSampler;
                                 m_enviroSampler = NULL;
                                 m_cfg.m_mitsuba.useEnvironmentSampler = false;
@@ -146,12 +146,12 @@ public:
 //                    writeImportanceEnviroMap( fname.str(), *m_enviroSampler->getDirectionsBmp() );
 //#endif
                 }                
-                SLog( EInfo, "%s", cacheStatsToString( m_importanceStats, "Importance" ).c_str() );
+                //SLog( EInfo, "%s", cacheStatsToString( m_importanceStats, "Importance" ).c_str() );
             }
             /* PHOTONS TRACING */
             SLog( EInfo, "Training (pass %i/%i): tracing photons", iPass+1, m_cfg.m_mitsuba.nPasses );
             ref<PhotonMap> photonMap = particleTracingPass( job, sceneResID, sensorResID, m_importanceSampler, GuidedEmitParticleProcess::EFromEmitters, NULL );
-            SLog( EInfo, "Training: radiance cache update" );
+            //SLog( EInfo, "Training: radiance cache update" );
             if ( !m_radianceSampler) {
                 m_radianceSampler = Importance::SamplerFactory::createSampler( m_cfg.m_importance );
                 SAssert(m_radianceSampler);
@@ -162,7 +162,7 @@ public:
             else{
                 m_radianceSampler->refreshSamples( PhotonsIterator( photonMap ) );
             }
-            SLog( EInfo, "%s", cacheStatsToString( m_radianceStats, "Radiance" ).c_str() );
+            //SLog( EInfo, "%s", cacheStatsToString( m_radianceStats, "Radiance" ).c_str() );
         } // end of the main training loop
 
 
@@ -334,7 +334,7 @@ protected:
             std::string particleName( traceDirection == GuidedEmitParticleProcess::EFromSensor ? 
                 "importon" : "photon" );
 			if ( samplerID == -1 ) { /** Creates sampler if it does not exists */
-				SLog( EInfo, "Creating independent samplers for %s tracing, one sampler per core...", particleName.c_str() );
+				//SLog( EInfo, "Creating independent samplers for %s tracing, one sampler per core...", particleName.c_str() );
 				ref<Scheduler> sched = Scheduler::getInstance();
 				ref<Sampler> sampler = static_cast<Sampler *> (PluginManager::getInstance()->
 					createObject(MTS_CLASS(Sampler), Properties(/*"halton"*/"independent")));
@@ -386,19 +386,19 @@ protected:
 				return NULL;
 			}
 
-			SLog( EInfo, "Global photon map full. Shot " SIZE_T_FMT " particles, excess particles due to parallelism: " 
-				SIZE_T_FMT " Stored particles: " SIZE_T_FMT, proc->getShotParticles(), proc->getExcessPhotons(), proc->getPhotonMap()->size() );
-			SLog( EInfo, "Tracing took %s", timeString( m_timer->getMilliseconds() / 1000.f ).c_str() );
+// 			SLog( EInfo, "Global photon map full. Shot " SIZE_T_FMT " particles, excess particles due to parallelism: " 
+// 				SIZE_T_FMT " Stored particles: " SIZE_T_FMT, proc->getShotParticles(), proc->getExcessPhotons(), proc->getPhotonMap()->size() );
+// 			SLog( EInfo, "Tracing took %s", timeString( m_timer->getMilliseconds() / 1000.f ).c_str() );
 
 			if ( bgImportons ) {
 				*bgImportons = proc->getBgParticles();
-				SLog( EInfo, "Captured " SIZE_T_FMT " background particles.", 
-					(*bgImportons)->m_data.size() );
+// 				SLog( EInfo, "Captured " SIZE_T_FMT " background particles.", 
+// 					(*bgImportons)->m_data.size() );
 			}
 
-            SLog( EInfo, "Weight window: %s", getConfig().m_mitsuba.useWeightWindow ? "ON" : "OFF" );
-            SLog( EInfo, "Weight window: \n%s", getWeightWindow().toString().c_str() );
-            SLog( EInfo, "Particle (%s) statistics:\n%s", particleName.c_str(), proc->getParticleStats().toString().c_str() );
+//             SLog( EInfo, "Weight window: %s", getConfig().m_mitsuba.useWeightWindow ? "ON" : "OFF" );
+//             SLog( EInfo, "Weight window: \n%s", getWeightWindow().toString().c_str() );
+//             SLog( EInfo, "Particle (%s) statistics:\n%s", particleName.c_str(), proc->getParticleStats().toString().c_str() );
             
 			return proc->getPhotonMap();
 	}

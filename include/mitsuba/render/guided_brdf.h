@@ -235,11 +235,11 @@ public:
 		Sampler *sampler){
 		Importance::Vector3 wo(wo_.x, wo_.y, wo_.z);
 		Importance::Vector3 diri(-10000.f);
-		while (diri.x == -10000.f && diri.y == -10000.f && diri.z == -10000.f){
-			Point2 s1 = sampler->next2D();
-			Importance::Vector2 samples(s1.x, s1.y);
-			diri = m_impDistrib->sampleGatherArea(samples, wo, radius, ptrNode, componentCDFs, componentBounds);
-		}
+		Point2 s1 = sampler->next2D();
+		Importance::Vector2 samples(s1.x, s1.y);
+
+		diri = m_impDistrib->sampleGatherArea(samples, wo, radius, ptrNode, componentCDFs, componentBounds);
+
 		return Vector(diri.x, diri.y, diri.z);
 	}
 
