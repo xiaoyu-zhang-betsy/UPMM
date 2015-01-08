@@ -269,14 +269,15 @@ namespace Importance {
 			// project corner points to inside lobe coords
 			Vector2 xmax = Vector2(-10000.f, -10000.f);
 			Vector2 xmin = Vector2(10000.f, 10000.f);
-// 			for (int i = 0; i < numCriticalPoints; i++){
-// 				Vector2 dir = criticalPoints[i];
-// 				Vector2 x = toLobe(index, dir);
-// 				xmin.x = std::min(xmin.x, x.x);
-// 				xmin.y = std::min(xmin.y, x.y);
-// 				xmax.x = std::max(xmax.x, x.x);
-// 				xmax.y = std::max(xmax.y, x.y);
-// 			}
+			for (int i = 0; i < numCriticalPoints; i++){
+				Vector2 dir = criticalPoints[i];
+				Vector2 x = toLobe(index, dir);
+				xmin.x = std::min(xmin.x, x.x);
+				xmin.y = std::min(xmin.y, x.y);
+				xmax.x = std::max(xmax.x, x.x);
+				xmax.y = std::max(xmax.y, x.y);
+			}
+			/*
 			float c2 = cov.m[1][index] * cov.m[1][index];
 			float invDetSqrt = 1.0f / std::sqrt(cov.m[0][index] * cov.m[2][index] - c2);			
 			if (cov.m[0][index] > cov.m[2][index])
@@ -321,6 +322,7 @@ namespace Importance {
 					xmax.y = std::max(xmax.y, x.y);
 				}
 			}
+			*/
 
 			// calculate the cdfs of this bbox and the probability integral
 			Float cdfx0 = gaussianCDF(xmin.x);

@@ -787,7 +787,7 @@ public:
 							uint32_t finishCnt = 0;
 							Float distSquared = gatherRadius * gatherRadius;
 							wr->m_timeBoundSample->start();
-							while (finishCnt < searchResults.size() && totalShootShared < expectShoot){
+							while (finishCnt < searchResults.size() && totalShootShared < expectShoot * 4){
 								totalShootShared++;
 
 								// bounded sampling shoots
