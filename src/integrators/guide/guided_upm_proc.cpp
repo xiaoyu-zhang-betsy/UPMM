@@ -757,7 +757,6 @@ public:
 						// evaluate sampling domain pdf normalization
 						// camera direction----->
 						Float invBrdfIntegralShare = 1.f;
-						/*
 						float confidence = 0.95f;
 						Float expectShoot = log(1.f - pow(confidence, 1.f / float(searchPosCamera.size()))) / log(0.75f);
 						size_t totalShootShared = 0;						
@@ -770,34 +769,30 @@ public:
 								m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability, gsampler_valid);
 
 							// compute bounded pdf
-							componentCDFs.clear();
-							componentBounds.clear();
-							ref<Timer> timerA = new Timer();	
-							ref<Timer> timerDistrib = new Timer(false);
-							ref<Timer> timerGMM = new Timer(false);
-							ref<Timer> timerLobe = new Timer(false);
-							Float brdfIntegral = gatherAreaPdf(vtPred, vt->getPosition(), gatherRadius * 2.f, vtPred2, componentCDFs, componentBounds, gsampler,
-								timerDistrib, timerGMM, timerLobe);
-							wr->m_timeProbDistrib += timerDistrib->getSeconds();
-							wr->m_timeProbGMM += timerGMM->getSeconds();
-							wr->m_timeProbLobe += timerLobe->getSeconds();
-							wr->m_timeBoundProb += timerA->getSeconds();
+							topComponentCDFs = 0;
+							topComponentBounds = 0;
+							wr->m_timeBoundProb->start();
+							Float brdfIntegral = gatherAreaPdf(vtPred, vt->getPosition(), gatherRadius * 2.f, vtPred2, &gsampler,
+								componentCDFs, componentBounds, topComponentCDFs, topComponentBounds,
+								componentCDFsImp, componentBoundsImp,
+								wr->m_timeBoundSurfaceProb, wr->m_timeProbDistrib, wr->m_timeProbGMM, wr->m_timeProbLobe);
+							wr->m_timeBoundProb->stop();
 
 							// copy cdfs and bounds to fucking IMP vector types
-							copyBoundInfo(componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp);
+							copyBoundInfo(componentCDFs, componentBounds, topComponentCDFs, topComponentBounds, componentCDFsImp, componentBoundsImp);
 
 							// sample shoot to evaluate 1/p against 2 x radius shared area
 							if (brdfIntegral == 0.f) continue;
 							invBrdfIntegralShare = 1.f / brdfIntegral;
 							uint32_t finishCnt = 0;
 							Float distSquared = gatherRadius * gatherRadius;
-							ref<Timer> timerB = new Timer();							
-							while (finishCnt < searchResults.size() && totalShootShared < expectShoot * 2){
+							wr->m_timeBoundSample->start();
+							while (finishCnt < searchResults.size() && totalShootShared < expectShoot){
 								totalShootShared++;
 
 								// bounded sampling shoots
 								if (!sampleShoot(vtPred, m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f,
-									componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp, gsampler))
+									componentCDFs, componentBounds, topComponentCDFs, topComponentBounds, componentCDFsImp, componentBoundsImp, &gsampler))
 									continue;
 
 								// check shoot validation against all shared connections
@@ -815,14 +810,13 @@ public:
 									}
 								}
 							}
-							wr->m_timeBoundSample += timerB->getSeconds();
+							wr->m_timeBoundSample->stop();
 							avgInvpShoots.incrementBase();
 							avgInvpShoots += totalShootShared;
 							maxInvpShoots.recordMaximum(totalShootShared);
 							numInvpShoots += totalShootShared;
 							numSharedEvaluation++;
 						}
-						*/
 						
 						MisState sensorState = sensorStates[t - 1];
 						MisState sensorStatePred = sensorStates[t - 2];
@@ -833,7 +827,6 @@ public:
 #ifdef EXCLUDE_DIRECT_LIGHTING
 							if (s == 2 && t == 2) continue;
 #endif
-
 							size_t vertexIndex = node.data.vertexIndex;
 							LightVertex vi = m_pathSampler->m_lightVertices[vertexIndex];
 							LightVertex viPred = m_pathSampler->m_lightVertices[vertexIndex - 1];
@@ -904,7 +897,7 @@ public:
 									m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability, gsampler_valid);
 
 								// compute bounded pdf
-								wr->m_timeBoundProb->start();								
+								wr->m_timeBoundProb->start();
 								if (cameraDirConnection)
 									brdfIntegral = gatherAreaPdf(vtPred, vs->getPosition(), gatherRadius, vtPred2, &gsampler,
 										componentCDFs, componentBounds, topComponentCDFs, topComponentBounds,
@@ -1210,8 +1203,6 @@ public:
 			topComponentCDFs++;
 			Vector2 xmin = Vector2(bbox.x, bbox.z);
 			Vector2 xmax = Vector2(bbox.y, bbox.w);
-// 			componentBounds.push_back(xmin);
-// 			componentBounds.push_back(xmax);
 			componentBounds[topComponentBounds] = xmin;
 			componentBounds[topComponentBounds + 1] = xmax;
 			topComponentBounds += 2;

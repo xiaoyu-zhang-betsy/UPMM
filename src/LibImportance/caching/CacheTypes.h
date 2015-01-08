@@ -105,9 +105,6 @@ public:
 		if (found > 1){
 			int numNode = found;
 			Float previousWeight = 0.f;
-//			componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node				
-// 			for (int i = 0; i < numNode; i++)
-// 				componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
 			componentCDFs[topComponentCDFs].y = *(float*)&numNode;
 			topComponentCDFs += numNode + 1;
 			for (int i = 0; i < numNode; i++){
