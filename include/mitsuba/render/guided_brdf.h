@@ -210,35 +210,45 @@ public:
 		}
 	}
 
-	Float gatherAreaPdf(Vector wo_, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds){
-		std::vector<Importance::Vector2> tempComponentCDFs, tempComponentBounds;
+	Float gatherAreaPdfGuide(Vector wo_, Float radius,
+		Vector2* componentCDFs, Vector2* componentBounds, int &topComponentCDFs, int &topComponentBounds,
+		Importance::Vector2* componentCDFsImp, Importance::Vector2* componentBoundsImp,
+		Timer* timerDistrib, Timer* timerGMM, Timer* timerLobe){
+
+		int topCDFs = 0, topBounds = 0;
 		Importance::Vector3 wo(wo_.x, wo_.y, wo_.z);
 
-		Float prob = m_impDistrib->gatherAreaPdf(wo, radius, 
-			tempComponentCDFs, tempComponentBounds, componentCDFs.size(), componentBounds.size());
+		timerDistrib->start();
+		Float prob = m_impDistrib->gatherAreaPdfDistrib(wo, radius, 
+			componentCDFsImp, componentBoundsImp, topCDFs, topBounds,
+			topComponentCDFs, topComponentBounds);
+		timerDistrib->stop();
 
-		for (int i = 0; i < tempComponentCDFs.size(); i++){
-			Importance::Vector2 iv = tempComponentCDFs[i];
+		// merge Importance type cdfs back to original cdf tree
+		for (int i = 0; i < topCDFs; i++){
+			Importance::Vector2 iv = componentCDFsImp[i];
 			Vector2 v = Vector2(iv.x, iv.y);
-			componentCDFs.push_back(v);
+			componentCDFs[topComponentCDFs] = v;
+			topComponentCDFs++;
 		}
-		for (int i = 0; i < tempComponentBounds.size(); i++){
-			Importance::Vector2 iv = tempComponentBounds[i];
+		for (int i = 0; i < topBounds; i++){
+			Importance::Vector2 iv = componentBoundsImp[i];
 			Vector2 v = Vector2(iv.x, iv.y);
-			componentBounds.push_back(v);
+			componentBounds[topComponentBounds] = v;
+			topComponentBounds++;
 		}
 		return prob;
 	}
 
-	Vector sampleGatherArea(Vector wo_, Float radius, int ptrNode, 
-		std::vector<Importance::Vector2> &componentCDFs, std::vector<Importance::Vector2> &componentBounds, 
-		Sampler *sampler){
-		Importance::Vector3 wo(wo_.x, wo_.y, wo_.z);
-		Importance::Vector3 diri(-10000.f);
+	Vector sampleGatherAreaGuide(Vector wo_, Float radius, int ptrNode, 
+		Importance::Vector2* componentCDFs, Importance::Vector2* componentBounds, Sampler *sampler){
+
 		Point2 s1 = sampler->next2D();
 		Importance::Vector2 samples(s1.x, s1.y);
+		Importance::Vector3 wo(wo_.x, wo_.y, wo_.z);
+		Importance::Vector3 diri(-10000.f);		
 
-		diri = m_impDistrib->sampleGatherArea(samples, wo, radius, ptrNode, componentCDFs, componentBounds);
+		diri = m_impDistrib->sampleGatherAreaDistrib(samples, wo, radius, ptrNode, componentCDFs, componentBounds);
 
 		return Vector(diri.x, diri.y, diri.z);
 	}

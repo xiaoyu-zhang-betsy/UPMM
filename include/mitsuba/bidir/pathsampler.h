@@ -279,9 +279,14 @@ public:
 		}
 #endif
 		sampleCount = 0;
-		m_timeTraceKernel = 0.f;
-		m_timeBoundProb = 0.f;
-		m_timeBoundSample = 0.f;
+
+		m_timeTraceKernel = new Timer(false);
+		m_timeBoundProb = new Timer(false);
+		m_timeBoundSurfaceProb = new Timer(false);
+		m_timeBoundSample = new Timer(false);
+		m_timeProbDistrib = new Timer(false);
+		m_timeProbGMM = new Timer(false);
+		m_timeProbLobe = new Timer(false);
 	}
 
 	// Clear the contents of the work result
@@ -446,9 +451,13 @@ protected:
 	bool m_guided;
 
 public:
-	Float m_timeTraceKernel;
-	Float m_timeBoundProb;
-	Float m_timeBoundSample;
+	ref<Timer> m_timeTraceKernel;
+	ref<Timer> m_timeBoundProb;
+	ref<Timer> m_timeBoundSurfaceProb;
+	ref<Timer> m_timeBoundSample;
+	ref<Timer> m_timeProbDistrib;
+	ref<Timer> m_timeProbGMM;
+	ref<Timer> m_timeProbLobe;
 };
 
 /**

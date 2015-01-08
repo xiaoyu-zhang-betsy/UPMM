@@ -71,8 +71,8 @@ namespace Importance {
             return res;
         }
 
-		virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds) = 0;
-		virtual Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) = 0;
+		virtual Float gatherAreaPdfDistrib(Vector3 wo, Float radius, Vector2* componentCDFs, Vector2* componentBounds, int &topComponentCDFs, int &topComponentBounds, int baseCDFs, int baseBounds) = 0;
+		virtual Vector3 sampleGatherAreaDistrib(Vector2 samples, Vector3 wo, Float radius, int ptrNode, Vector2* componentCDFs, Vector2* componentBounds) = 0;
 
         virtual void release() = 0;
 

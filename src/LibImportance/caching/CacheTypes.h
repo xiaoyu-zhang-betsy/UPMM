@@ -98,18 +98,22 @@ public:
         }
     }
 
-	virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds){
+	virtual Float gatherAreaPdfDistrib(Vector3 wo, Float radius, 
+		Vector2* componentCDFs, Vector2* componentBounds, int &topComponentCDFs, int &topComponentBounds,
+		int baseCDFs, int baseBounds){
 		Float totalProb = 0.f;		
 		if (found > 1){
 			int numNode = found;
 			Float previousWeight = 0.f;
-			componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node	
-			for (int i = 0; i < numNode; i++)
-				componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
+//			componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node				
+// 			for (int i = 0; i < numNode; i++)
+// 				componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
+			componentCDFs[topComponentCDFs].y = *(float*)&numNode;
+			topComponentCDFs += numNode + 1;
 			for (int i = 0; i < numNode; i++){
-				int ptrNode = componentCDFs.size() + baseCDFs;
+				int ptrNode = topComponentCDFs + baseCDFs;
 				componentCDFs[i + 1].y = *(float*)&ptrNode;
-				Float probDistrib = records[i]->gatherAreaPdf(wo, radius, componentCDFs, componentBounds, baseCDFs, baseBounds);
+				Float probDistrib = records[i]->gatherAreaPdfGMM(wo, radius, componentCDFs, componentBounds, topComponentCDFs, topComponentBounds, baseCDFs, baseBounds);
 				Float probi = probDistrib * (cdf[i] - previousWeight);
 				componentCDFs[i + 1].x = probi;
 				totalProb += probi;
@@ -122,11 +126,11 @@ public:
 			}
 		}
 		else{
-			totalProb = records[0]->gatherAreaPdf(wo, radius, componentCDFs, componentBounds, baseCDFs, baseBounds);
+			totalProb = records[0]->gatherAreaPdfGMM(wo, radius, componentCDFs, componentBounds, topComponentCDFs, topComponentBounds, baseCDFs, baseBounds);
 		}
 		return totalProb;
 	}
-	virtual Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds){
+	virtual Vector3 sampleGatherAreaDistrib(Vector2 samples, Vector3 wo, Float radius, int ptrNode, Vector2* componentCDFs, Vector2* componentBounds){
 		// sample CDF tree
 		int chosenLobe = -1;
 		int ptrChild = -1;
@@ -152,7 +156,7 @@ public:
 			ptrChild = ptrNode;
 		}
 
-		Vector3 dir = records[chosenLobe]->sampleGatherArea(samples, wo, radius, ptrChild, componentCDFs, componentBounds);
+		Vector3 dir = records[chosenLobe]->sampleGatherAreaGMM(samples, wo, radius, ptrChild, componentCDFs, componentBounds);
 		return dir;
 	}
 

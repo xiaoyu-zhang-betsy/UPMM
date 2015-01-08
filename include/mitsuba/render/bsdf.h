@@ -515,12 +515,13 @@ public:
 
 	// for guided UPM
 	virtual Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius,
-		std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds) const{
+		Vector2* componentCDFs, Vector2* componentBounds,
+		int &topComponentCDFs, int &topComponentBounds) const{
 		SLog(EWarn, "Not implment bsdf->gatherAreaPdf");
 		return 0.f;
 	}
 	virtual Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample,
-		int ptrTree, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
+		int ptrTree, Vector2* componentCDFs, Vector2* componentBounds) const{
 		SLog(EWarn, "Not implment bsdf->sampleGatherArea");
 		return Vector(0.f);
 	}

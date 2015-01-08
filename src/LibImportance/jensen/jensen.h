@@ -171,11 +171,11 @@ namespace Importance {
             return res;
         }
 
-		Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds) const{
+		Float gatherAreaPdfGMM(Vector3 wo, Float radius, Vector2* componentCDFs, Vector2* componentBounds, int &topComponentCDFs, int &topComponentBounds, int baseCDFs, int baseBounds) const{
 			IMPORTANCE_ASSERT(false);
 			return 1.f;
 		}
-		Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
+		Vector3 sampleGatherAreaGMM(Vector2 samples, Vector3 wo, Float radius, int ptrNode, Vector2* componentCDFs, Vector2* componentBounds) const{
 			IMPORTANCE_ASSERT(false);
 			return Vector3(0.f);
 		}

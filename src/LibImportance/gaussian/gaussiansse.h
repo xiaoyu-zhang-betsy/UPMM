@@ -257,11 +257,14 @@ namespace Importance {
 			return x;
 		}
 
-		IMPORTANCE_INLINE Float gatherAreaPdf(int index, std::vector<Vector2> criticalPoints, std::vector<Vector2> &componentBounds) const{
+		IMPORTANCE_INLINE Float gatherAreaPdfLobe(int index, std::vector<Vector2> criticalPoints, Vector2* componentBounds, int &topComponentBounds) const{
 			// uniform sampling, add default bound and return
 			if (criticalPoints.size() == 0){				
-				componentBounds.push_back(Vector2(0.f, 1.f));
-				componentBounds.push_back(Vector2(0.f, 1.f));
+// 				componentBounds.push_back(Vector2(0.f, 1.f));
+// 				componentBounds.push_back(Vector2(0.f, 1.f));
+				componentBounds[topComponentBounds] = Vector2(0.f, 1.f);
+				componentBounds[topComponentBounds + 1] = Vector2(0.f, 1.f);
+				topComponentBounds += 2;
 				return 1.f;
 			}
 
@@ -336,12 +339,18 @@ namespace Importance {
 			Float cdfy1 = gaussianCDF(xmax.y);
 			Float prob = (cdfx1 - cdfx0) * (cdfy1 - cdfy0);			
 			if (prob <= 0.f){
-				componentBounds.push_back(Vector2(0.f, 1.f));
-				componentBounds.push_back(Vector2(0.f, 1.f));
+// 				componentBounds.push_back(Vector2(0.f, 1.f));
+// 				componentBounds.push_back(Vector2(0.f, 1.f));
+				componentBounds[topComponentBounds] = Vector2(0.f, 1.f);
+				componentBounds[topComponentBounds + 1] = Vector2(0.f, 1.f);
+				topComponentBounds += 2;
 				return 0.f;
 			}
-			componentBounds.push_back(Vector2(cdfx0, cdfx1));
-			componentBounds.push_back(Vector2(cdfy0, cdfy1));
+// 			componentBounds.push_back(Vector2(cdfx0, cdfx1));
+// 			componentBounds.push_back(Vector2(cdfy0, cdfy1));
+			componentBounds[topComponentBounds] = Vector2(cdfx0, cdfx1);
+			componentBounds[topComponentBounds + 1] = Vector2(cdfy0, cdfy1);
+			topComponentBounds += 2;
 			return prob;
 		}
 
@@ -430,15 +439,17 @@ namespace Importance {
 		}
 		
 
-		Float gatherAreaPdf(Vector3 wo, Float radius, 
-			std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, 
+		Float gatherAreaPdfGMM(Vector3 wo, Float radius, 
+			Vector2* componentCDFs, Vector2* componentBounds, int &topComponentCDFs, int &topComponentBounds,
 			int baseCDFs, int baseBounds) const{
 			// initiate sampling components
 			int numNode = storedLobes;
-			int pnode0 = componentCDFs.size();
-			componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node				
-			for (int i = 0; i < numNode; i++)
-				componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
+			int pnode0 = topComponentCDFs;
+// 			componentCDFs.push_back(Vector2(0.f/* toal pdf, later fill in */, *(float*)&numNode));		// level root node				
+// 			for (int i = 0; i < numNode; i++)
+// 				componentCDFs.push_back(Vector2(0.f/* pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));
+			componentCDFs[topComponentCDFs].y = *(float*)&numNode;
+			topComponentCDFs += numNode + 1;
 
 			// local bound			
 			std::vector<Vector2> criticalPoints;
@@ -515,9 +526,9 @@ namespace Importance {
 			Float totalProb = 0.f;
 			int actualGroup = 0, actualLobe = 0;
 			for (int i = 0; i < numNode; i++){
-				int ptrBound = -(componentBounds.size() + baseBounds);
+				int ptrBound = -(topComponentBounds + baseBounds);
 				componentCDFs[pnode0 + i + 1].y = *(float*)&ptrBound;
-				Float probLobe = lobes[actualGroup].gatherAreaPdf(actualLobe, criticalPoints, componentBounds);
+				Float probLobe = lobes[actualGroup].gatherAreaPdfLobe(actualLobe, criticalPoints, componentBounds, topComponentBounds);
 				Float probi = probLobe * lobes[actualGroup].weights[actualLobe];
 				componentCDFs[pnode0 + i + 1].x = probi;
 				totalProb += probi;
@@ -535,14 +546,11 @@ namespace Importance {
 			return totalProb;
 		}
 
-		Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, 
-			std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
+		Vector3 sampleGatherAreaGMM(Vector2 samples, Vector3 wo, Float radius, int ptrNode,
+			Vector2* componentCDFs, Vector2* componentBounds) const{
 			// sample lobes CDF
 			Vector2 rootnode = componentCDFs[ptrNode];
 			int numNode = *(int*)&rootnode.y;
-			if (numNode == 0){
-				float fuck = 1.f;
-			}
 			Float cdfi = 0.f;
 			int chosenLobe = -1;
 			Vector2 bound0, bound1;

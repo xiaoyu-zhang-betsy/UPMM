@@ -63,12 +63,12 @@ namespace Importance {
             }
         }   
 
-		virtual Float gatherAreaPdf(Vector3 wo, Float radius, std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, int baseCDFs, int baseBounds){
+		virtual Float gatherAreaPdfDistrib(Vector3 wo, Float radius, Vector2* componentCDFs, Vector2* componentBounds, int &topComponentCDFs, int &topComponentBounds, int baseCDFs, int baseBounds){
 			IMPORTANCE_ASSERT(false);
 			return 1.f;
 		}
 
-		virtual Vector3 sampleGatherArea(Vector2 samples, Vector3 wo, Float radius, int ptrNode, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds){
+		virtual Vector3 sampleGatherAreaDistrib(Vector2 samples, Vector3 wo, Float radius, int ptrNode, Vector2* componentCDFs, Vector2* componentBounds){
 			IMPORTANCE_ASSERT(false);
 			return Vector3(0.f);
 		}

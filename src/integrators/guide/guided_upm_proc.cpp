@@ -53,19 +53,18 @@ StatsCounter maxGMMShoots("Unbiased photon mapping", "Max number of a single GMM
 
 const bool EnableCovAwareMis = true;
 const bool MaxClampedConnectionPdf = false;
+const int MaxCDFNode = 3 * 64 /*lobes*/ + 3/*brdf*/ + 5/*GMMs*/ + 3/*root*/;	
 
-void copyBoundInfo(std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds, std::vector<Importance::Vector2> &componentCDFsImp, std::vector<Importance::Vector2> &componentBoundsImp){
-	componentCDFsImp.clear();
-	componentBoundsImp.clear();
-	for (int i = 0; i < componentCDFs.size(); i++){
+void copyBoundInfo(Vector2* componentCDFs, Vector2* componentBounds, int topComponentCDFs, int topComponentBounds, Importance::Vector2* &componentCDFsImp, Importance::Vector2* &componentBoundsImp){	
+	for (int i = 0; i < topComponentCDFs; i++){
 		Vector2 v = componentCDFs[i];
 		Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
-		componentCDFsImp.push_back(vi);
+		componentCDFsImp[i] = vi;
 	}
-	for (int i = 0; i < componentBounds.size(); i++){
+	for (int i = 0; i < topComponentBounds; i++){
 		Vector2 v = componentBounds[i];
 		Importance::Vector2 vi = Importance::Vector2(v.x, v.y);
-		componentBoundsImp.push_back(vi);
+		componentBoundsImp[i] = vi;
 	}
 }
 
@@ -629,7 +628,8 @@ public:
 		const float gatherRadius, const Point2i &offset,
 		const size_t cameraPathIndex, SplatList &list, bool useVC, bool useVM,
 		Float rejectionProb, size_t clampThreshold) {
-		ref<Timer> timer = new Timer();
+
+		wr->m_timeTraceKernel->start();
 		list.clear();
 
 		const Sensor *sensor = m_scene->getSensor();
@@ -681,7 +681,7 @@ public:
 			// VCM tech report Eq. 31 - 33		
 			MisState *sensorStates = (MisState *)alloca(m_pathSampler->m_sensorSubpath.vertexCount() * sizeof(MisState));
 			initializeMisHelper(m_pathSampler->m_sensorSubpath, sensorStates, m_scene,
-				gatherRadius, nLightPaths, useVC, useVM, ERadiance);
+				gatherRadius, nLightPaths, useVC, useVM, ERadiance);			
 
 			// massive vertex merging
 			if (useVM){
@@ -701,13 +701,14 @@ public:
 				// std::vector<Point> searchPosLight; // can't do shared shoot for inverse connection
 				std::vector<uint32_t> acceptCnt;
 				std::vector<size_t> shootCnt;
-				std::vector<Vector2> componentCDFs;
-				std::vector<Vector2> componentBounds;
-				std::vector<Importance::Vector2> componentCDFsImp;
-				std::vector<Importance::Vector2> componentBoundsImp;
+
+				Vector2* componentCDFs = new Vector2[MaxCDFNode];
+				Vector2* componentBounds = new Vector2[MaxCDFNode * 2];
+				Importance::Vector2* componentCDFsImp = new Importance::Vector2[MaxCDFNode];
+				Importance::Vector2* componentBoundsImp = new Importance::Vector2[MaxCDFNode * 2];
+				int topComponentCDFs = 0, topComponentBounds = 0;
 
 				int minT = 2; int minS = 2;
-
 				int maxT = (int)m_pathSampler->m_sensorSubpath.vertexCount() - 1;
 				if (m_pathSampler->m_maxDepth != -1)
 					maxT = std::min(maxT, m_pathSampler->m_maxDepth);
@@ -754,11 +755,12 @@ public:
 						}
 
 						// evaluate sampling domain pdf normalization
-						// camera direction----->						
+						// camera direction----->
+						Float invBrdfIntegralShare = 1.f;
+						/*
 						float confidence = 0.95f;
 						Float expectShoot = log(1.f - pow(confidence, 1.f / float(searchPosCamera.size()))) / log(0.75f);
-						size_t totalShootShared = 0;
-						Float invBrdfIntegralShare = 1.f;
+						size_t totalShootShared = 0;						
 						if (searchPosCamera.size() > expectShoot){
 							bool cameraDirConnection = true;
 							// prepare distribution sampler
@@ -770,8 +772,15 @@ public:
 							// compute bounded pdf
 							componentCDFs.clear();
 							componentBounds.clear();
-							ref<Timer> timerA = new Timer();							
-							Float brdfIntegral = gatherAreaPdf(vtPred, vt->getPosition(), gatherRadius * 2.f, vtPred2, componentCDFs, componentBounds, gsampler);
+							ref<Timer> timerA = new Timer();	
+							ref<Timer> timerDistrib = new Timer(false);
+							ref<Timer> timerGMM = new Timer(false);
+							ref<Timer> timerLobe = new Timer(false);
+							Float brdfIntegral = gatherAreaPdf(vtPred, vt->getPosition(), gatherRadius * 2.f, vtPred2, componentCDFs, componentBounds, gsampler,
+								timerDistrib, timerGMM, timerLobe);
+							wr->m_timeProbDistrib += timerDistrib->getSeconds();
+							wr->m_timeProbGMM += timerGMM->getSeconds();
+							wr->m_timeProbLobe += timerLobe->getSeconds();
 							wr->m_timeBoundProb += timerA->getSeconds();
 
 							// copy cdfs and bounds to fucking IMP vector types
@@ -813,6 +822,7 @@ public:
 							numInvpShoots += totalShootShared;
 							numSharedEvaluation++;
 						}
+						*/
 						
 						MisState sensorState = sensorStates[t - 1];
 						MisState sensorStatePred = sensorStates[t - 2];
@@ -884,8 +894,8 @@ public:
 							else{
 								// sample shoot to evaluate 1/p against individual area
 								Float brdfIntegral;
-								componentCDFs.clear();
-								componentBounds.clear();
+								topComponentCDFs = 0;
+								topComponentBounds = 0;
 								
 								// prepare distribution sampler
 								bool gsampler_valid = (cameraDirConnection && vtPred->isSurfaceInteraction() || !cameraDirConnection && vsPred->isSurfaceInteraction());
@@ -894,21 +904,27 @@ public:
 									m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability, gsampler_valid);
 
 								// compute bounded pdf
-								ref<Timer> timerA = new Timer();
+								wr->m_timeBoundProb->start();								
 								if (cameraDirConnection)
-									brdfIntegral = gatherAreaPdf(vtPred, vs->getPosition(), gatherRadius, vtPred2, componentCDFs, componentBounds, gsampler);
+									brdfIntegral = gatherAreaPdf(vtPred, vs->getPosition(), gatherRadius, vtPred2, &gsampler,
+										componentCDFs, componentBounds, topComponentCDFs, topComponentBounds,
+										componentCDFsImp, componentBoundsImp,
+										wr->m_timeBoundSurfaceProb, wr->m_timeProbDistrib, wr->m_timeProbGMM, wr->m_timeProbLobe);
 								else
-									brdfIntegral = gatherAreaPdf(vsPred, vt->getPosition(), gatherRadius, vsPred2, componentCDFs, componentBounds, gsampler);
-								wr->m_timeBoundProb += timerA->getSeconds();
+									brdfIntegral = gatherAreaPdf(vsPred, vt->getPosition(), gatherRadius, vsPred2, &gsampler, 
+										componentCDFs, componentBounds, topComponentCDFs, topComponentBounds,
+										componentCDFsImp, componentBoundsImp,
+										wr->m_timeBoundSurfaceProb, wr->m_timeProbDistrib, wr->m_timeProbGMM, wr->m_timeProbLobe);
+								wr->m_timeBoundProb->stop();
 
 								// copy cdfs and bounds to fucking IMP vector types
-								copyBoundInfo(componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp);								
+								copyBoundInfo(componentCDFs, componentBounds, topComponentCDFs, topComponentBounds, componentCDFsImp, componentBoundsImp);	
 
 								if (brdfIntegral == 0.f) continue;
 								Float invBrdfIntegral = 1.f / brdfIntegral;
 								size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
 								Float distSquared = gatherRadius * gatherRadius;
-								ref<Timer> timerB = new Timer();
+								wr->m_timeBoundSample->start();
 								while (totalShoot < clampThreshold){
 									totalShoot++;
 
@@ -916,13 +932,13 @@ public:
 									Float pointDistSquared;
 									if (cameraDirConnection){
 										if (!sampleShoot(vtPred, m_scene, m_pathSampler->m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, 
-											componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp, gsampler))
+											componentCDFs, componentBounds, topComponentCDFs, topComponentBounds, componentCDFsImp, componentBoundsImp, &gsampler))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
 									}
 									else{
 										if (!sampleShoot(vsPred, m_scene, m_pathSampler->m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, 
-											componentCDFs, componentBounds, componentCDFsImp, componentBoundsImp, gsampler))
+											componentCDFs, componentBounds, topComponentCDFs, topComponentBounds, componentCDFsImp, componentBoundsImp, &gsampler))
 											continue;
 										pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
 									}
@@ -934,7 +950,7 @@ public:
 										}
 									}
 								}
-								wr->m_timeBoundSample += timerB->getSeconds();
+								wr->m_timeBoundSample->stop();
 								avgInvpShoots.incrementBase();
 								avgInvpShoots += totalShoot;
 								maxInvpShoots.recordMaximum(totalShoot);
@@ -994,6 +1010,11 @@ public:
 				m_pathSampler->m_pool.release(vsPred3_);
 				m_pathSampler->m_pool.release(succVertex);
 				m_pathSampler->m_pool.release(succEdge);
+
+				delete(componentCDFs);
+				delete(componentBounds);
+				delete(componentCDFsImp);
+				delete(componentBoundsImp);
 			}
 
 			repeated = false;
@@ -1168,49 +1189,64 @@ public:
 		default:
 			Log(EError, "PathSampler::sample(): invalid technique!");
 		}
-		wr->m_timeTraceKernel += timer->getSeconds();
+		wr->m_timeTraceKernel->stop();
 	}
 
-	Float gatherAreaPdf(PathVertex* current, Point p, Float radius, PathVertex* pPred,
-		std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds, GuidedBRDF gsampler){
+	Float gatherAreaPdf(PathVertex* current, Point p, Float radius, PathVertex* pPred, GuidedBRDF* gsampler,
+		Vector2* componentCDFs, Vector2* componentBounds,  int &topComponentCDFs, int &topComponentBounds,
+		Importance::Vector2* componentCDFsImp, Importance::Vector2* componentBoundsImp,
+		Timer* timerSurface, Timer* timerDistrib, Timer* timerGMM, Timer* timerLobe){		
+
+		Float prob = 0.f;
 		switch (current->type) {
 		case PathVertex::ESensorSample: {
 			// Assume perspective camera
 			PositionSamplingRecord &pRec = current->getPositionSamplingRecord();
 			const Sensor *sensor = static_cast<const Sensor *>(pRec.object);
 			Vector4 bbox = sensor->evaluateSphereBounds(p, radius);
-			Float prob = (bbox.y - bbox.x) * (bbox.w - bbox.z);
-			componentCDFs.push_back(Vector2(prob, 0.f));
+			prob = (bbox.y - bbox.x) * (bbox.w - bbox.z);
+			//componentCDFs.push_back(Vector2(prob, 0.f));
+			componentCDFs[topComponentCDFs] = Vector2(prob, 0.f);
+			topComponentCDFs++;
 			Vector2 xmin = Vector2(bbox.x, bbox.z);
 			Vector2 xmax = Vector2(bbox.y, bbox.w);
-			componentBounds.push_back(xmin);
-			componentBounds.push_back(xmax);
-			return prob;
+// 			componentBounds.push_back(xmin);
+// 			componentBounds.push_back(xmax);
+			componentBounds[topComponentBounds] = xmin;
+			componentBounds[topComponentBounds + 1] = xmax;
+			topComponentBounds += 2;
+			break;
 		}
-		case PathVertex::ESurfaceInteraction: {
+		case PathVertex::ESurfaceInteraction: {			
 			const Intersection &its = current->getIntersection();
 			Vector wo = p - its.p;
 			Vector wi = normalize(pPred->getPosition() - its.p);
+			Float bsdfSamplingWeight = m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability;
+			if (gsampler->m_pureSpecularBSDF || gsampler->m_impDistrib == NULL || gsampler->m_pureSpecularBSDF)
+				bsdfSamplingWeight = 1.f;
 
 			Vector2 rootnode = Vector2();
-			componentCDFs.push_back(Vector2(0.f/* bsdf pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));		// level root node			
-			Float bsdfSamplingWeight = m_guidingSampler->getConfig().m_mitsuba.bsdfSamplingProbability;
-			if (gsampler.m_pureSpecularBSDF || gsampler.m_impDistrib == NULL || gsampler.m_pureSpecularBSDF)
-				bsdfSamplingWeight = 1.f;
+			//componentCDFs.push_back(Vector2(0.f/* bsdf pdf, later fill in */, 0.f/* pointer to GMM node, later fill in */));		// level root node			
+			topComponentCDFs++;			
 			
 			const BSDF *bsdf = its.getBSDF();
-			Float probBsdf = bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds);			
+			Float probBsdf = bsdf->gatherAreaPdf(its.toLocal(wi), its.toLocal(wo), radius, componentCDFs, componentBounds, topComponentCDFs, topComponentBounds);
 
 			Float probGMM = 1.f;
-			int ptrNode = componentCDFs.size();			
+			int ptrNode = topComponentCDFs;
+			timerSurface->start();
 			if (1.f - bsdfSamplingWeight > 0.f){
-				probGMM = gsampler.gatherAreaPdf(wo, radius, componentCDFs, componentBounds);
+				probGMM = gsampler->gatherAreaPdfGuide(wo, radius, 
+					componentCDFs, componentBounds, topComponentCDFs, topComponentBounds,
+					componentCDFsImp, componentBoundsImp,
+					timerDistrib, timerGMM, timerLobe);
 			}
+			timerSurface->stop();
 
-			Float prob = probBsdf * bsdfSamplingWeight + probGMM * (1.f - bsdfSamplingWeight);
+			prob = probBsdf * bsdfSamplingWeight + probGMM * (1.f - bsdfSamplingWeight);
 			componentCDFs[0].x = probBsdf * bsdfSamplingWeight / prob;
-			componentCDFs[0].y = *(float*)&ptrNode;
-			return prob;
+			componentCDFs[0].y = *(float*)&ptrNode;		
+			break;
 		}
 		case PathVertex::EEmitterSample: {
 			// assume no sampling from emitter, bounded CDF and bounded sampling left untouched
@@ -1224,15 +1260,16 @@ public:
 				"unsupported vertex type (%i)!", current->type);
 			return 0.f;
 		}
+		return prob;
 	}
 
 	bool sampleShoot(PathVertex* current, const Scene *scene, Sampler *sampler,
 		const PathVertex *pred, const PathEdge *predEdge,
 		PathEdge *succEdge, PathVertex *succ,
 		ETransportMode mode, Point gatherPosition, Float gatherRadius,
-		std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds, 
-		std::vector<Importance::Vector2> componentCDFsImp, std::vector<Importance::Vector2> componentBoundsImp,
-		GuidedBRDF gsampler) {
+		Vector2* componentCDFs, Vector2* componentBounds, int topComponentCDFs, int topComponentBounds,		
+		Importance::Vector2* componentCDFsImp, Importance::Vector2* componentBoundsImp,
+		GuidedBRDF* gsampler) {
 		Ray ray;
 
 		memset(succEdge, 0, sizeof(PathEdge));
@@ -1266,29 +1303,7 @@ public:
 			const Intersection &its = current->getIntersection();
 			const BSDF *bsdf = its.getBSDF();
 			Vector wi = normalize(pred->getPosition() - its.p);
-			Vector wo = gatherPosition - its.p;
-
-			// sample CDF tree
-			/*
-			Float rndsmp = sampler->next1D();
-			Vector2 rootnode = componentCDFs[0];
-			Float invTotalPdf = 1.f / rootnode.x;
-			int numNode = *(int*)&rootnode.y;
-			Float cdfi = 0.f;
-			int chosenLobe = -1;
-			int ptrNode = -1;
-			for (int i = 0; i < numNode; i++){
-				Vector2 nodei = componentCDFs[1 + i];
-				Float pdfi = nodei.x;
-				if (rndsmp <= (cdfi + pdfi) * invTotalPdf){
-					// choose this component
-					chosenLobe = i;
-					ptrNode = *(int*)&nodei.y;
-					//rndsmp = (rndsmp - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
-					break;
-				}
-				cdfi += pdfi;
-			}			*/			Vector2 rootnode = componentCDFs[0];			Float cdf0 = rootnode.x;			int chosenLobe = -1;			int ptrNode = -1;			Float rndsmp = sampler->next1D();			if (rndsmp < cdf0){				chosenLobe = 0;				ptrNode = 1;			}			else{				chosenLobe = 1;				ptrNode = *(int*)&rootnode.y;			}
+			Vector wo = gatherPosition - its.p;			Vector2 rootnode = componentCDFs[0];			Float cdf0 = rootnode.x;			int chosenLobe = -1;			int ptrNode = -1;			Float rndsmp = sampler->next1D();			if (rndsmp < cdf0){				chosenLobe = 0;				ptrNode = 1;			}			else{				chosenLobe = 1;				ptrNode = *(int*)&rootnode.y;			}
 			if (chosenLobe == 0){
 				/* Sample the BSDF */
 				Vector dir = bsdf->sampleGatherArea(its.toLocal(wi), its.toLocal(wo), gatherRadius, sampler->next2D(),
@@ -1299,7 +1314,7 @@ public:
 			else{				
 				Float pdf = 0.f;
 				// chance to sample outside bounds, enable rejection
-				Vector dir = gsampler.sampleGatherArea(wo, gatherRadius, ptrNode, componentCDFsImp, componentBoundsImp, sampler);
+				Vector dir = gsampler->sampleGatherAreaGuide(wo, gatherRadius, ptrNode, componentCDFsImp, componentBoundsImp, sampler);
 				if (dir == Vector(0.f)) return false;
 				wo = dir;
 			}
@@ -1891,8 +1906,14 @@ void GuidedUPMProcess::processResult(const WorkResult *workResult, bool cancelle
 	if (m_job->isInteractive() && m_refreshTimer->getMilliseconds() > m_refreshTimeout)
 		develop();
 
-	SLog(EInfo, "Trace kernel time: %f, gather bounding pdf: %f, bounded sampling: %f",
-		wr->m_timeTraceKernel, wr->m_timeBoundProb, wr->m_timeBoundSample);
+	SLog(EInfo, "Trace kernel time: %f, \n - gather bounding pdf: %f \n     - surface: %f \n       - distribution: %f \n       - GMM: %f \n       - Lobe: %f \n - bounded sampling: %f,",
+		wr->m_timeTraceKernel->getSeconds(),
+		wr->m_timeBoundProb->getSeconds(),
+		wr->m_timeBoundSurfaceProb->getSeconds(),
+		wr->m_timeProbDistrib->getSeconds(),
+		wr->m_timeProbGMM->getSeconds(),
+		wr->m_timeProbLobe->getSeconds(),
+		wr->m_timeBoundSample->getSeconds());
 }
 
 ParallelProcess::EStatus GuidedUPMProcess::generateWork(WorkUnit *unit, int worker) {

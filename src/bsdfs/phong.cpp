@@ -515,7 +515,8 @@ public:
 
 	// for guided UPM
 	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius,
-		std::vector<Vector2> &componentCDFs, std::vector<Vector2> &componentBounds) const{
+		Vector2* componentCDFs, Vector2* componentBounds,
+		int &topComponentCDFs, int &topComponentBounds) const{
 		if (Frame::cosTheta(wi) <= 0)
 			return 0.f;
 
@@ -525,20 +526,24 @@ public:
 
 		Float dis = wo.length();
 		if (dis < gatherRadius){
-			int numNode = 2;
-			componentCDFs.push_back(Vector2(1.f, *(float*)&numNode));		// level root node
-			int ptrBound = -componentBounds.size();										// specular node
-			componentCDFs.push_back(Vector2(m_specularSamplingWeight, *(float*)&ptrBound));
+			int ptrBound = -topComponentBounds;										// specular node
+			//componentCDFs.push_back(Vector2(m_specularSamplingWeight, *(float*)&ptrBound));
+			componentCDFs[topComponentCDFs] = Vector2(m_specularSamplingWeight, *(float*)&ptrBound);
 			Vector2 xmin = Vector2(bbox.x, bbox.z);
 			Vector2 xmax = Vector2(bbox.y, bbox.w);
-			componentBounds.push_back(xmin);
-			componentBounds.push_back(xmax);
-			ptrBound = -componentBounds.size();											// diffuse node
-			componentCDFs.push_back(Vector2(1.f - m_specularSamplingWeight, *(float*)&ptrBound));
+// 			componentBounds.push_back(xmin);
+// 			componentBounds.push_back(xmax);
+			componentBounds[topComponentBounds] = xmin;
+			componentBounds[topComponentBounds + 1] = xmax;
+// 			ptrBound = -componentBounds.size();											// diffuse node
+// 			componentCDFs.push_back(Vector2(1.f - m_specularSamplingWeight, *(float*)&ptrBound));
 			xmin = Vector2(bboxd.x, bboxd.z);
 			xmax = Vector2(bboxd.y, bboxd.w);
-			componentBounds.push_back(xmin);
-			componentBounds.push_back(xmax);
+// 			componentBounds.push_back(xmin);
+// 			componentBounds.push_back(xmax);
+			componentBounds[topComponentBounds + 2] = xmin;
+			componentBounds[topComponentBounds + 3] = xmax;
+			topComponentBounds += 4;
 			return 1.f;
 		}
 
@@ -607,25 +612,31 @@ public:
 		}
 		Float prob = probSpec * m_specularSamplingWeight + probDiff * (1.f - m_specularSamplingWeight);
 
-		int numNode = 2;
-		componentCDFs.push_back(Vector2(prob, *(float*)&numNode));		// level root node
-		int ptrBound = -componentBounds.size();										// specular node
-		componentCDFs.push_back(Vector2(probSpec * m_specularSamplingWeight, *(float*)&ptrBound));
+		//int numNode = 2;
+		//componentCDFs.push_back(Vector2(prob, *(float*)&numNode));		// level root node
+		int ptrBound = -topComponentBounds;										// specular node
+		//componentCDFs.push_back(Vector2(probSpec * m_specularSamplingWeight, *(float*)&ptrBound));
+		componentCDFs[topComponentCDFs] = Vector2(probSpec * m_specularSamplingWeight / prob, *(float*)&ptrBound);
 		Vector2 xmin = Vector2(bbox.x, bbox.z);
 		Vector2 xmax = Vector2(bbox.y, bbox.w);
-		componentBounds.push_back(xmin);
-		componentBounds.push_back(xmax);
-		ptrBound = -componentBounds.size();											// diffuse node
-		componentCDFs.push_back(Vector2(probDiff * (1.f - m_specularSamplingWeight), *(float*)&ptrBound));
+// 		componentBounds.push_back(xmin);
+// 		componentBounds.push_back(xmax);
+		componentBounds[topComponentBounds] = xmin;
+		componentBounds[topComponentBounds + 1] = xmax;
+// 		ptrBound = -componentBounds.size();											// diffuse node
+// 		componentCDFs.push_back(Vector2(probDiff * (1.f - m_specularSamplingWeight), *(float*)&ptrBound));
 		xmin = Vector2(bboxd.x, bboxd.z);
 		xmax = Vector2(bboxd.y, bboxd.w);
-		componentBounds.push_back(xmin);
-		componentBounds.push_back(xmax);
+		//componentBounds.push_back(xmin);
+		//componentBounds.push_back(xmax);
+		componentBounds[topComponentBounds + 2] = xmin;
+		componentBounds[topComponentBounds + 3] = xmax;
+		topComponentBounds += 4;
 
 		return prob;
 	}
 	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample,
-		int ptrTree, std::vector<Vector2> componentCDFs, std::vector<Vector2> componentBounds) const{
+		int ptrTree, Vector2* componentCDFs, Vector2* componentBounds) const{
 		if (Frame::cosTheta(wi) <= 0)
 			return Vector(0.f);
 
@@ -635,26 +646,19 @@ public:
 
 		// sample CDF tree
 		Vector2 rootnode = componentCDFs[ptrTree];
-		Float invTotalPdf = 1.f / rootnode.x;
-		int numNode = *(int*)&rootnode.y;
-		Float cdfi = 0.f;
-		int chosenLobe = -1;
-		Vector4 bbox;
-		for (int i = 0; i < numNode; i++){
-			Vector2 nodei = componentCDFs[ptrTree + 1 + i];
-			Float pdfi = nodei.x;
-			if (sample.x <= (cdfi + pdfi) * invTotalPdf){
-				// choose this component
-				chosenLobe = i;
-				int ptrBound = -*(int*)&nodei.y;
-				Vector2 xmin = componentBounds[ptrBound];
-				Vector2 xmax = componentBounds[ptrBound + 1];
-				bbox = Vector4(xmin.x, xmax.x, xmin.y, xmax.y);
-				sample.x = (sample.x - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
-				break;
-			}
-			cdfi += pdfi;
+		Float cdfSpec = rootnode.x;
+		int ptrBound = -*(int*)&rootnode.y;
+		int chosenLobe = -1;		
+		if (sample.x < cdfSpec){
+			chosenLobe = 0;
 		}
+		else{
+			chosenLobe = 1;
+			ptrBound += 2;
+		}
+		Vector2 xmin = componentBounds[ptrBound];
+		Vector2 xmax = componentBounds[ptrBound + 1];
+		Vector4 bbox = Vector4(xmin.x, xmax.x, xmin.y, xmax.y);
 
 		Vector dir;
 		if (chosenLobe == 0){
