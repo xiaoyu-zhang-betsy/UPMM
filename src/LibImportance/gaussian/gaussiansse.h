@@ -257,9 +257,9 @@ namespace Importance {
 			return x;
 		}
 
-		IMPORTANCE_INLINE Float gatherAreaPdfLobe(int index, Vector2* criticalPoints, int numCriticalPoints, Vector2* componentBounds, int &topComponentBounds) const{
+		IMPORTANCE_INLINE Float gatherAreaPdfLobe(int index, std::vector<Vector2> criticalPoints, Vector2* componentBounds, int &topComponentBounds) const{
 			// uniform sampling, add default bound and return
-			if (numCriticalPoints == 0){
+			if (criticalPoints.size() == 0){
 				componentBounds[topComponentBounds] = Vector2(0.f, 1.f);
 				componentBounds[topComponentBounds + 1] = Vector2(0.f, 1.f);
 				topComponentBounds += 2;
@@ -269,7 +269,7 @@ namespace Importance {
 			// project corner points to inside lobe coords
 			Vector2 xmax = Vector2(-10000.f, -10000.f);
 			Vector2 xmin = Vector2(10000.f, 10000.f);
-			for (int i = 0; i < numCriticalPoints; i++){
+			for (int i = 0; i < criticalPoints.size(); i++){
 				Vector2 dir = criticalPoints[i];
 				Vector2 x = toLobe(index, dir);
 				xmin.x = std::min(xmin.x, x.x);
@@ -437,8 +437,8 @@ namespace Importance {
 			topComponentCDFs += numNode + 1;
 
 			// local bound
-			int numCriticalPoints = 0;
-			Vector2 criticalPoints[6];
+			std::vector<Vector2> criticalPoints;
+			//criticalPoints.reserve(6);
 			Vector3 woLocal = localFrame.toLocal(wo);
 			Float dist = woLocal.length();
 			if (dist > radius){
@@ -465,18 +465,24 @@ namespace Importance {
 					Ff::sincos(theta0, sintheta0, costheta0);
 					Ff::sincos(theta1, sintheta1, costheta1);
 					Ff::sincos(phi0, sinphi0, cosphi0);
-					Ff::sincos(phi1, sinphi1, cosphi1);					
-
-					criticalPoints[0] = fromPolarToSquareThetaPhi(costheta0, sintheta0, cosphi0, sinphi0);					criticalPoints[1] = fromPolarToSquareThetaPhi(costheta0, sintheta0, cosphi1, sinphi1);					criticalPoints[2] = fromPolarToSquareThetaPhi(costheta1, sintheta1, cosphi0, sinphi0);					criticalPoints[3] = fromPolarToSquareThetaPhi(costheta1, sintheta1, cosphi1, sinphi1);					numCriticalPoints = 4; 
+					Ff::sincos(phi1, sinphi1, cosphi1);										Vector2 d0 = fromPolarToSquareThetaPhi(costheta0, sintheta0, cosphi0, sinphi0);
+					Vector2 d1 = fromPolarToSquareThetaPhi(costheta0, sintheta0, cosphi1, sinphi1);
+					Vector2 d2 = fromPolarToSquareThetaPhi(costheta1, sintheta1, cosphi0, sinphi0);
+					Vector2 d3 = fromPolarToSquareThetaPhi(costheta1, sintheta1, cosphi1, sinphi1);
+					criticalPoints.push_back(d0);
+					criticalPoints.push_back(d1);
+					criticalPoints.push_back(d2);
+					criticalPoints.push_back(d3); 
 					for (int i = 0; i < 8; i++){
 						// cover the mapping changing point at 1/4 PI, add corner points
 						Float deltaPhi = (-1.75f + 0.5f * (Float)i) * IMP_PI;
 						if (deltaPhi > phi0 && deltaPhi < phi1){
 							Float sinphi, cosphi;
 							Ff::sincos(deltaPhi, sinphi, cosphi);
-							criticalPoints[4] = fromPolarToSquareThetaPhi(costheta0, sintheta0, cosphi, sinphi);
-							criticalPoints[5] = fromPolarToSquareThetaPhi(costheta1, sintheta1, cosphi, sinphi);
-							numCriticalPoints = 6;
+							Vector2 d4 = fromPolarToSquareThetaPhi(costheta0, sintheta0, cosphi, sinphi);
+							Vector2 d5 = fromPolarToSquareThetaPhi(costheta1, sintheta1, cosphi, sinphi);
+							criticalPoints.push_back(d4);
+							criticalPoints.push_back(d5);
 							break;
 						}
 						if (deltaPhi > phi1) break;
@@ -486,11 +492,14 @@ namespace Importance {
 					// covering north pole, theta bounding
 					Float costheta1, sintheta1;
 					Ff::sincos(theta1, sintheta1, costheta1);
-					criticalPoints[0] = fromPolarToSquareTheta(costheta1, sintheta1, 0.25f * IMP_PI);
-					criticalPoints[1] = fromPolarToSquareTheta(costheta1, sintheta1, 0.75f * IMP_PI);
-					criticalPoints[2] = fromPolarToSquareTheta(costheta1, sintheta1, 1.25f * IMP_PI);
-					criticalPoints[3] = fromPolarToSquareTheta(costheta1, sintheta1, 1.75f * IMP_PI);
-					numCriticalPoints = 4;
+					Vector2 d0 = fromPolarToSquareTheta(costheta1, sintheta1, 0.25f * IMP_PI);
+					Vector2 d1 = fromPolarToSquareTheta(costheta1, sintheta1, 0.75f * IMP_PI);
+					Vector2 d2 = fromPolarToSquareTheta(costheta1, sintheta1, 1.25f * IMP_PI);
+					Vector2 d3 = fromPolarToSquareTheta(costheta1, sintheta1, 1.75f * IMP_PI);
+					criticalPoints.push_back(d0);
+					criticalPoints.push_back(d1);
+					criticalPoints.push_back(d2);
+					criticalPoints.push_back(d3);
 				}
 			}
 			else{
@@ -503,7 +512,7 @@ namespace Importance {
 			for (int i = 0; i < numNode; i++){
 				int ptrBound = -(topComponentBounds + baseBounds);
 				componentCDFs[pnode0 + i + 1].y = *(float*)&ptrBound;
-				Float probLobe = lobes[actualGroup].gatherAreaPdfLobe(actualLobe, criticalPoints, numCriticalPoints, componentBounds, topComponentBounds);
+				Float probLobe = lobes[actualGroup].gatherAreaPdfLobe(actualLobe, criticalPoints, componentBounds, topComponentBounds);
 				Float probi = probLobe * lobes[actualGroup].weights[actualLobe];
 				componentCDFs[pnode0 + i + 1].x = probi;
 				totalProb += probi;
