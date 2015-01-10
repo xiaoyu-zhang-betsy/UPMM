@@ -306,7 +306,7 @@ public:
 	Shader *createShader(Renderer *renderer) const;
 
 	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, 
-		std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds) const{
+		std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds) const{
 		if (Frame::cosTheta(wi) <= 0)
 			return 0.f;		
 
@@ -316,13 +316,8 @@ public:
 		
 		Float dis = wo.length();
 		if (dis < gatherRadius){
-			int numNode = 2;			
-			componentCDFs.push_back(Vector2(1.f, *(float*)&numNode));		// level root node
-			int ptrBound = -componentBounds.size();										// specular node
-			componentCDFs.push_back(Vector2(m_specularSamplingWeight, *(float*)&ptrBound));
-			componentBounds.push_back(bbox);
-			ptrBound = -componentBounds.size();											// diffuse node
-			componentCDFs.push_back(Vector2(1.f - m_specularSamplingWeight, *(float*)&ptrBound));
+			componentProbs.push_back(m_specularSamplingWeight);			
+			componentBounds.push_back(bbox);			
 			componentBounds.push_back(bboxd);
 			return 1.f;
 		}
@@ -391,20 +386,15 @@ public:
 		}
 		Float prob = probSpec * m_specularSamplingWeight + probDiff * (1.f - m_specularSamplingWeight);
 
-		int numNode = 2;
-		componentCDFs.push_back(Vector2(prob, *(float*)&numNode));		// level root node
-		int ptrBound = -componentBounds.size();										// specular node
-		componentCDFs.push_back(Vector2(probSpec * m_specularSamplingWeight, *(float*)&ptrBound));
+		componentProbs.push_back(probSpec * m_specularSamplingWeight / prob);
 		componentBounds.push_back(bbox);
-		ptrBound = -componentBounds.size();											// diffuse node
-		componentCDFs.push_back(Vector2(probDiff * (1.f - m_specularSamplingWeight), *(float*)&ptrBound));
 		componentBounds.push_back(bboxd);
 		
 		return prob;
 	}
 	
 	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, 
-		int ptrTree, std::vector<Vector2> componentCDFs, std::vector<Vector4> componentBounds) const{
+		std::vector<Float> componentProbs, std::vector<Vector4> componentBounds) const{
 		if (Frame::cosTheta(wi) <= 0)
 			return Vector(0.f);
 
@@ -413,28 +403,22 @@ public:
 		phiShootRatio.incrementBase();
 
 		// sample CDF tree
-		Vector2 rootnode = componentCDFs[ptrTree];
-		Float invTotalPdf = 1.f / rootnode.x;
-		int numNode = *(int*)&rootnode.y;
-		Float cdfi = 0.f;
-		int chosenLobe = -1;
+		bool sampleSpecular = false;
+		Float tSpec = componentProbs[0];
 		Vector4 bbox;
-		for (int i = 0; i < numNode; i++){
-			Vector2 nodei = componentCDFs[ptrTree + 1 + i];
-			Float pdfi = nodei.x;			
-			if (sample.x <= (cdfi + pdfi) * invTotalPdf){
-				// choose this component
-				chosenLobe = i;
-				int ptrBound = -*(int*)&nodei.y;
-				bbox = componentBounds[ptrBound];
-				sample.x = (sample.x - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
-				break;
-			}
-			cdfi += pdfi;
+		if (sample.x < tSpec){
+			sampleSpecular = true;
+			sample.x = sample.x / tSpec;
+			bbox = componentBounds[0];
 		}
+		else{
+			sample.x = (sample.x - tSpec) / (1.f - tSpec);
+			bbox = componentBounds[1];
+		}
+		
 
 		Vector dir;
-		if (chosenLobe == 0){
+		if (sampleSpecular){
 			/* Update statistics */			
 			if (bbox.x == 1.f && bbox.y == 0.f && bbox.z == 0.f && bbox.w == 1.f)
 				++uniformShootRatio;

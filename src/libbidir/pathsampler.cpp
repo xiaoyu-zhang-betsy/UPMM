@@ -2254,13 +2254,13 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							contrib *= invp;
 						}
 						else{
-							std::vector<Vector2> componentCDFs;
+							std::vector<Float> componentProbs;
 							std::vector<Vector4> componentBounds;
 							Float brdfIntegral;
 							if (cameraDirConnection)
-								brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentCDFs, componentBounds);
+								brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentProbs, componentBounds);
 							else
-								brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentCDFs, componentBounds);
+								brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentProbs, componentBounds);
 
 							if (brdfIntegral == 0.f) continue;
 							invBrdfIntegral = 1.f / brdfIntegral;
@@ -2272,12 +2272,12 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 								// restricted sampling evaluation shoots
 								Float pointDistSquared;
 								if (cameraDirConnection){
-									if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentCDFs, componentBounds))
+									if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentProbs, componentBounds))
 										continue;
 									pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
 								}
 								else{
-									if (!vsPred->sampleShoot(m_scene, m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentCDFs, componentBounds))
+									if (!vsPred->sampleShoot(m_scene, m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentProbs, componentBounds))
 										continue;
 									pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
 								}
@@ -3071,9 +3071,9 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 					size_t totalShootShared = 0;
 					Float invBrdfIntegralShared = 1.f;
 					if (searchPos.size() > expectShoot && false){
-						std::vector<Vector2> componentCDFs;
+						std::vector<Float> componentProbs;
 						std::vector<Vector4> componentBounds;
-						Float brdfIntegral = vtPred->gatherAreaPdf(vt->getPosition(), gatherRadius * 2.f, vtPred2, componentCDFs, componentBounds);
+						Float brdfIntegral = vtPred->gatherAreaPdf(vt->getPosition(), gatherRadius * 2.f, vtPred2, componentProbs, componentBounds);
 						if (brdfIntegral > 0.f){
 							shareShoot = true;
 							invBrdfIntegralShared = 1.f / brdfIntegral;
@@ -3083,7 +3083,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 								totalShootShared++;
 
 								// restricted sampling evaluation shoots
-								if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f, componentCDFs, componentBounds))
+								if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vt->getPosition(), gatherRadius * 2.f, componentProbs, componentBounds))
 									continue;
 
 								Point pshoot = succVertex->getPosition();
@@ -3170,13 +3170,13 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 						if (acceptCnt[k] > 0){
 							invp = (Float)(shootCnt[k]) / (Float)(acceptCnt[k])* invBrdfIntegralShared;
 						}else{
-							std::vector<Vector2> componentCDFs;
+							std::vector<Float> componentProbs;
 							std::vector<Vector4> componentBounds;
 							Float brdfIntegral;
 							if (cameraDirConnection)
-								brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentCDFs, componentBounds);
+								brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentProbs, componentBounds);
 							else
-								brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentCDFs, componentBounds);
+								brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentProbs, componentBounds);
 
 							if (brdfIntegral == 0.f) continue;
 							Float invBrdfIntegral = 1.f / brdfIntegral;
@@ -3188,12 +3188,12 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 								// restricted sampling evaluation shoots
 								Float pointDistSquared;
 								if (cameraDirConnection){
-									if (!vtPred->sampleShoot(m_scene, m_lightPathSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentCDFs, componentBounds))
+									if (!vtPred->sampleShoot(m_scene, m_lightPathSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentProbs, componentBounds))
 										continue;
 									pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
 								}
 								else{
-									if (!vsPred->sampleShoot(m_scene, m_lightPathSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentCDFs, componentBounds))
+									if (!vsPred->sampleShoot(m_scene, m_lightPathSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentProbs, componentBounds))
 										continue;
 									pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
 								}

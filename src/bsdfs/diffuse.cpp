@@ -183,17 +183,13 @@ public:
 
 	Shader *createShader(Renderer *renderer) const;
 
-	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius, 
-		std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds) const{
+	Float gatherAreaPdf(Vector wi, Vector wo, Float gatherRadius,
+		std::vector<Float > &componentProbs, std::vector<Vector4> &componentBounds) const{
 		if (Frame::cosTheta(wi) <= 0) return 0.f;
 		Vector4 bbox = Vector4(0.f, 0.5f * M_PI, 0.f, 2.f * M_PI);		
 		Vector dir = wo;
 		Float dis = dir.length();
 		if (dis < gatherRadius){
-			int numNode = 1;
-			int ptrBound = -componentBounds.size();
-			componentCDFs.push_back(Vector2(1.f, *(float*)&numNode));		// level root node
-			componentCDFs.push_back(Vector2(1.f, *(float*)&ptrBound));		// single CDF node
 			componentBounds.push_back(bbox);
 			return 1.f;
 		}
@@ -221,42 +217,18 @@ public:
 			bbox.x = theta0; bbox.y = theta1;
 			bbox.z = phi - dPhi; bbox.w = phi + dPhi;
 		}
-		int numNode = 1;
-		int ptrBound = -componentBounds.size();
-		componentCDFs.push_back(Vector2(prob, *(float*)&numNode));		// level root node
-		componentCDFs.push_back(Vector2(prob, *(float*)&ptrBound));			// single CDF node
 		componentBounds.push_back(bbox);
 		return prob;		
 	}
 	
 	Vector sampleGatherArea(Vector wi, Vector wo, Float gatherRadius, Point2 sample, 
-		int ptrTree, std::vector<Vector2> componentCDFs, std::vector<Vector4> componentBounds) const{
+		std::vector<Float> componentProbs, std::vector<Vector4> componentBounds) const{
 		if (Frame::cosTheta(wi) <= 0) return Vector(0.f);		
 		uniformShootRatio.incrementBase();
 		thetaShootRatio.incrementBase();
 		phiShootRatio.incrementBase();
 
-		// sample CDF tree
-		Vector2 rootnode = componentCDFs[ptrTree];
-		Float invTotalPdf = 1.f / rootnode.x;
-		int numNode = *(int*)&rootnode.y;
-		Float cdfi = 0.f;
-		int chosenLobe = -1;
-		Vector4 bbox;
-		for (int i = 0; i < numNode; i++){
-			Vector2 nodei = componentCDFs[ptrTree + 1 + i];
-			Float pdfi = nodei.x;
-			if (sample.x <= (cdfi + pdfi) * invTotalPdf){
-				// choose this component
-				chosenLobe = i;
-				int ptrBound = -*(int*)&nodei.y;
-				bbox = componentBounds[ptrBound];
-				sample.x = (sample.x - cdfi * invTotalPdf) / (pdfi * invTotalPdf);
-				break;
-			}
-			cdfi += pdfi;
-		}
-
+		Vector4 bbox = componentBounds[0];
 		Vector dir;
 		if (bbox.x == 0.f && bbox.y == 0.5f * M_PI && bbox.z == 0.f && bbox.w == 2.f * M_PI){
 			// uniform sampling
@@ -320,14 +292,10 @@ public:
 		if (dis < gatherRadius){
 			int numNode = 1;
 			int ptrBound = -topComponentBounds;
-// 			componentCDFs.push_back(Vector2(1.f, *(float*)&numNode));		// level root node
-// 			componentCDFs.push_back(Vector2(1.f, *(float*)&ptrBound));		// single CDF node
 			componentCDFs[topComponentCDFs] = Vector2(1.f, *(float*)&ptrBound);
 			topComponentCDFs++;
 			Vector2 xmin = Vector2(bbox.x, bbox.z);
 			Vector2 xmax = Vector2(bbox.y, bbox.w);
-// 			componentBounds.push_back(xmin);
-// 			componentBounds.push_back(xmax);
 			componentBounds[topComponentBounds] = xmin;
 			componentBounds[topComponentBounds + 1] = xmax;
 			topComponentBounds += 2;
@@ -359,14 +327,10 @@ public:
 		}
 		int numNode = 1;
 		int ptrBound = -topComponentBounds;
-// 		componentCDFs.push_back(Vector2(prob, *(float*)&numNode));		// level root node
-// 		componentCDFs.push_back(Vector2(prob, *(float*)&ptrBound));			// single CDF node
 		componentCDFs[topComponentCDFs] = Vector2(prob, *(float*)&ptrBound);
 		topComponentCDFs++;
 		Vector2 xmin = Vector2(bbox.x, bbox.z);
 		Vector2 xmax = Vector2(bbox.y, bbox.w);
-// 		componentBounds.push_back(xmin);
-// 		componentBounds.push_back(xmax);
 		componentBounds[topComponentBounds] = xmin;
 		componentBounds[topComponentBounds + 1] = xmax;
 		topComponentBounds += 2;

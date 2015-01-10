@@ -912,11 +912,11 @@ struct MTS_EXPORT_BIDIR PathVertex {
 	}
 
 	/// For UPM
-	Float gatherAreaPdf(Point p, Float radius, PathVertex* pPred, std::vector<Vector2> &componentCDFs, std::vector<Vector4> &componentBounds);
+	Float gatherAreaPdf(Point p, Float radius, PathVertex* pPred, std::vector<Float> &componentProbs, std::vector<Vector4> &componentBounds);
 	bool sampleShoot(const Scene *scene, Sampler *sampler,
 		const PathVertex *pred, const PathEdge *predEdge, PathEdge *succEdge, PathVertex *succ,
 		ETransportMode mode, Point gatherPosition, Float gatherRadius,
-		std::vector<Vector2> componentCDFs, std::vector<Vector4> componentBounds);
+		std::vector<Float> componentProbs, std::vector<Vector4> componentBounds);
 
 	//! @}
 	/* ==================================================================== */
