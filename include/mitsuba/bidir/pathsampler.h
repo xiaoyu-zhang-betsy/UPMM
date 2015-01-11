@@ -27,8 +27,8 @@
 
 MTS_NAMESPACE_BEGIN
 
-#define UPM_DEBUG 1
-#define UPM_DEBUG_HARD
+// #define UPM_DEBUG 1
+// #define UPM_DEBUG_HARD
 
 /*
 *	Misc for VCM

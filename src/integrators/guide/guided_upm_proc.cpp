@@ -593,7 +593,7 @@ public:
 						&vt, &vtPred, NULL, NULL,
 						gatherRadius, m_lightPathNum, useVC, useVM);
 
-#if GUPM_DEBUG == 1
+#if UPM_DEBUG == 1
 					wr->putDebugSample(s, 1, samplePos, value * miWeight);
 					wr->putDebugSampleM(s, 1, samplePos, value);
 #endif
@@ -967,7 +967,7 @@ public:
 								vt, vtPred, vtPred2, vtPred3,
 								cameraDirConnection, gatherRadius, m_pathSampler->m_lightPathNum, useVC, useVM);
 
-#if GUPM_DEBUG == 1
+#if UPM_DEBUG == 1
 							if (cameraDirConnection){
 								wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
 								wr->putDebugSampleM(s, t - 1, samplePos, contrib);
@@ -980,7 +980,7 @@ public:
 
 							contrib *= miWeight;
 
-#ifdef GUPM_DEBUG_HARD
+#ifdef UPM_DEBUG_HARD
 							if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
 								Log(EWarn, "Invalid sample value[UPM]: %f %f %f, invp = %f, miWeight = %f",
 									contrib[0], contrib[1], contrib[2], invp, miWeight);
@@ -1143,7 +1143,7 @@ public:
 							vt, vtPred, vtPred2, vtPred3,
 							gatherRadius, m_pathSampler->m_lightPathNum, useVC, useVM);
 
-#if GUPM_DEBUG == 1
+#if UPM_DEBUG == 1
 						wr->putDebugSample(s, t, samplePos, value * miWeight);
 						wr->putDebugSampleM(s, t, samplePos, value);
 #endif			
@@ -1153,7 +1153,7 @@ public:
 
 
 
-#ifdef GUPM_DEBUG_HARD
+#ifdef UPM_DEBUG_HARD
 						if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f){
 							Log(EWarn, "Invalid sample value[VC]: %f %f %f", value[0], value[1], value[2]);
 							continue;
