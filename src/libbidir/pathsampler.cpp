@@ -2318,29 +2318,6 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 #endif
 
 						contrib *= miWeight;						
-
-// 						if ((samplePos.x >= 157 && samplePos.x < 158 && samplePos.y >= 373 && samplePos.y < 374)	&& 
-// 							(s == 3 && t == 2 || s == 2 && t == 3) && contrib[1] > 0.3f){
-// 							if (!repeated) k--;
-// 							repeated = true;
-// 
-// 							float fucka = 1.f;
-// 							Point vsp0 = vs->getPosition();
-// 							Point vsp1 = vsPred->getPosition();
-// 							Point vtp0 = vt->getPosition();
-// 							Point vtp1 = vtPred->getPosition();
-// 
-// 							Vector vsn0 = vs->getGeometricNormal();
-// 							Vector vsn1 = vsPred->getGeometricNormal();
-// 							Vector vtn0 = vt->getGeometricNormal();
-// 							Vector vtn1 = vtPred->getGeometricNormal();
-// 
-// 							Float miWeight = miWeightVM(m_scene, s, t,
-// 								emitterState, sensorState, emitterStatePred, sensorStatePred,
-// 								vsPred3, vsPred2, vsPred, vs,
-// 								vt, vtPred, vtPred2, vtPred3,
-// 								cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
-// 						}
 						
 #ifdef UPM_DEBUG_HARD
 						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
@@ -2917,16 +2894,10 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 						m_sensorSubpath, s, t, m_sampleDirect, m_lightImage);
 					
 					Float miWeight = 0.f;
-					MisState sensorStatePred, emitterStatePred;
-					if (t >= 2) sensorStatePred = sensorStates[t - 2];
-					if (s >= 2) emitterStatePred = emitterStates[s - 2];
-					if (!sampleDirect){						
-// 						miWeight = miWeightVC(m_scene, vsPred, vs, vt, vtPred,
-// 							s, t,
-// 							emitterState[EVCM], emitterState[EVC],
-// 							sensorState[EVCM], sensorState[EVC],
-// 							misVmWeightFactor, true);
-						miWeight = miWeightVC(m_scene, s, t, emitterStatePred, sensorStatePred,
+					MisState sensorState = sensorStates[t - 1];
+					MisState emitterState = emitterStates[s - 1];
+					if (!sampleDirect){
+						miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
 							vsPred3, vsPred2, vsPred, vs,
 							vt, vtPred, vtPred2, vtPred3,
 							gatherRadius, m_lightPathNum, useVC, useVM);
@@ -2935,7 +2906,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 							PathVertex
 								*vtPredTemp = m_sensorSubpath.vertexOrNull(t - 1),
 								*vtTemp = m_sensorSubpath.vertex(t);
-							miWeight = miWeightVC(m_scene, s, t, emitterStatePred, sensorStatePred,
+							miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
 								vsPred3, vsPred2, vsPred, vs,
 								vtTemp, vtPredTemp, NULL, NULL,
 								gatherRadius, m_lightPathNum, useVC, useVM);
@@ -2944,7 +2915,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 							PathVertex
 								*vsPredTemp = m_emitterSubpath.vertexOrNull(s - 1),
 								*vsTemp = m_emitterSubpath.vertex(s);							
-							miWeight = miWeightVC(m_scene, s, t, emitterStatePred, sensorStatePred,
+							miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
 								NULL, NULL, vsPredTemp, vsTemp,
 								vt, vtPred, vtPred2, vtPred3,
 								gatherRadius, m_lightPathNum, useVC, useVM);
@@ -2990,7 +2961,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 		std::vector<Point> searchPos;
 		std::vector<uint32_t> acceptCnt;
 		std::vector<size_t> shootCnt;
-		size_t clampThreshold = 1000000; // TODO: make it a parameter
+		size_t clampThreshold = 100; // TODO: make it a parameter
 		int shareShootThreshold = 128;
 
 		// massive vertex merging - CAMERA!
@@ -3103,6 +3074,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 						}
 					}					
 
+					MisState sensorState = sensorStates[t - 1];
 					MisState sensorStatePred = sensorStates[t - 2];
 					for (int k = 0; k < searchResults.size(); k++){
 						LightPathNode node = m_lightPathTree[searchResults[k]];
@@ -3114,6 +3086,7 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 						size_t vertexIndex = node.data.vertexIndex;
 						LightVertex vi = m_lightVertices[vertexIndex];
 						LightVertex viPred = m_lightVertices[vertexIndex - 1];
+						MisState emitterState = vi.emitterState;
 						MisState emitterStatePred = viPred.emitterState;
 
 						vs = vs_; vsPred = vsPred_; vsPred2 = vsPred2_; vsPred3 = vsPred3_;
@@ -3221,8 +3194,12 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 // 							vsPred3, vsPred2, vsPred, vs,
 // 							vt, vtPred, vtPred2, vtPred3,
 // 							cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
+						Float miWeight = miWeightVM(m_scene, s, t,
+							emitterState, sensorState, emitterStatePred, sensorStatePred,
+							vsPred3, vsPred2, vsPred, vs,
+							vt, vtPred, vtPred2, vtPred3,
+							cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
 
-						Float miWeight = -1.f;
 						contrib *= miWeight;
 
 						if (contrib[0] < 0.f || _isnan(contrib[0]) || !std::isfinite(contrib[0]) ||
