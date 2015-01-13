@@ -49,6 +49,8 @@ struct VCMConfiguration {
 	bool useVM;
 	bool useVC;
 
+	bool enableSeparateDump;
+
 	inline VCMConfiguration() { }
 
 	inline VCMConfiguration(Stream *stream) {
@@ -66,6 +68,7 @@ struct VCMConfiguration {
 		timeout = stream->readSize();
 		useVC = stream->readBool();
 		useVM = stream->readBool();
+		enableSeparateDump = stream->readBool();
 	}
 
 	inline void serialize(Stream *stream) const {
@@ -83,6 +86,7 @@ struct VCMConfiguration {
 		stream->writeSize(timeout);
 		stream->writeBool(useVC);
 		stream->writeBool(useVM);
+		stream->writeBool(enableSeparateDump);
 	}
 
 	void dump() const {
@@ -101,6 +105,7 @@ struct VCMConfiguration {
 		SLog(EDebug, "   Scale of initial radius for gathering:	%f", radiusScale);
 		SLog(EDebug, "   Total number of work units  : %i", workUnits);
 		SLog(EDebug, "   Timeout                     : " SIZE_T_FMT, timeout);
+		SLog(EDebug, "   Enable separate dump   : %s", enableSeparateDump ? "yes" : "no");
 	}
 };
 

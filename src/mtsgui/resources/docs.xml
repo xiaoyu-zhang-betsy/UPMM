@@ -581,6 +581,9 @@
 		<param name="useVM" readableName="Use vertex merging" type="boolean" default="true">
 			Use vertex merging
 		</param>
+		<param name="enableSeparateDump" readableName="Enable separate dump" type="boolean" default="false">
+			For unbiasness check
+		</param>
 	</plugin>
 	
 	<plugin type="integrator" name="upm" readableName="Unbiased Photon Mapping" show="true"
@@ -675,6 +678,9 @@
 		</param>
 		<param name="clampThreshold" readableName="Maximum 1/p sample number" type="integer" default="100" importance="1">
 			Clamp threshold for 1/p evaluation
+		</param>
+		<param name="enableSeparateDump" readableName="Enable separate dump" type="boolean" default="false">
+			For unbiasness check
 		</param>
 	</plugin>
 

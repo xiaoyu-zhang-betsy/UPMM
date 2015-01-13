@@ -87,11 +87,16 @@ public:
 		splats->clear();
 
 		// [UC] for unbiased check
-// 		ImageBlock *batres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
-// 		batres->clear();
-// 		int numSampleBatch = 32;
-// 		float invSampleBatch = 1.f / (float)numSampleBatch;
-// 		size_t numBatch = 0;
+		Float sepInterval = 60.f;
+		size_t numSepSamples = 0;		
+		size_t numBatch = 0;
+		ref<Timer> intervalTimer = new Timer(false);
+		ImageBlock *batres = NULL;
+		if (m_config.enableSeparateDump){
+			batres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
+			batres->clear();
+			intervalTimer->start();
+		}		
 
 		HilbertCurve2D<int> hilbertCurve;
 		TVector2<int> filmSize(m_film->getCropSize());
@@ -102,7 +107,7 @@ public:
 
 		size_t actualSampleCount;
 		float radius = m_config.initialRadius;
-		ref<Timer> timer = new Timer();
+		ref<Timer> timer = new Timer();		
 		for (actualSampleCount = 0; actualSampleCount < m_config.sampleCount || (wu->getTimeout() > 0 && timer->getSeconds() < wu->getTimeout()); actualSampleCount++) {
 			if (m_config.initialRadius > 0.0f){
 				Float reduceFactor = 1.0 / std::pow((Float)(iteration + 1), (Float)(0.5 * (1 - m_config.radiusAlpha/*radiusAlpha*/)));
@@ -110,7 +115,7 @@ public:
 				iteration += numWork;
 			}
 
-			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr, m_config.rejectionProb);
+			m_pathSampler->gatherLightPathsUPM(m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), wr, batres, m_config.rejectionProb);
 
 			for (size_t i = 0; i < hilbertCurve.getPointCount(); ++i) {
 				if (stop) break;
@@ -124,22 +129,27 @@ public:
  					Spectrum value = splats->getValue(k);
 					wr->putSample(splats->getPosition(k), &value[0]);
  					// [UC] for unbiased check
-// 					value *= invSampleBatch;
-// 					batres->put(splats->getPosition(k), &value[0]);
- 				}
+					if (batres != NULL)
+						batres->put(splats->getPosition(k), &value[0]);					
+ 				}				
 			}			
 
 			// [UC] for unbiased check
-// 			if ((actualSampleCount + 1) % numSampleBatch == 0){
-// 				Bitmap *bitmap = const_cast<Bitmap *>(batres->getBitmap());
-// 				ref<Bitmap> hdrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, -1, 1.f);
-// 				fs::path filename = fs::path(formatString("E:\\%s_k%02d.pfm", "test", numBatch * 8 + workID));
-// 				ref<FileStream> targetFile = new FileStream(filename,
-// 					FileStream::ETruncReadWrite);
-// 				hdrBitmap->write(Bitmap::EPFM, targetFile, 1);
-// 				batres->clear();
-// 				numBatch++;
-// 			}
+			if (m_config.enableSeparateDump){
+				numSepSamples++;
+				if (intervalTimer->getSeconds() >= sepInterval){
+					Bitmap *bitmap = const_cast<Bitmap *>(batres->getBitmap());
+					ref<Bitmap> hdrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, 1.0, 1.f / (Float)numSepSamples);
+					fs::path filename = fs::path(formatString("E://%s_k%02d.pfm", m_config.useVM ? "upm_sep" : "bdpt_sep", numBatch * 8 + workID));
+					ref<FileStream> targetFile = new FileStream(filename,
+						FileStream::ETruncReadWrite);
+					hdrBitmap->write(Bitmap::EPFM, targetFile, 1);
+					batres->clear();
+					intervalTimer->reset();
+					numSepSamples = 0;
+					numBatch++;
+				}
+			}
 		}
 
 		Log(EInfo, "Run %d iterations", actualSampleCount);

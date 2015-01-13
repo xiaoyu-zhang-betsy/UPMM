@@ -155,6 +155,8 @@ public:
 
 		m_config.useVM = props.getBoolean("useVM", true);
 		m_config.useVC = props.getBoolean("useVC", true);
+
+		m_config.enableSeparateDump = props.getBoolean("enableSeparateDump", false);
 	}
 
 	/// Unserialize from a binary data stream
@@ -195,7 +197,6 @@ public:
 			//m_config.initialRadius = rad * 0.003f; //VCM style
 			//m_config.initialRadius = 0.003f * 2.21705961; // for debug
 			//m_config.initialRadius = 1.44111049; // for debug
-
 		}
 		m_config.initialRadius *= m_config.radiusScale;
 

@@ -1162,8 +1162,8 @@ ETransportMode connectionDirection(const PathVertex* vsPred, const PathVertex* v
 	else
 		return ETransportModes;
 
-	if (sBandwidth < tBandwidth)
-		cameraDirConnection = false;
+ 	if (sBandwidth <= tBandwidth)
+ 		cameraDirConnection = false;
 
 	return cameraDirConnection ? ERadiance : EImportance;
 }
@@ -1911,7 +1911,7 @@ void PathSampler::sampleSplatsVCM(const bool useVC, const bool useVM,
 }
 
 void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
-	const float gatherRadius, const int nsample, UPMWorkResult *wr, Float rejectionProb){
+	const float gatherRadius, const int nsample, UPMWorkResult *wr, ImageBlock *batres, Float rejectionProb){
 	const Sensor *sensor = m_scene->getSensor();
 	m_lightPathTree.clear();
 	m_lightVertices.clear();
@@ -1995,22 +1995,15 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 #if UPM_DEBUG == 1
 				wr->putDebugSample(s, 1, samplePos, value * miWeight);
 				wr->putDebugSampleM(s, 1, samplePos, value);
+				wr->putDebugSampleVC(samplePos, value * miWeight);
 #endif
 
 				value *= miWeight;
-				if (value.isZero()) continue;
-
-				if ((samplePos.x >= 242 && samplePos.x < 243 && samplePos.y >= 76 && samplePos.y < 77)
-					&& (s == 4) && value[1] > 0.5f){
-					float fucka = 1.f;
-					Float miWeight2 = miWeightVC(m_scene, s, 1, emitterState, sensorState,
-						vsPred3, vsPred2, vsPred, vs,
-						&vt, &vtPred, NULL, NULL,
-						gatherRadius, m_lightPathNum, useVC, useVM);
-				}
+				if (value.isZero()) continue;			
 				
-				vt.getSamplePosition(vs, samplePos);
 				wr->putSample(samplePos, &value[0]);
+				if (batres != NULL)
+					batres->put(samplePos, &value[0]);
 			}
 		}
 		m_lightPathEnds.push_back(m_lightVertices.size());
@@ -2321,6 +2314,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							wr->putDebugSample(s - 1, t, samplePos, contrib * miWeight);
 							wr->putDebugSampleM(s - 1, t, samplePos, contrib);
 						}
+						wr->putDebugSampleVM(samplePos, contrib * miWeight);
 #endif
 
 						contrib *= miWeight;						
@@ -2511,6 +2505,7 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 #if UPM_DEBUG == 1
 					wr->putDebugSample(s, t, samplePos, value * miWeight);
 					wr->putDebugSampleM(s, t, samplePos, value);
+					wr->putDebugSampleVC(samplePos, value * miWeight);
 #endif			
 
 //					if ((samplePos.x >= 517 && samplePos.x < 518 && samplePos.y >= 203 && samplePos.y < 204) &&

@@ -160,6 +160,8 @@ public:
 		m_config.useVC = props.getBoolean("useVC", true);
 
 		m_config.clampThreshold = props.getSize("clampThreshold", 100);
+
+		m_config.enableSeparateDump = props.getBoolean("enableSeparateDump", false);
 	}
 
 	/// Unserialize from a binary data stream

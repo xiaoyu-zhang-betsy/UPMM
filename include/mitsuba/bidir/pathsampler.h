@@ -27,7 +27,7 @@
 
 MTS_NAMESPACE_BEGIN
 
-// #define UPM_DEBUG 1
+ #define UPM_DEBUG 1
 // #define UPM_DEBUG_HARD
 
 /*
@@ -263,7 +263,7 @@ public:
 		m_debugBlocks.resize(
 			maxDepth*(5 + maxDepth) / 2);
 		m_debugBlocksM.resize(
-			maxDepth*(5 + maxDepth) / 2);
+			maxDepth*(5 + maxDepth) / 2);		
 
 		for (size_t i = 0; i<m_debugBlocks.size(); ++i) {
 			m_debugBlocks[i] = new ImageBlock(
@@ -277,6 +277,9 @@ public:
 			m_debugBlocksM[i]->setOffset(Point2i(0, 0));
 			m_debugBlocksM[i]->setSize(blockSize);
 		}
+
+		m_block_vc = new ImageBlock(Bitmap::ESpectrum, blockSize, rfilter);
+		m_block_vm = new ImageBlock(Bitmap::ESpectrum, blockSize, rfilter);
 #endif
 		sampleCount = 0;
 
@@ -296,6 +299,9 @@ public:
 			m_debugBlocks[i]->clear();
 		for (size_t i = 0; i < m_debugBlocksM.size(); ++i)
 			m_debugBlocksM[i]->clear();
+
+		m_block_vc->clear();
+		m_block_vm->clear();
 #endif
 		m_block->clear();
 		sampleCount = 0;
@@ -308,6 +314,9 @@ public:
 			m_debugBlocks[i]->load(stream);
 		for (size_t i = 0; i < m_debugBlocksM.size(); ++i)
 			m_debugBlocksM[i]->load(stream);
+
+		m_block_vc->load(stream);
+		m_block_vm->load(stream);
 #endif
 		m_block->load(stream);
 	}
@@ -319,6 +328,9 @@ public:
 			m_debugBlocks[i]->save(stream);
 		for (size_t i = 0; i < m_debugBlocksM.size(); ++i)
 			m_debugBlocksM[i]->save(stream);
+
+		m_block_vc->save(stream);
+		m_block_vm->save(stream);
 #endif
 		m_block->save(stream);
 	}
@@ -330,6 +342,9 @@ public:
 			m_debugBlocks[i]->put(workResult->m_debugBlocks[i].get());
 		for (size_t i = 0; i < m_debugBlocksM.size(); ++i)
 			m_debugBlocksM[i]->put(workResult->m_debugBlocksM[i].get());
+
+		m_block_vc->put(workResult->m_block_vc.get());
+		m_block_vm->put(workResult->m_block_vm.get());
 #endif
 		m_block->put(workResult->m_block.get());
 		sampleCount += workResult->getSampleCount();
@@ -382,6 +397,24 @@ public:
 				ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
 			}
 		}
+		Bitmap *bitmap = const_cast<Bitmap *>(m_block_vc->getBitmap());
+		if (!bitmap->average().isZero()){
+			ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, 1.0, weight);
+			fs::path filename =
+				prefix / fs::path(formatString("%s_%s_vc.pfm", stem.filename().string().c_str(), algorithm));
+			ref<FileStream> targetFile = new FileStream(filename,
+				FileStream::ETruncReadWrite);
+			ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
+		}
+		bitmap = const_cast<Bitmap *>(m_block_vm->getBitmap());
+		if (!bitmap->average().isZero()){
+			ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, 1.0, weight);
+			fs::path filename =
+				prefix / fs::path(formatString("%s_%s_vm.pfm", stem.filename().string().c_str(), algorithm));
+			ref<FileStream> targetFile = new FileStream(filename,
+				FileStream::ETruncReadWrite);
+			ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
+		}
 	}
 
 	inline void putDebugSample(int s, int t, const Point2 &sample, const Spectrum &spec) {
@@ -390,6 +423,12 @@ public:
 	inline void putDebugSampleM(int s, int t, const Point2 &sample, const Spectrum &spec) {
 		return;
 		m_debugBlocksM[strategyIndex(s, t)]->put(sample, (const Float *)&spec);
+	}
+	inline void putDebugSampleVM(const Point2 &sample, const Spectrum &spec) {
+		m_block_vm->put(sample, (const Float *)&spec);
+	}
+	inline void putDebugSampleVC(const Point2 &sample, const Spectrum &spec) {
+		m_block_vc->put(sample, (const Float *)&spec);
 	}
 #endif
 
@@ -442,9 +481,11 @@ protected:
 		return s + above*(5 + above) / 2;
 	}
 protected:
-#if UPM_DEBUG == 1
+#if UPM_DEBUG == 1	
 	ref_vector<ImageBlock> m_debugBlocks;
 	ref_vector<ImageBlock> m_debugBlocksM;
+	ref<ImageBlock> m_block_vc;
+	ref<ImageBlock> m_block_vm;
 #endif
 	size_t sampleCount;
 	ref<ImageBlock> m_block; // , m_lightImage;
@@ -637,7 +678,7 @@ public:
 	void sampleSplatsVCM(const bool useVC, const bool useVM, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list);
 
 	/// for UPM
-	void gatherLightPathsUPM(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, UPMWorkResult *wr, Float rejectionProb = 0.f);
+	void gatherLightPathsUPM(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, UPMWorkResult *wr, ImageBlock *batres = NULL, Float rejectionProb = 0.f);
 	void sampleSplatsUPM(UPMWorkResult *wr, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list, 
 		bool useVC = false, bool useVM = true, Float rejectionProb = 0.f, size_t clampThreshold = 100);
 

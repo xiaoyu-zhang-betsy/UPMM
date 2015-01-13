@@ -354,7 +354,8 @@ public:
 
 	void gatherLightPaths(ref<PathSampler> pathSampler,
 		const bool useVC, const bool useVM,
-		const float gatherRadius, const int nsample, ImageBlock* lightImage){
+		const float gatherRadius, const int nsample, 
+		ImageBlock* lightImage, ImageBlock *batres){
 		const Sensor *sensor = m_scene->getSensor();
 		m_lightPathTree.clear();
 		m_lightVertices.clear();
@@ -430,6 +431,8 @@ public:
 					Point2 samplePos(0.0f);
 					vt.getSamplePosition(vs, samplePos);
 					lightImage->put(samplePos, &value[0]);
+					if (batres != NULL)
+						batres->put(samplePos, &value[0]);
 				}
 			}
 			m_lightPathEnds.push_back(m_lightVertices.size());
@@ -702,7 +705,59 @@ public:
 				pathSampler->m_pool.release(vs0);
 				pathSampler->m_pool.release(vsPred0);
 				pathSampler->m_pool.release(vsEdge0);
-			}			
+			}
+			else{
+				// complement missing path in single VM technique set
+				int t = 2, s = 0;
+				PathVertex
+					*vtPred = pathSampler->m_sensorSubpath.vertexOrNull(t - 1),
+					*vt = pathSampler->m_sensorSubpath.vertex(t);
+				PathEdge
+					*vtEdge = pathSampler->m_sensorSubpath.edgeOrNull(t - 1);
+				PathVertex *vs = pathSampler->m_pool.allocVertex();
+
+				/* Will receive the path weight of the (s, t)-connection */
+				Spectrum value = Spectrum(0.0f);
+
+				/* If possible, convert 'vt' into an emitter sample */
+				if (vt->cast(m_scene, PathVertex::EEmitterSample) && !vt->isDegenerate() && !pathSampler->m_excludeDirectIllum){
+					vs->makeEndpoint(m_scene, time, EImportance);
+
+					/* Number of edges of the combined subpaths */
+					int depth = s + t - 1;
+
+					/* Allowed remaining number of ENull vertices that can
+					be bridged via pathConnect (negative=arbitrarily many) */
+					int remaining = pathSampler->m_maxDepth - depth;
+
+					// backup original path vertex measure
+					uint8_t vsMeasure0 = vs->measure, vtMeasure0 = vt->measure;
+
+					value = radianceWeights[t] *
+						vs->eval(m_scene, NULL, vt, EImportance) *
+						vt->eval(m_scene, vtPred, vs, ERadiance);
+
+					/* Attempt to connect the two endpoints, which could result in
+					the creation of additional vertices (index-matched boundaries etc.) */
+					int interactions = remaining;
+					connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vt, vtEdge, interactions);
+					depth += interactions;
+
+					value *= connectionEdge.evalCached(vs, vt, PathEdge::ETransmittance |
+						(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
+
+					MisStateV sensorState = sensorStates[t - 1];
+					MisStateV emitterState;
+					Float weight = miWeightVC(m_scene, NULL, vs, vt, vtPred,
+						s, t, pathSampler->m_sampleDirect,
+						emitterState[EVCMV], emitterState[EVCV],
+						sensorState[EVCMV], sensorState[EVCV],
+						misVmWeightFactor, nLightPaths);
+					value *= weight;
+					list.accum(0, value);
+				}
+				pathSampler->m_pool.release(vs);
+			}
 
 			/* Release any used edges and vertices back to the memory pool */
 			pathSampler->m_sensorSubpath.release(pathSampler->m_pool);
@@ -728,6 +783,17 @@ public:
 		uint64_t iteration = workID;
 		size_t actualSampleCount = 0;
 
+		ImageBlock *batres = NULL;
+		Float sepInterval = 60.f;
+		size_t numSepSamples = 0;
+		size_t numBatch = 0;
+		ref<Timer> intervalTimer = new Timer(false);
+		if (m_config.enableSeparateDump){
+			batres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
+			batres->clear();
+			intervalTimer->start();
+		}
+
 		float radius = m_config.initialRadius;
 		ref<Timer> timer = new Timer();
 		for (size_t j = 0; j < m_config.sampleCount || (wu->getTimeout() > 0 && (int)timer->getMilliseconds() < wu->getTimeout()); j++) {
@@ -736,7 +802,7 @@ public:
 				radius = std::max(reduceFactor * m_config.initialRadius, (Float)1e-7);
 				iteration += 8;
 			}
-			gatherLightPaths(m_pathSampler, m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), midres);
+			gatherLightPaths(m_pathSampler, m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), midres, batres);
 
 			for (size_t i = 0; i < hilbertCurve.getPointCount(); ++i) {
 				if (stop) break;
@@ -748,9 +814,29 @@ public:
 				for (size_t k = 0; k < splats->size(); ++k) {
 					Spectrum value = splats->getValue(k);
 					midres->put(splats->getPosition(k), &value[0]);
+					// [UC] for unbiased check					
+					if (batres != NULL)
+						batres->put(splats->getPosition(k), &value[0]);
 				}
 			}
 			actualSampleCount++;
+
+			// [UC] for unbiased check
+			if (m_config.enableSeparateDump){
+				numSepSamples++;
+				if (intervalTimer->getSeconds() >= sepInterval){
+					Bitmap *bitmap = const_cast<Bitmap *>(batres->getBitmap());
+					ref<Bitmap> hdrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, 1.0, 1.f / (Float)numSepSamples);
+					fs::path filename = fs::path(formatString("E://%s_k%02d.pfm", "vcm_sep", numBatch * 8 + workID));
+					ref<FileStream> targetFile = new FileStream(filename,
+						FileStream::ETruncReadWrite);
+					hdrBitmap->write(Bitmap::EPFM, targetFile, 1);
+					batres->clear();
+					intervalTimer->reset();
+					numSepSamples = 0;
+					numBatch++;
+				}
+			}
 		}
 
 		Log(EInfo, "Run %d iterations", actualSampleCount);
