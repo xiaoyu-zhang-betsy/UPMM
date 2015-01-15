@@ -27,7 +27,7 @@
 
 MTS_NAMESPACE_BEGIN
 
- #define UPM_DEBUG 1
+ //#define UPM_DEBUG 1
 // #define UPM_DEBUG_HARD
 
 /*
@@ -280,6 +280,10 @@ public:
 
 		m_block_vc = new ImageBlock(Bitmap::ESpectrum, blockSize, rfilter);
 		m_block_vm = new ImageBlock(Bitmap::ESpectrum, blockSize, rfilter);
+
+		tentativeDistribution.resize(100);
+		for (int i = 0; i < 100; i++)
+			tentativeDistribution[i] = 0.f;
 #endif
 		sampleCount = 0;
 
@@ -302,6 +306,10 @@ public:
 
 		m_block_vc->clear();
 		m_block_vm->clear();
+
+		tentativeDistribution.resize(100);
+		for (int i = 0; i < 100; i++)
+			tentativeDistribution[i] = 0.f;
 #endif
 		m_block->clear();
 		sampleCount = 0;
@@ -345,6 +353,9 @@ public:
 
 		m_block_vc->put(workResult->m_block_vc.get());
 		m_block_vm->put(workResult->m_block_vm.get());
+
+		for (int i = 0; i < 100; i++)
+			tentativeDistribution[i] += workResult->tentativeDistribution[i];
 #endif
 		m_block->put(workResult->m_block.get());
 		sampleCount += workResult->getSampleCount();
@@ -415,6 +426,17 @@ public:
 				FileStream::ETruncReadWrite);
 			ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
 		}
+
+		if (tentativeDistribution.size() > 0){
+			fs::path filename = prefix / fs::path(formatString("%s_distribution.csv", stem.filename().string().c_str()));
+			ref<FileStream> stream = new FileStream(filename, FileStream::ETruncReadWrite);
+			for (int i = 0; i < 100; i++){
+				std::ostringstream oss;
+				oss << i << ','  << tentativeDistribution[i] << '\n';				
+				std::string itemi = oss.str();
+				stream->write(itemi.c_str(), itemi.length());
+			}
+		}
 	}
 
 	inline void putDebugSample(int s, int t, const Point2 &sample, const Spectrum &spec) {
@@ -429,6 +451,10 @@ public:
 	}
 	inline void putDebugSampleVC(const Point2 &sample, const Spectrum &spec) {
 		m_block_vc->put(sample, (const Float *)&spec);
+	}
+	inline void putTentativeSample(const size_t t){
+		int index = (int)std::min((size_t)tentativeDistribution.size() - 1, t);
+		tentativeDistribution[index] += 1.f;
 	}
 #endif
 
@@ -486,6 +512,7 @@ protected:
 	ref_vector<ImageBlock> m_debugBlocksM;
 	ref<ImageBlock> m_block_vc;
 	ref<ImageBlock> m_block_vm;
+	std::vector<Float> tentativeDistribution;
 #endif
 	size_t sampleCount;
 	ref<ImageBlock> m_block; // , m_lightImage;

@@ -2291,6 +2291,10 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 							if (totalShoot >= clampThreshold)
 								++numClampShoots;
 
+#if UPM_DEBUG == 1
+							wr->putTentativeSample(totalShoot);
+#endif
+
 							invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
 							contrib *= invp;
 						}						
