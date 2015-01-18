@@ -162,6 +162,7 @@ public:
 		m_config.clampThreshold = props.getSize("clampThreshold", 100);
 
 		m_config.enableSeparateDump = props.getBoolean("enableSeparateDump", false);
+		m_config.enableProgressiveDump = props.getBoolean("enableProgressiveDump", false);
 	}
 
 	/// Unserialize from a binary data stream

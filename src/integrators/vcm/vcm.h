@@ -50,6 +50,7 @@ struct VCMConfiguration {
 	bool useVC;
 
 	bool enableSeparateDump;
+	bool enableProgressiveDump;
 
 	inline VCMConfiguration() { }
 
@@ -69,6 +70,7 @@ struct VCMConfiguration {
 		useVC = stream->readBool();
 		useVM = stream->readBool();
 		enableSeparateDump = stream->readBool();
+		enableProgressiveDump = stream->readBool();
 	}
 
 	inline void serialize(Stream *stream) const {
@@ -87,6 +89,7 @@ struct VCMConfiguration {
 		stream->writeBool(useVC);
 		stream->writeBool(useVM);
 		stream->writeBool(enableSeparateDump);
+		stream->writeBool(enableProgressiveDump);
 	}
 
 	void dump() const {
@@ -106,6 +109,7 @@ struct VCMConfiguration {
 		SLog(EDebug, "   Total number of work units  : %i", workUnits);
 		SLog(EDebug, "   Timeout                     : " SIZE_T_FMT, timeout);
 		SLog(EDebug, "   Enable separate dump   : %s", enableSeparateDump ? "yes" : "no");
+		SLog(EDebug, "   Enable progressive dump   : %s", enableProgressiveDump ? "yes" : "no");
 	}
 };
 

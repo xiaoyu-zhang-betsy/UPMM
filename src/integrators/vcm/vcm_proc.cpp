@@ -41,6 +41,9 @@ StatsCounter forcedAcceptance("Primary sample space MLT",
 /*
 *	Misc for VCM
 */
+inline Float MisHeuristic(Float pdf) {
+	return pdf * pdf;
+}
 enum EMisTechV {
 	EVCMV = 0,
 	EVCV = 1,
@@ -156,8 +159,8 @@ struct VertexMergingQuery {
 		Float weightExt = 0.f;
 		Float psr2_w = vt->evalPdf(scene, wi, wo, ERadiance, ESolidAngle);
 		Float ptr2_w = vt->evalPdf(scene, wo, wi, EImportance, ESolidAngle);
-		Float wLight = emitterState[EVCMV] * misVcWeightFactor + psr2_w * emitterState[EVMV];
-		Float wCamera = sensorState[EVCMV] * misVcWeightFactor + ptr2_w * sensorState[EVMV];
+		Float wLight = emitterState[EVCMV] * MisHeuristic(misVcWeightFactor) + MisHeuristic(psr2_w) * emitterState[EVMV];
+		Float wCamera = sensorState[EVCMV] * MisHeuristic(misVcWeightFactor) + MisHeuristic(ptr2_w) * sensorState[EVMV];
 		weightExt = 1.f / (1.f + wLight + wCamera);
 
 		result += val * weightExt * vmNormalization;
@@ -194,8 +197,7 @@ public:
 	}
 
 	ref<WorkResult> createWorkResult() const {
-		return new ImageBlock(Bitmap::ESpectrum,
-			m_film->getCropSize(), m_film->getReconstructionFilter());
+		return new UPMWorkResult(m_film->getCropSize().x, m_film->getCropSize().y, m_config.maxDepth, m_film->getReconstructionFilter());
 	}
 
 	void prepare() {
@@ -239,20 +241,20 @@ public:
 			if (mode == ERadiance){
 				// 			if (measure == EDiscrete)
 				// 				p1 *= (e->length * e->length) / (vNext->isOnSurface() ? std::abs(dot(e->d, vNext->getGeometricNormal())) : 1.f);
-				state[EVCMV] = pconnect / (ptrace * p1);
+				state[EVCMV] = MisHeuristic(pconnect / (ptrace * p1));
 				state[EVCV] = 0.f;
 				state[EVMV] = 0.f;
 			}
 			else{
-				state[EVCMV] = pconnect / (ptrace * p1);
+				state[EVCMV] = MisHeuristic(pconnect / (ptrace * p1));
 				if (measure != EDiscrete){
 					Float geoTerm0 = v->isOnSurface() ? std::abs(dot(e->d, v->getGeometricNormal()) / (e->length * e->length)) : 1;
-					state[EVCV] = geoTerm0 / (ptrace * p1);
+					state[EVCV] = MisHeuristic(geoTerm0 / (ptrace * p1));
 				}
 				else{
 					state[EVCV] = 0.f;
 				}
-				state[EVMV] = state[EVCV] * misVcWeightFactor;
+				state[EVMV] = state[EVCV] * MisHeuristic(misVcWeightFactor);
 			}
 		}
 		else{
@@ -261,8 +263,8 @@ public:
 			if (v->measure == EDiscrete){
 				PathVertex *vNext = path.vertex(i + 1);
 				state[EVCMV] = 0.f;
-				state[EVCV] *= std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1);
-				state[EVMV] *= std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1);
+				state[EVCV] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1));
+				state[EVMV] *= MisHeuristic(std::abs(v->isOnSurface() ? dot(e->d, v->getGeometricNormal()) : 1) / std::abs(vNext->isOnSurface() ? dot(e->d, vNext->getGeometricNormal()) : 1));
 			}
 			else{
 				BDAssert(v->measure == EArea);
@@ -272,9 +274,9 @@ public:
 				Float giInPred = std::abs(vPred->isOnSurface() ? dot(ePred->d, vPred->getGeometricNormal()) : 1) / (ePred->length * ePred->length);
 				Float pi = v->pdf[mode] * e->pdf[mode];
 				Float pir2_w = v->pdf[1 - mode] * ePred->pdf[1 - mode] / giInPred;
-				state[EVCV] = giIn / pi * (state[EVCMV] + misVmWeightFactor + pir2_w * state[EVCV]);
-				state[EVMV] = giIn / pi * (1.f + state[EVCMV] * misVcWeightFactor + pir2_w * state[EVMV]);
-				state[EVCMV] = 1 / pi;
+				state[EVCV] = MisHeuristic(giIn / pi) * (state[EVCMV] + MisHeuristic(misVmWeightFactor) + MisHeuristic(pir2_w) * state[EVCV]);
+				state[EVMV] = MisHeuristic(giIn / pi) * (1.f + state[EVCMV] * MisHeuristic(misVcWeightFactor) + MisHeuristic(pir2_w) * state[EVMV]);
+				state[EVCMV] = MisHeuristic(1 / pi);
 			}
 		}
 	}
@@ -303,7 +305,7 @@ public:
 			Float ptr = vs->evalPdf(scene, NULL, vt, EImportance, measure == ESolidAngle ? EArea : measure);
 			Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
 			//Float wCamera = (t == 1) ? 0.f : ratioEmitterDirect * ptr1 * (misVmWeightFactor + sensordVCM + ptr2_w * sensordVC);
-			Float wCamera = (t == 1) ? 0.f : ptrdir * sensordVCM + ptr * ptr2_w * sensordVC;
+			Float wCamera = (t == 1) ? 0.f : MisHeuristic(ptrdir) * sensordVCM + MisHeuristic(ptr * ptr2_w) * sensordVC;
 			weight = 1.f / (1.f + wCamera);
 		}
 		else if (s > 1 && t > 1){
@@ -311,8 +313,8 @@ public:
 			Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
 			Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 			Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, EArea);
-			Float wLight = psr1 * (misVmWeightFactor + emitterdVCM + psr2_w * emitterdVC);
-			Float wCamera = ptr1 * (misVmWeightFactor + sensordVCM + ptr2_w * sensordVC);
+			Float wLight = MisHeuristic(psr1) * (MisHeuristic(misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
+			Float wCamera = MisHeuristic(ptr1) * (MisHeuristic(misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 			weight = 1.f / (1.f + wLight + wCamera);
 		}
 		else if (t == 1 && s > 1){
@@ -322,7 +324,7 @@ public:
 			Float psr2_w = vs->evalPdf(scene, vt, vsPred, ERadiance, ESolidAngle);
 			Float psr1 = vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 
-			Float wLight = ptrace * psr1 / pconnect * (misVmWeightFactor + emitterdVCM + psr2_w * emitterdVC);
+			Float wLight = MisHeuristic(ptrace * psr1 / pconnect) * (MisHeuristic(misVmWeightFactor) + emitterdVCM + MisHeuristic(psr2_w) * emitterdVC);
 			weight = 1.f / (1.f + wLight);
 		}
 		else if (s == 1){
@@ -342,8 +344,8 @@ public:
 			Float ptr2_w = vt->evalPdf(scene, vs, vtPred, EImportance, ESolidAngle);
 			Float psr1 = (!emitter->needsDirectionSample() || !emitter->needsPositionSample()) ? 0.f : vt->evalPdf(scene, vtPred, vs, ERadiance, EArea);
 			Float ptr1 = vs->evalPdf(scene, vsPred, vt, EImportance, vsMeasure);
-			Float wLight = ratioEmitterDirect * (psr1 / ptrace);
-			Float wCamera = (t == 1) ? 0.f : ratioEmitterDirect * ptr1 * (misVmWeightFactor + sensordVCM + ptr2_w * sensordVC);
+			Float wLight = MisHeuristic(ratioEmitterDirect * (psr1 / ptrace));
+			Float wCamera = (t == 1) ? 0.f : MisHeuristic(ratioEmitterDirect * ptr1) * (MisHeuristic(misVmWeightFactor) + sensordVCM + MisHeuristic(ptr2_w) * sensordVC);
 			weight = 1.f / (1.f + wLight + wCamera);
 		}
 		else{
@@ -355,7 +357,7 @@ public:
 	void gatherLightPaths(ref<PathSampler> pathSampler,
 		const bool useVC, const bool useVM,
 		const float gatherRadius, const int nsample, 
-		ImageBlock* lightImage, ImageBlock *batres){
+		UPMWorkResult *wr, ImageBlock *batres){
 		const Sensor *sensor = m_scene->getSensor();
 		m_lightPathTree.clear();
 		m_lightVertices.clear();
@@ -409,7 +411,7 @@ public:
 				}
 
 				// connect to camera
-				if (vs->measure != EDiscrete && lightImage != NULL && useVC){
+				if (vs->measure != EDiscrete && wr != NULL && useVC){
 					Spectrum value = importanceWeight * vs->sampleDirect(m_scene, pathSampler->m_directSampler,
 						&vtPred, &vtEdge, &vt, ERadiance);
 					if (value.isZero()) continue;
@@ -430,7 +432,11 @@ public:
 
 					Point2 samplePos(0.0f);
 					vt.getSamplePosition(vs, samplePos);
-					lightImage->put(samplePos, &value[0]);
+
+#if UPM_DEBUG == 1
+					wr->putDebugSampleVC(samplePos, value);
+#endif					
+					wr->putSample(samplePos, &value[0]);
 					if (batres != NULL)
 						batres->put(samplePos, &value[0]);
 				}
@@ -442,7 +448,8 @@ public:
 		/* Release any used edges and vertices back to the memory pool */
 		pathSampler->m_emitterSubpath.release(pathSampler->m_pool);
 	}
-	void sampleCameraPath(ref<PathSampler> pathSampler, const bool useVC, const bool useVM,
+	void sampleCameraPath(ref<PathSampler> pathSampler, UPMWorkResult *wr, 
+		const bool useVC, const bool useVM,
 		const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list) {
 		list.clear();
 
@@ -482,10 +489,12 @@ public:
 				pathSampler->m_sensorSubpath.vertex(i - 1)->rrWeight *
 				pathSampler->m_sensorSubpath.edge(i - 1)->weight[ERadiance];
 
+			Point2 initialSamplePos;
 			if (pathSampler->m_sensorSubpath.vertexCount() > 2) {
 				Point2 samplePos(0.0f);
 				pathSampler->m_sensorSubpath.vertex(1)->getSamplePosition(pathSampler->m_sensorSubpath.vertex(2), samplePos);
 				list.append(samplePos, Spectrum(0.0f));
+				initialSamplePos = samplePos;
 			}
 
 			// initialize of MIS helper
@@ -520,6 +529,10 @@ public:
 							t, pathSampler->m_maxDepth, misVcWeightFactor, vmNormalization, sensorStates[t - 1]);
 
 						m_lightPathTree.executeQuery(vt->getPosition(), gatherRadius, query);
+
+#if UPM_DEBUG == 1
+						wr->putDebugSampleVM(initialSamplePos, query.result);
+#endif
 
 						if (!query.result.isZero())
 							list.accum(0, query.result);
@@ -695,10 +708,16 @@ public:
 
 						if (t < 2) {
 							list.append(samplePos, value);
+#if UPM_DEBUG == 1
+							wr->putDebugSampleVC(samplePos, value);
+#endif
 						}
 						else {
 							BDAssert(pathSampler->m_sensorSubpath.vertexCount() > 2);
 							list.accum(0, value);
+#if UPM_DEBUG == 1
+							wr->putDebugSampleVC(initialSamplePos, value);
+#endif
 						}
 					}
 				}
@@ -755,6 +774,9 @@ public:
 						misVmWeightFactor, nLightPaths);
 					value *= weight;
 					list.accum(0, value);
+#if UPM_DEBUG == 1
+					wr->putDebugSampleVC(initialSamplePos, value);
+#endif
 				}
 				pathSampler->m_pool.release(vs);
 			}
@@ -769,10 +791,8 @@ public:
 		}
 	}
 
-	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {		
-		ImageBlock *result = static_cast<ImageBlock *>(workResult);
-		ImageBlock *midres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
-		midres->clear();
+	void process(const WorkUnit *workUnit, WorkResult *workResult, const bool &stop) {				
+		UPMWorkResult *result = static_cast<UPMWorkResult *>(workResult);		
 		const SeedWorkUnit *wu = static_cast<const SeedWorkUnit *>(workUnit);
 		const int workID = wu->getID();
 		SplatList *splats = new SplatList();		
@@ -783,6 +803,7 @@ public:
 		uint64_t iteration = workID;
 		size_t actualSampleCount = 0;
 
+		// [UC] for unbiased check
 		ImageBlock *batres = NULL;
 		Float sepInterval = 60.f;
 		size_t numSepSamples = 0;
@@ -794,6 +815,14 @@ public:
 			intervalTimer->start();
 		}
 
+		// [UC] for relative contribution graphing
+		Float rcInterval = 600.f;
+		Float numProgressiveBatch = 0;
+		ref<Timer> intervalTimer2 = new Timer(false);
+		if (m_config.enableProgressiveDump){
+			intervalTimer2->start();
+		}
+
 		float radius = m_config.initialRadius;
 		ref<Timer> timer = new Timer();
 		for (size_t j = 0; j < m_config.sampleCount || (wu->getTimeout() > 0 && (int)timer->getMilliseconds() < wu->getTimeout()); j++) {
@@ -802,18 +831,18 @@ public:
 				radius = std::max(reduceFactor * m_config.initialRadius, (Float)1e-7);
 				iteration += 8;
 			}
-			gatherLightPaths(m_pathSampler, m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), midres, batres);
+			gatherLightPaths(m_pathSampler, m_config.useVC, m_config.useVM, radius, hilbertCurve.getPointCount(), result, batres);
 
 			for (size_t i = 0; i < hilbertCurve.getPointCount(); ++i) {
 				if (stop) break;
 
 				Point2i offset = Point2i(hilbertCurve[i]);
 				m_sampler->generate(offset);
-				sampleCameraPath(m_pathSampler, m_config.useVC, m_config.useVM, radius, offset, i, *splats);
+				sampleCameraPath(m_pathSampler, result, m_config.useVC, m_config.useVM, radius, offset, i, *splats);
 
 				for (size_t k = 0; k < splats->size(); ++k) {
 					Spectrum value = splats->getValue(k);
-					midres->put(splats->getPosition(k), &value[0]);
+					result->putSample(splats->getPosition(k), &value[0]);
 					// [UC] for unbiased check					
 					if (batres != NULL)
 						batres->put(splats->getPosition(k), &value[0]);
@@ -837,19 +866,27 @@ public:
 					numBatch++;
 				}
 			}
+
+			// [UC] for relative contribution graphing
+			if (m_config.enableProgressiveDump && intervalTimer2->getSeconds() >= rcInterval){
+				fs::path path = m_scene->getDestinationFile();
+				result->progressiveDump(filmSize.x, filmSize.y, m_config.maxDepth, path.parent_path(), path.stem(), numProgressiveBatch * 8 + workID, actualSampleCount, false);
+				intervalTimer2->reset();
+				numProgressiveBatch++;
+			}
+		}
+
+		// [UC] for relative contribution graphing
+		if (m_config.enableProgressiveDump){
+			fs::path path = m_scene->getDestinationFile();
+			result->progressiveDump(filmSize.x, filmSize.y, m_config.maxDepth, path.parent_path(), path.stem(), numProgressiveBatch * 8 + workID, actualSampleCount, false);
+			intervalTimer2->reset();
+			numProgressiveBatch++;
 		}
 
 		Log(EInfo, "Run %d iterations", actualSampleCount);
+		result->accumSampleCount(actualSampleCount);
 
-		const Spectrum *pmidres = (Spectrum *)midres->getBitmap()->getData();
-		Spectrum *presult = (Spectrum *)result->getBitmap()->getData();
-		size_t pixelCount = midres->getBitmap()->getPixelCount();
-		for (int i = 0; i < pixelCount; i++){
-			presult[i] = pmidres[i] / float(actualSampleCount);;
-		}
-		midres->clear();
-		//delete midres; // TODO: better handle the memory of midres
-		
 		delete splats;
 	}
 
@@ -894,12 +931,12 @@ ref<WorkProcessor> VCMProcess::createWorkProcessor() const {
 
 void VCMProcess::develop() {
 	LockGuard lock(m_resultMutex);
-	size_t pixelCount = m_accum->getBitmap()->getPixelCount();
-	const Spectrum *accum = (Spectrum *) m_accum->getBitmap()->getData();
+	size_t pixelCount = m_result->getImageBlock()->getBitmap()->getPixelCount();
+	const Spectrum *accum = (Spectrum *)(m_result->getImageBlock()->getBitmap()->getData());
 	Spectrum *target = (Spectrum *) m_developBuffer->getData();
-
+	Float invFactor = 1.f / Float(m_result->getSampleCount());
 	for (size_t i=0; i<pixelCount; ++i) {
-		target[i] = accum[i] / float(m_config.workUnits);
+		target[i] = accum[i] * invFactor;
 	}
 	m_film->setBitmap(m_developBuffer);
 	m_refreshTimer->reset();
@@ -907,10 +944,11 @@ void VCMProcess::develop() {
 	m_queue->signalRefresh(m_job);
 }
 
-void VCMProcess::processResult(const WorkResult *wr, bool cancelled) {
-	LockGuard lock(m_resultMutex);
-	const ImageBlock *result = static_cast<const ImageBlock *>(wr);
-	m_accum->put(result);
+void VCMProcess::processResult(const WorkResult *workResult, bool cancelled) {
+	const UPMWorkResult *wr = static_cast<const UPMWorkResult *>(workResult);
+	LockGuard lock(m_resultMutex);	
+	//m_accum->put(result);
+	m_result->put(wr);
 	m_progress->update(++m_resultCounter);
 	m_refreshTimeout = std::min(2000U, m_refreshTimeout * 2);
 
@@ -943,8 +981,10 @@ void VCMProcess::bindResource(const std::string &name, int id) {
 		if (m_progress)
 			delete m_progress;
 		m_progress = new ProgressReporter("Rendering", m_config.workUnits, m_job);
-		m_accum = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize());
-		m_accum->clear();
+// 		m_accum = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize());
+// 		m_accum->clear();
+		m_result = new UPMWorkResult(m_film->getCropSize().x, m_film->getCropSize().y, m_config.maxDepth, NULL);
+		m_result->clear();
 		m_developBuffer = new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, m_film->getCropSize());
 	}
 }
@@ -952,5 +992,5 @@ void VCMProcess::bindResource(const std::string &name, int id) {
 MTS_IMPLEMENT_CLASS_S(VCMRenderer, false, WorkProcessor)
 MTS_IMPLEMENT_CLASS(VCMProcess, false, ParallelProcess)
 MTS_IMPLEMENT_CLASS(SeedWorkUnit, false, WorkUnit)
-
+MTS_IMPLEMENT_CLASS(UPMWorkResult, false, WorkResult)
 MTS_NAMESPACE_END

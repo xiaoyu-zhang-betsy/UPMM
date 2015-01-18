@@ -27,7 +27,7 @@
 
 MTS_NAMESPACE_BEGIN
 
- //#define UPM_DEBUG 1
+#define UPM_DEBUG 1
 // #define UPM_DEBUG_HARD
 
 /*
@@ -455,6 +455,39 @@ public:
 	inline void putTentativeSample(const size_t t){
 		int index = (int)std::min((size_t)tentativeDistribution.size() - 1, t);
 		tentativeDistribution[index] += 1.f;
+	}
+
+	inline void progressiveDump(const int width, const int height, const int maxDepth,
+		const fs::path &prefix, const fs::path &stem, const int index,
+		const size_t  actualSampleCount, const bool isUPM) const{
+		Float weight = 1.f / (Float)actualSampleCount;
+		Bitmap *bitmap = const_cast<Bitmap *>(m_block_vc->getBitmap());
+		if (!bitmap->average().isZero()){
+			ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, 1.0, weight);
+			fs::path filename =
+				prefix / fs::path(formatString("%s_%s_vc_progress%d.pfm", stem.filename().string().c_str(), isUPM ? "upm" : "vcm", index));
+			ref<FileStream> targetFile = new FileStream(filename,
+				FileStream::ETruncReadWrite);
+			ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
+		}
+		bitmap = const_cast<Bitmap *>(m_block_vm->getBitmap());
+		if (!bitmap->average().isZero()){
+			ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, 1.0, weight);
+			fs::path filename =
+				prefix / fs::path(formatString("%s_%s_vm_progress%d.pfm", stem.filename().string().c_str(), isUPM ? "upm" : "vcm", index));
+			ref<FileStream> targetFile = new FileStream(filename,
+				FileStream::ETruncReadWrite);
+			ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
+		}
+		bitmap = const_cast<Bitmap *>(m_block->getBitmap());
+		if (!bitmap->average().isZero()){
+			ref<Bitmap> ldrBitmap = bitmap->convert(Bitmap::ERGB, Bitmap::EFloat32, 1.0, weight);
+			fs::path filename =
+				prefix / fs::path(formatString("%s_%s_vcm_progress%d.pfm", stem.filename().string().c_str(), isUPM ? "upm" : "vcm", index));
+			ref<FileStream> targetFile = new FileStream(filename,
+				FileStream::ETruncReadWrite);
+			ldrBitmap->write(Bitmap::EPFM, targetFile, 1);
+		}
 	}
 #endif
 

@@ -53,6 +53,7 @@ struct UPMConfiguration {
 	bool useVC;
 
 	bool enableSeparateDump;
+	bool enableProgressiveDump;
 
 	inline UPMConfiguration() { }
 
@@ -75,6 +76,7 @@ struct UPMConfiguration {
 		useVM = stream->readBool();
 		clampThreshold = stream->readSize();
 		enableSeparateDump = stream->readBool();
+		enableProgressiveDump = stream->readBool();
 	}
 
 	inline void serialize(Stream *stream) const {
@@ -96,6 +98,7 @@ struct UPMConfiguration {
 		stream->writeBool(useVM);
 		stream->writeSize(clampThreshold);
 		stream->writeBool(enableSeparateDump);
+		stream->writeBool(enableProgressiveDump);
 	}
 
 	void dump() const {
@@ -118,6 +121,7 @@ struct UPMConfiguration {
 		SLog(EDebug, "   Timeout                     : " SIZE_T_FMT, timeout);
 		SLog(EDebug, "   1/p clamp threshold   : " SIZE_T_FMT, clampThreshold);
 		SLog(EDebug, "   Enable separate dump   : %s", enableSeparateDump ? "yes" : "no");
+		SLog(EDebug, "   Enable progressive dump   : %s", enableProgressiveDump ? "yes" : "no");
 
 	}
 };

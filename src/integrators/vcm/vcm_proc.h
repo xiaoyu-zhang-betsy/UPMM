@@ -53,13 +53,14 @@ private:
 	const VCMConfiguration &m_config;
 	const Bitmap *m_directImage;
 	ref<Bitmap> m_developBuffer;
-	ImageBlock *m_accum;
+	//ImageBlock *m_accum;
 	ProgressReporter *m_progress;
 	ref<Mutex> m_resultMutex;
 	ref<Film> m_film;
 	int m_resultCounter, m_workCounter;
 	unsigned int m_refreshTimeout;
 	ref<Timer> m_timeoutTimer, m_refreshTimer;
+	ref<UPMWorkResult> m_result;
 };
 
 MTS_NAMESPACE_END

@@ -1548,9 +1548,6 @@ Float miWeightVM(const Scene *scene, int s, int t,
 	return miWeight;
 }
 
-
-
-
 void PathSampler::gatherLightPaths(const bool useVC, const bool useVM,
 	const float gatherRadius, const int nsample, ImageBlock* lightImage){
 	const Sensor *sensor = m_scene->getSensor();
@@ -1990,7 +1987,7 @@ void PathSampler::gatherLightPathsUPM(const bool useVC, const bool useVM,
 				Float miWeight = miWeightVC(m_scene, s, 1, emitterState, sensorState,
 					vsPred3, vsPred2, vsPred, vs,
 					&vt, &vtPred, NULL, NULL,
-					gatherRadius, m_lightPathNum, useVC, useVM);
+					gatherRadius, m_lightPathNum, true, useVM);
 
 #if UPM_DEBUG == 1
 				wr->putDebugSample(s, 1, samplePos, value * miWeight);
@@ -2032,109 +2029,107 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 
 	PathVertex tempSample, tempEndpoint;
 	PathEdge tempEdge;
-	switch (m_technique) {
-	case EBidirectional: {
-		/* Uniformly sample a scene time */
-		Float time = sensor->getShutterOpen();
-		if (sensor->needsTimeSample())
-			time = sensor->sampleTime(m_sensorSampler->next1D());
+	/* Uniformly sample a scene time */
+	Float time = sensor->getShutterOpen();
+	if (sensor->needsTimeSample())
+		time = sensor->sampleTime(m_sensorSampler->next1D());
 
-		/* Initialize the path endpoints */
-		m_sensorSubpath.initialize(m_scene, time, ERadiance, m_pool);
+	/* Initialize the path endpoints */
+	m_sensorSubpath.initialize(m_scene, time, ERadiance, m_pool);
 
-		if (offset == Point2i(-1))
-			m_sensorSubpath.randomWalk(m_scene, m_sensorSampler,
-			m_sensorDepth, m_rrDepth, ERadiance, m_pool);
-		else
-			m_sensorSubpath.randomWalkFromPixel(m_scene, m_sensorSampler,
-			m_sensorDepth, offset, m_rrDepth, m_pool);
+	if (offset == Point2i(-1))
+		m_sensorSubpath.randomWalk(m_scene, m_sensorSampler,
+		m_sensorDepth, m_rrDepth, ERadiance, m_pool);
+	else
+		m_sensorSubpath.randomWalkFromPixel(m_scene, m_sensorSampler,
+		m_sensorDepth, offset, m_rrDepth, m_pool);
 
-		/* Compute the combined weights along the two subpaths */
-		Spectrum *radianceWeights = (Spectrum *)alloca(m_sensorSubpath.vertexCount()  * sizeof(Spectrum));
+	/* Compute the combined weights along the two subpaths */
+	Spectrum *radianceWeights = (Spectrum *)alloca(m_sensorSubpath.vertexCount()  * sizeof(Spectrum));
 
-		radianceWeights[0] = Spectrum(1.0f);
+	radianceWeights[0] = Spectrum(1.0f);
 
-		for (size_t i = 1; i<m_sensorSubpath.vertexCount(); ++i)
-			radianceWeights[i] = radianceWeights[i - 1] *
-			m_sensorSubpath.vertex(i - 1)->weight[ERadiance] *
-			m_sensorSubpath.vertex(i - 1)->rrWeight *
-			m_sensorSubpath.edge(i - 1)->weight[ERadiance];
+	for (size_t i = 1; i<m_sensorSubpath.vertexCount(); ++i)
+		radianceWeights[i] = radianceWeights[i - 1] *
+		m_sensorSubpath.vertex(i - 1)->weight[ERadiance] *
+		m_sensorSubpath.vertex(i - 1)->rrWeight *
+		m_sensorSubpath.edge(i - 1)->weight[ERadiance];
 
-		bool watchThread = false;
-		Point2 initialSamplePos(0.0f);
-		if (m_sensorSubpath.vertexCount() > 2) {
-			Point2 samplePos(0.0f);
-			m_sensorSubpath.vertex(1)->getSamplePosition(m_sensorSubpath.vertex(2), samplePos);
-			list.append(samplePos, Spectrum(0.0f));
-			initialSamplePos = samplePos;
-		}
+	bool watchThread = false;
+	Point2 initialSamplePos(0.0f);
+	if (m_sensorSubpath.vertexCount() > 2) {
+		Point2 samplePos(0.0f);
+		m_sensorSubpath.vertex(1)->getSamplePosition(m_sensorSubpath.vertex(2), samplePos);
+		list.append(samplePos, Spectrum(0.0f));
+		initialSamplePos = samplePos;
+	}
 
-		// initialize of MIS helper
-		// VCM tech report Eq. 31 - 33		
-		MisState *sensorStates = (MisState *)alloca(m_sensorSubpath.vertexCount() * sizeof(MisState));
-		initializeMisHelper(m_sensorSubpath, sensorStates, m_scene, 
-			gatherRadius, nLightPaths, useVC, useVM, ERadiance);
+	// initialize of MIS helper
+	// VCM tech report Eq. 31 - 33		
+	MisState *sensorStates = (MisState *)alloca(m_sensorSubpath.vertexCount() * sizeof(MisState));
+	initializeMisHelper(m_sensorSubpath, sensorStates, m_scene, 
+		gatherRadius, nLightPaths, useVC, useVM, ERadiance);
 
-		// massive vertex merging
-		if (useVM){
-			PathVertex *vs_ = m_pool.allocVertex();
-			PathVertex *vsPred_ = m_pool.allocVertex();
-			PathVertex *vsPred2_ = m_pool.allocVertex();
-			PathVertex *vsPred3_ = m_pool.allocVertex();
-			PathVertex *vs = NULL, *vsPred = NULL, *vsPred2 = NULL, *vsPred3 = NULL;
-			PathEdge connectionEdge;
-			PathVertex *succVertex = m_pool.allocVertex();
-			PathEdge *succEdge = m_pool.allocEdge();
-			Point2 samplePos(0.0f);
-			std::vector<uint32_t> searchResults;
-			//std::vector<Point> searchPos;
-			std::vector<uint32_t> acceptCnt;
-			std::vector<size_t> shootCnt;
+	// massive vertex merging
+	if (useVM){
+		PathVertex *vs_ = m_pool.allocVertex();
+		PathVertex *vsPred_ = m_pool.allocVertex();
+		PathVertex *vsPred2_ = m_pool.allocVertex();
+		PathVertex *vsPred3_ = m_pool.allocVertex();
+		PathVertex *vs = NULL, *vsPred = NULL, *vsPred2 = NULL, *vsPred3 = NULL;
+		PathEdge connectionEdge;
+		PathVertex *succVertex = m_pool.allocVertex();
+		PathEdge *succEdge = m_pool.allocEdge();
+		Point2 samplePos(0.0f);
+		std::vector<uint32_t> searchResults;
+		//std::vector<Point> searchPos;
+		std::vector<uint32_t> acceptCnt;
+		std::vector<size_t> shootCnt;
 
-			int minT = 2; int minS = 2;
+		int minT = 2; int minS = 2;
 
-			int maxT = (int)m_sensorSubpath.vertexCount() - 1;
-			if (m_maxDepth != -1)
-				maxT = std::min(maxT, m_maxDepth);
-			for (int t = minT; t <= maxT; ++t) {
-				PathVertex
-					*vtPred3 = m_sensorSubpath.vertexOrNull(t - 3),
-					*vtPred2 = m_sensorSubpath.vertex(t - 2),
-					*vtPred = m_sensorSubpath.vertex(t - 1),
-					*vt = m_sensorSubpath.vertex(t);
-				PathEdge
-					*predEdge = m_sensorSubpath.edge(t - 2);
+		int maxT = (int)m_sensorSubpath.vertexCount() - 1;
+		if (m_maxDepth != -1)
+			maxT = std::min(maxT, m_maxDepth);
+		for (int t = minT; t <= maxT; ++t) {
+			PathVertex
+				*vtPred3 = m_sensorSubpath.vertexOrNull(t - 3),
+				*vtPred2 = m_sensorSubpath.vertex(t - 2),
+				*vtPred = m_sensorSubpath.vertex(t - 1),
+				*vt = m_sensorSubpath.vertex(t);
+			PathEdge
+				*predEdge = m_sensorSubpath.edge(t - 2);
 
-				if (!vt->isDegenerate()){
-					BDAssert(vt->type == PathVertex::ESurfaceInteraction);
+			if (!vt->isDegenerate()){
+				BDAssert(vt->type == PathVertex::ESurfaceInteraction);
 
-					searchResults.clear();
-					m_lightPathTree.search(vt->getPosition(), gatherRadius, searchResults);
-					avgGatherPoints.incrementBase();
-					avgGatherPoints += searchResults.size();
-					maxGatherPoints.recordMaximum(searchResults.size());
-					numZeroGatherPoints.incrementBase();
-					if (searchResults.size() == 0){
-						++numZeroGatherPoints;
-						continue;
-					}
+				searchResults.clear();
+				m_lightPathTree.search(vt->getPosition(), gatherRadius, searchResults);
+				avgGatherPoints.incrementBase();
+				avgGatherPoints += searchResults.size();
+				maxGatherPoints.recordMaximum(searchResults.size());
+				numZeroGatherPoints.incrementBase();
+				if (searchResults.size() == 0){
+					++numZeroGatherPoints;
+					continue;
+				}
 
-					//searchPos.resize(searchResults.size());
-					acceptCnt.resize(searchResults.size());
-					shootCnt.resize(searchResults.size());
-					for (int i = 0; i < searchResults.size(); i++){
-						acceptCnt[i] = 0;
-						shootCnt[i] = 0;
+				//searchPos.resize(searchResults.size());
+				acceptCnt.resize(searchResults.size());
+				shootCnt.resize(searchResults.size());
+				for (int i = 0; i < searchResults.size(); i++){
+					acceptCnt[i] = 0;
+					shootCnt[i] = 0;
 // 						LightPathNode node = m_lightPathTree[searchResults[i]];
 // 						size_t vertexIndex = node.data.vertexIndex;
 // 						LightVertexExt lvertexExt = m_lightVerticesExt[vertexIndex];
 // 						searchPos[i] = lvertexExt.position;
-					}
+				}
 
-					// evaluate sampling domain pdf normalization
-					int shareShootThreshold = 32;
-					Float invBrdfIntegral = 1.f;
-					bool shareShoot = false;
+				// evaluate sampling domain pdf normalization
+				int shareShootThreshold = 32;
+				Float invBrdfIntegral = 1.f;
+				bool shareShoot = false;
 // 					if (searchPos.size() > shareShootThreshold){
 // 						Vector4 smplBBox = Vector4(0.f);
 // 						Vector4 smplBBoxDiff = Vector4(0.f);
@@ -2176,372 +2171,387 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 // 						}
 // 					}					
 
-					MisState sensorState = sensorStates[t - 1];
-					MisState sensorStatePred = sensorStates[t - 2];
-					for (int k = 0; k < searchResults.size(); k++){
-						LightPathNode node = m_lightPathTree[searchResults[k]];
-						int s = node.data.depth;
-						if (m_maxDepth != -1 && s + t > m_maxDepth + 2 || s < minS) continue;
+				MisState sensorState = sensorStates[t - 1];
+				MisState sensorStatePred = sensorStates[t - 2];
+				for (int k = 0; k < searchResults.size(); k++){
+					LightPathNode node = m_lightPathTree[searchResults[k]];
+					int s = node.data.depth;
+					if (m_maxDepth != -1 && s + t > m_maxDepth + 2 || s < minS) continue;
 
 #ifdef EXCLUDE_DIRECT_LIGHTING
-						if (s == 2 && t == 2) continue;
+					if (s == 2 && t == 2 && useVC) continue;
 #endif
 
-						if (m_sensorSampler->next1D() < rejectionProb) continue;
+					if (m_sensorSampler->next1D() < rejectionProb) continue;
 
-						size_t vertexIndex = node.data.vertexIndex;
-						LightVertex vi = m_lightVertices[vertexIndex];
-						LightVertex viPred = m_lightVertices[vertexIndex - 1];
-						MisState emitterState = vi.emitterState;
-						MisState emitterStatePred = viPred.emitterState;
+					size_t vertexIndex = node.data.vertexIndex;
+					LightVertex vi = m_lightVertices[vertexIndex];
+					LightVertex viPred = m_lightVertices[vertexIndex - 1];
+					MisState emitterState = vi.emitterState;
+					MisState emitterStatePred = viPred.emitterState;
 
-						vs = vs_; vsPred = vsPred_; vsPred2 = vsPred2_; vsPred3 = vsPred3_;
-						m_lightVerticesExt[vertexIndex].expand(vs);						
-						m_lightVerticesExt[vertexIndex - 1].expand(vsPred);						
-						if (s > 2){
-							m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
-							m_lightVerticesExt[vertexIndex - 3].expand(vsPred3);
-						}
-						else if (s == 2){
-							m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
-							vsPred3 = NULL;
-						}
-						else{
-							vsPred2 = NULL;
-							vsPred3 = NULL;
-						}
-
-						// decide the direction to do connection
-						bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
-
-						samplePos = initialSamplePos;
-						if (vtPred->isSensorSample()){
-							if (!vtPred->getSamplePosition(cameraDirConnection ? vs : vt, samplePos))
-								continue;
-						}
-
-						// evaluate contribution
-						Spectrum contrib;						
-						if (cameraDirConnection){
-							contrib = radianceWeights[t - 1] * vi.importanceWeight * invLightPaths;
-							contrib *= vs->eval(m_scene, vsPred, vtPred, EImportance) *	vtPred->eval(m_scene, vtPred2, vs, ERadiance);
-							int interactions = m_maxDepth - s - t + 1;
-							if (contrib.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vtPred, NULL, interactions))
-								continue;
-							contrib *= connectionEdge.evalCached(vs, vtPred, PathEdge::EGeneralizedGeometricTerm);							
-						}
-						else{							
-							contrib = radianceWeights[t] * viPred.importanceWeight * invLightPaths;
-							contrib *= vt->eval(m_scene, vtPred, vsPred, ERadiance) *	vsPred->eval(m_scene, vsPred2, vt, EImportance);
-							int interactions = m_maxDepth - s - t + 1;
-							if (contrib.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vt, vsPred, NULL, interactions))
-								continue;
-							contrib *= connectionEdge.evalCached(vt, vsPred, PathEdge::EGeneralizedGeometricTerm);
-						}
-
-						contrib /= (1.f - rejectionProb);
-
-						Float invp = 0.f;
-						if (shareShoot){
-							invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
-							contrib *= invp;
-						}
-						else{
-							std::vector<Float> componentProbs;
-							std::vector<Vector4> componentBounds;
-							Float brdfIntegral;
-							if (cameraDirConnection)
-								brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentProbs, componentBounds);
-							else
-								brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentProbs, componentBounds);
-
-							if (brdfIntegral == 0.f) continue;
-							invBrdfIntegral = 1.f / brdfIntegral;
-							size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
-							Float distSquared = gatherRadius * gatherRadius;
-							while (totalShoot < clampThreshold){
-								totalShoot++;
-
-								// restricted sampling evaluation shoots
-								Float pointDistSquared;
-								if (cameraDirConnection){
-									if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentProbs, componentBounds))
-										continue;
-									pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
-								}
-								else{
-									if (!vsPred->sampleShoot(m_scene, m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentProbs, componentBounds))
-										continue;
-									pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
-								}
-
-								if (pointDistSquared < distSquared){
-									acceptedShoot++;
-									if (acceptedShoot == targetShoot){
-										break;
-									}
-								}
-							}
-							avgInvpShoots.incrementBase();
-							avgInvpShoots += totalShoot;
-							maxInvpShoots.recordMaximum(totalShoot);
-							numInvpShoots += totalShoot;
-
-							numClampShoots.incrementBase();
-							if (totalShoot >= clampThreshold)
-								++numClampShoots;
-
-#if UPM_DEBUG == 1
-							wr->putTentativeSample(totalShoot);
-#endif
-
-							invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
-							contrib *= invp;
-						}						
-
-						// accumulate to image
-						if (contrib.isZero()) continue;				
-
-						// MIS weighting						
-						Float miWeight = miWeightVM(m_scene, s, t, 
-							emitterState, sensorState, emitterStatePred, sensorStatePred,
-							vsPred3, vsPred2, vsPred, vs,
-							vt, vtPred, vtPred2, vtPred3,
-							cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);						
-
-#if UPM_DEBUG == 1
-						if (cameraDirConnection){
-							wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
-							wr->putDebugSampleM(s, t - 1, samplePos, contrib);
-						}
-						else{
-							wr->putDebugSample(s - 1, t, samplePos, contrib * miWeight);
-							wr->putDebugSampleM(s - 1, t, samplePos, contrib);
-						}
-						wr->putDebugSampleVM(samplePos, contrib * miWeight);
-#endif
-
-						contrib *= miWeight;						
-						
-#ifdef UPM_DEBUG_HARD
-						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
-							Log(EWarn, "Invalid sample value[UPM]: %f %f %f, invp = %f, miWeight = %f", 
-								contrib[0], contrib[1], contrib[2], invp, miWeight);
-							continue;
-						}
-#endif
-
-						if (t == 2) {
-							list.append(samplePos, contrib);
-						}
-						else {
-							list.accum(0, contrib);
-						}
-					}
-				}
-			}
-			m_pool.release(vs_);
-			m_pool.release(vsPred_);
-			m_pool.release(vsPred2_);
-			m_pool.release(vsPred3_);
-			m_pool.release(succVertex);
-			m_pool.release(succEdge);
-		}
-
-		repeated = false;
-
-		// vertex connection	 
-		if (useVC){
-			PathVertex *vs_ = m_pool.allocVertex();
-			PathVertex *vsPred_ = m_pool.allocVertex();
-			PathVertex *vsPred2_ = m_pool.allocVertex();
-			PathVertex *vsPred3_ = m_pool.allocVertex();
-			size_t lightPathBegin = (cameraPathIndex == 0) ? 0 : m_lightPathEnds[cameraPathIndex - 1];
-			size_t lightPathEnd = m_lightPathEnds[cameraPathIndex];
-			Point2 samplePos(0.0f);			
-			PathEdge connectionEdge;
-			for (size_t i = lightPathBegin; i < lightPathEnd + 2; i++){
-				int s = lightPathEnd + 1 - i;
-				PathVertex *vsPred3 = vsPred3_, *vsPred2 = vsPred2_, *vsPred = vsPred_, *vs = vs_;
-				Spectrum importanceWeight = Spectrum(1.0f);
-				MisState emitterState;
-
-				memset(vsPred, 0, sizeof(PathVertex));
-				memset(vs, 0, sizeof(PathVertex));
-				if (i < lightPathEnd){
-					LightVertex lvertex = m_lightVertices[i];
-					s = m_lightVerticesExt[i].depth;
-					if (s <= 1) continue;
-
-					importanceWeight = lvertex.importanceWeight;
-					emitterState = lvertex.emitterState;
-
-					m_lightVerticesExt[i].expand(vs);
-					m_lightVerticesExt[i - 1].expand(vsPred);
+					vs = vs_; vsPred = vsPred_; vsPred2 = vsPred2_; vsPred3 = vsPred3_;
+					m_lightVerticesExt[vertexIndex].expand(vs);						
+					m_lightVerticesExt[vertexIndex - 1].expand(vsPred);						
 					if (s > 2){
-						m_lightVerticesExt[i - 2].expand(vsPred2);
-						m_lightVerticesExt[i - 3].expand(vsPred3);
+						m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
+						m_lightVerticesExt[vertexIndex - 3].expand(vsPred3);
 					}
 					else if (s == 2){
-						m_lightVerticesExt[i - 2].expand(vsPred2);
+						m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
 						vsPred3 = NULL;
 					}
 					else{
 						vsPred2 = NULL;
 						vsPred3 = NULL;
 					}
-				}
 
-				int minT = 2, maxT = (int)m_sensorSubpath.vertexCount() - 1;
-				if (m_maxDepth != -1)
-					maxT = std::min(maxT, m_maxDepth + 1 - s);
-				for (int t = minT; t <= maxT; ++t) {
-					PathVertex
-						*vtPred3 = m_sensorSubpath.vertexOrNull(t - 3),
-						*vtPred2 = m_sensorSubpath.vertex(t - 2),
-						*vtPred = m_sensorSubpath.vertex(t - 1),
-						*vt = m_sensorSubpath.vertex(t);
-					PathEdge
-						*vtEdge = m_sensorSubpath.edgeOrNull(t - 1);
+					// decide the direction to do connection
+					bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
 
-					/* Will receive the path weight of the (s, t)-connection */
-					Spectrum value = Spectrum(0.0f);					
-
-					RestoreMeasureHelper rmh1(vt);
-
-					/* Will be set to true if direct sampling was used */
-					bool sampleDirect = false;
-
-					/* Number of edges of the combined subpaths */
-					int depth = s + t - 1;
-
-					/* Allowed remaining number of ENull vertices that can
-					be bridged via pathConnect (negative=arbitrarily many) */
-					int remaining = m_maxDepth - depth;
-
-					/* Account for the terms of the measurement contribution
-					function that are coupled to the connection endpoints */
-					if (s == 0){
-						/* If possible, convert 'vt' into an emitter sample */
-						if (!vt->cast(m_scene, PathVertex::EEmitterSample) || vt->isDegenerate())
-							continue;
-						vs = vs_;
-						vs->makeEndpoint(m_scene, time, EImportance);
-						value = radianceWeights[t] *
-							vs->eval(m_scene, NULL, vt, EImportance) *
-							vt->eval(m_scene, vtPred, vs, ERadiance);
-					}else if (s == 1) {
-						if (vt->isDegenerate())
-							continue;
-						/* Generate a position on an emitter using direct sampling */
-						value = radianceWeights[t] * vt->sampleDirect(m_scene, m_directSampler,
-							&tempEndpoint, &tempEdge, &tempSample, EImportance);
-						if (value.isZero())
-							continue;
-						vs = &tempSample; vsPred = &tempEndpoint; 
-						value *= vt->eval(m_scene, vtPred, vs, ERadiance);
-						vt->measure = EArea;						
-						sampleDirect = true;
-					}
-					else {
-						/* Can't connect degenerate endpoints */
-						if ((vs->isDegenerate()) || vt->isDegenerate())
-							continue;
-
-						value = importanceWeight * radianceWeights[t] *
-							vs->eval(m_scene, vsPred, vt, EImportance) *
-							vt->eval(m_scene, vtPred, vs, ERadiance);
-
-						/* Temporarily force vertex measure to EArea. Needed to
-						handle BSDFs with diffuse + specular components */
-						vs->measure = vt->measure = EArea;
-					}
-
-					/* Attempt to connect the two endpoints, which could result in
-					the creation of additional vertices (index-matched boundaries etc.) */
-					int interactions = remaining;
-					if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vt, NULL, interactions))
-						continue;
-
-					/* Determine the pixel sample position when necessary */
 					samplePos = initialSamplePos;
-// 					if (vt->isSensorSample())
-// 						if (!vt->getSamplePosition(vs, samplePos))
-// 							continue;
+					if (vtPred->isSensorSample()){
+						if (!vtPred->getSamplePosition(cameraDirConnection ? vs : vt, samplePos))
+							continue;
+					}
 
-					/* Account for the terms of the measurement contribution
-					function that are coupled to the connection edge */
-					if (!sampleDirect)
-						value *= connectionEdge.evalCached(vs, vt, PathEdge::EGeneralizedGeometricTerm);
-					else
-						value *= connectionEdge.evalCached(vs, vt, PathEdge::ETransmittance |
-						(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
+					// evaluate contribution
+					Spectrum contrib;						
+					if (cameraDirConnection){
+						contrib = radianceWeights[t - 1] * vi.importanceWeight * invLightPaths;
+						contrib *= vs->eval(m_scene, vsPred, vtPred, EImportance) *	vtPred->eval(m_scene, vtPred2, vs, ERadiance);
+						int interactions = m_maxDepth - s - t + 1;
+						if (contrib.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vtPred, NULL, interactions))
+							continue;
+						contrib *= connectionEdge.evalCached(vs, vtPred, PathEdge::EGeneralizedGeometricTerm);							
+					}
+					else{							
+						contrib = radianceWeights[t] * viPred.importanceWeight * invLightPaths;
+						contrib *= vt->eval(m_scene, vtPred, vsPred, ERadiance) *	vsPred->eval(m_scene, vsPred2, vt, EImportance);
+						int interactions = m_maxDepth - s - t + 1;
+						if (contrib.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vt, vsPred, NULL, interactions))
+							continue;
+						contrib *= connectionEdge.evalCached(vt, vsPred, PathEdge::EGeneralizedGeometricTerm);
+					}
 
-					MisState sensorState = sensorStates[t - 1];
-					Float miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
-						vsPred3, vsPred2, vsPred, vs,
-						vt, vtPred, vtPred2, vtPred3,
-						gatherRadius, m_lightPathNum, useVC, useVM);
+					contrib /= (1.f - rejectionProb);
+
+					Float invp = 0.f;
+					if (shareShoot){
+						invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
+						contrib *= invp;
+					}
+					else{
+						std::vector<Float> componentProbs;
+						std::vector<Vector4> componentBounds;
+						Float brdfIntegral;
+						if (cameraDirConnection)
+							brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentProbs, componentBounds);
+						else
+							brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentProbs, componentBounds);
+
+						if (brdfIntegral == 0.f) continue;
+						invBrdfIntegral = 1.f / brdfIntegral;
+						size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
+						Float distSquared = gatherRadius * gatherRadius;
+						while (totalShoot < clampThreshold){
+							totalShoot++;
+
+							// restricted sampling evaluation shoots
+							Float pointDistSquared;
+							if (cameraDirConnection){
+								if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentProbs, componentBounds))
+									continue;
+								pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
+							}
+							else{
+								if (!vsPred->sampleShoot(m_scene, m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentProbs, componentBounds))
+									continue;
+								pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
+							}
+
+							if (pointDistSquared < distSquared){
+								acceptedShoot++;
+								if (acceptedShoot == targetShoot){
+									break;
+								}
+							}
+						}
+						avgInvpShoots.incrementBase();
+						avgInvpShoots += totalShoot;
+						maxInvpShoots.recordMaximum(totalShoot);
+						numInvpShoots += totalShoot;
+
+						numClampShoots.incrementBase();
+						if (totalShoot >= clampThreshold)
+							++numClampShoots;
 
 #if UPM_DEBUG == 1
-					wr->putDebugSample(s, t, samplePos, value * miWeight);
-					wr->putDebugSampleM(s, t, samplePos, value);
-					wr->putDebugSampleVC(samplePos, value * miWeight);
-#endif			
+						wr->putTentativeSample(totalShoot);
+#endif
 
-//					if ((samplePos.x >= 517 && samplePos.x < 518 && samplePos.y >= 203 && samplePos.y < 204) &&
-//						(s == 0 && t == 4) && value[0] > 0.2f){
-// 						if (!repeated) t--;
-// 						repeated = true;
+						invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
+						contrib *= invp;
+					}						
 
-//						float fucka = 1.f;
-// 						Point vsp0 = vs->getPosition();
-// 						Point vtp0 = vt->getPosition();
-// 						Point vtp1 = vtPred->getPosition();
-// 
-// 						Vector vsn0 = vs->getGeometricNormal();
-// 						Vector vtn0 = vt->getGeometricNormal();
-// 						Vector vtn1 = vtPred->getGeometricNormal();
+					// accumulate to image
+					if (contrib.isZero()) continue;				
 
-//						Float miWeight2 = miWeightVC(m_scene, s, t, emitterState, sensorState,
-//							vsPred3, vsPred2, vsPred, vs,
-//							vt, vtPred, vtPred2, vtPred3,
-//							gatherRadius, m_lightPathNum, useVC, useVM);
-//					}
+					// MIS weighting						
+					Float miWeight = miWeightVM(m_scene, s, t, 
+						emitterState, sensorState, emitterStatePred, sensorStatePred,
+						vsPred3, vsPred2, vsPred, vs,
+						vt, vtPred, vtPred2, vtPred3,
+						cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);						
 
-					value *= miWeight;
-					if (value.isZero()) continue;
+#if UPM_DEBUG == 1
+					if (cameraDirConnection){
+						wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
+						wr->putDebugSampleM(s, t - 1, samplePos, contrib);
+					}
+					else{
+						wr->putDebugSample(s - 1, t, samplePos, contrib * miWeight);
+						wr->putDebugSampleM(s - 1, t, samplePos, contrib);
+					}
+					wr->putDebugSampleVM(samplePos, contrib * miWeight);
+#endif
 
-
-
+					contrib *= miWeight;						
+						
 #ifdef UPM_DEBUG_HARD
-					if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f){
-						Log(EWarn, "Invalid sample value[VC]: %f %f %f", value[0], value[1], value[2]);
+					if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
+						Log(EWarn, "Invalid sample value[UPM]: %f %f %f, invp = %f, miWeight = %f", 
+							contrib[0], contrib[1], contrib[2], invp, miWeight);
 						continue;
 					}
 #endif
 
-					if (t < 2) {
-						list.append(samplePos, value);
+					if (t == 2) {
+						list.append(samplePos, contrib);
 					}
 					else {
-						list.accum(0, value);
+						list.accum(0, contrib);
 					}
 				}
 			}
-			m_pool.release(vs_);
-			m_pool.release(vsPred_);
-			m_pool.release(vsPred2_);
-			m_pool.release(vsPred3_);
-		}		
-
-		/* Release any used edges and vertices back to the memory pool */
-		m_sensorSubpath.release(m_pool);		
+		}
+		m_pool.release(vs_);
+		m_pool.release(vsPred_);
+		m_pool.release(vsPred2_);
+		m_pool.release(vsPred3_);
+		m_pool.release(succVertex);
+		m_pool.release(succEdge);
 	}
-		break;
 
-	default:
-		Log(EError, "PathSampler::sample(): invalid technique!");
+	repeated = false;
+
+	// vertex connection	 
+	if (useVC){
+		PathVertex *vs_ = m_pool.allocVertex();
+		PathVertex *vsPred_ = m_pool.allocVertex();
+		PathVertex *vsPred2_ = m_pool.allocVertex();
+		PathVertex *vsPred3_ = m_pool.allocVertex();
+		size_t lightPathBegin = (cameraPathIndex == 0) ? 0 : m_lightPathEnds[cameraPathIndex - 1];
+		size_t lightPathEnd = m_lightPathEnds[cameraPathIndex];
+		Point2 samplePos(0.0f);			
+		PathEdge connectionEdge;
+		for (size_t i = lightPathBegin; i < lightPathEnd + 2; i++){
+			int s = lightPathEnd + 1 - i;
+			PathVertex *vsPred3 = vsPred3_, *vsPred2 = vsPred2_, *vsPred = vsPred_, *vs = vs_;
+			Spectrum importanceWeight = Spectrum(1.0f);
+			MisState emitterState;
+
+			memset(vsPred, 0, sizeof(PathVertex));
+			memset(vs, 0, sizeof(PathVertex));
+			if (i < lightPathEnd){
+				LightVertex lvertex = m_lightVertices[i];
+				s = m_lightVerticesExt[i].depth;
+				if (s <= 1) continue;
+
+				importanceWeight = lvertex.importanceWeight;
+				emitterState = lvertex.emitterState;
+
+				m_lightVerticesExt[i].expand(vs);
+				m_lightVerticesExt[i - 1].expand(vsPred);
+				if (s > 2){
+					m_lightVerticesExt[i - 2].expand(vsPred2);
+					m_lightVerticesExt[i - 3].expand(vsPred3);
+				}
+				else if (s == 2){
+					m_lightVerticesExt[i - 2].expand(vsPred2);
+					vsPred3 = NULL;
+				}
+				else{
+					vsPred2 = NULL;
+					vsPred3 = NULL;
+				}
+			}
+
+			int minT = 2, maxT = (int)m_sensorSubpath.vertexCount() - 1;
+			if (m_maxDepth != -1)
+				maxT = std::min(maxT, m_maxDepth + 1 - s);
+			for (int t = minT; t <= maxT; ++t) {
+				PathVertex
+					*vtPred3 = m_sensorSubpath.vertexOrNull(t - 3),
+					*vtPred2 = m_sensorSubpath.vertex(t - 2),
+					*vtPred = m_sensorSubpath.vertex(t - 1),
+					*vt = m_sensorSubpath.vertex(t);
+				PathEdge
+					*vtEdge = m_sensorSubpath.edgeOrNull(t - 1);
+
+				/* Will receive the path weight of the (s, t)-connection */
+				Spectrum value = Spectrum(0.0f);					
+
+				RestoreMeasureHelper rmh1(vt);
+
+				/* Will be set to true if direct sampling was used */
+				bool sampleDirect = false;
+
+				/* Number of edges of the combined subpaths */
+				int depth = s + t - 1;
+
+				/* Allowed remaining number of ENull vertices that can
+				be bridged via pathConnect (negative=arbitrarily many) */
+				int remaining = m_maxDepth - depth;
+
+				/* Account for the terms of the measurement contribution
+				function that are coupled to the connection endpoints */
+				if (s == 0){
+					/* If possible, convert 'vt' into an emitter sample */
+					if (!vt->cast(m_scene, PathVertex::EEmitterSample) || vt->isDegenerate())
+						continue;
+					vs = vs_;
+					vs->makeEndpoint(m_scene, time, EImportance);
+					value = radianceWeights[t] *
+						vs->eval(m_scene, NULL, vt, EImportance) *
+						vt->eval(m_scene, vtPred, vs, ERadiance);
+				}else if (s == 1) {
+					if (vt->isDegenerate())
+						continue;
+					/* Generate a position on an emitter using direct sampling */
+					value = radianceWeights[t] * vt->sampleDirect(m_scene, m_directSampler,
+						&tempEndpoint, &tempEdge, &tempSample, EImportance);
+					if (value.isZero())
+						continue;
+					vs = &tempSample; vsPred = &tempEndpoint; 
+					value *= vt->eval(m_scene, vtPred, vs, ERadiance);
+					vt->measure = EArea;						
+					sampleDirect = true;
+				}
+				else {
+					/* Can't connect degenerate endpoints */
+					if ((vs->isDegenerate()) || vt->isDegenerate())
+						continue;
+
+					value = importanceWeight * radianceWeights[t] *
+						vs->eval(m_scene, vsPred, vt, EImportance) *
+						vt->eval(m_scene, vtPred, vs, ERadiance);
+
+					/* Temporarily force vertex measure to EArea. Needed to
+					handle BSDFs with diffuse + specular components */
+					vs->measure = vt->measure = EArea;
+				}
+
+				/* Attempt to connect the two endpoints, which could result in
+				the creation of additional vertices (index-matched boundaries etc.) */
+				int interactions = remaining;
+				if (value.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vt, NULL, interactions))
+					continue;
+
+				/* Determine the pixel sample position when necessary */
+				samplePos = initialSamplePos;
+// 					if (vt->isSensorSample())
+// 						if (!vt->getSamplePosition(vs, samplePos))
+// 							continue;
+
+				/* Account for the terms of the measurement contribution
+				function that are coupled to the connection edge */
+				if (!sampleDirect)
+					value *= connectionEdge.evalCached(vs, vt, PathEdge::EGeneralizedGeometricTerm);
+				else
+					value *= connectionEdge.evalCached(vs, vt, PathEdge::ETransmittance |
+					(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
+
+				MisState sensorState = sensorStates[t - 1];
+				Float miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
+					vsPred3, vsPred2, vsPred, vs,
+					vt, vtPred, vtPred2, vtPred3,
+					gatherRadius, m_lightPathNum, useVC, useVM);
+
+#if UPM_DEBUG == 1
+				wr->putDebugSample(s, t, samplePos, value * miWeight);
+				wr->putDebugSampleM(s, t, samplePos, value);
+				wr->putDebugSampleVC(samplePos, value * miWeight);
+#endif			
+
+				value *= miWeight;
+				if (value.isZero()) continue;
+
+#ifdef UPM_DEBUG_HARD
+				if (value[0] < 0.f || _isnan(value[0]) || value[0] > 100000000.f){
+					Log(EWarn, "Invalid sample value[VC]: %f %f %f", value[0], value[1], value[2]);
+					continue;
+				}
+#endif
+
+				if (t < 2) {
+					list.append(samplePos, value);
+				}
+				else {
+					list.accum(0, value);
+				}
+			}
+		}
+		m_pool.release(vs_);
+		m_pool.release(vsPred_);
+		m_pool.release(vsPred2_);
+		m_pool.release(vsPred3_);
+	}
+	else{	
+		// complement missing path in single VM technique set
+		if (m_sensorSubpath.vertexCount() >= 3){
+			int t = 2, s = 0;
+			PathVertex
+				*vtPred2 = m_sensorSubpath.vertex(0),
+				*vtPred = m_sensorSubpath.vertex(1),
+				*vt = m_sensorSubpath.vertex(2);
+			PathEdge
+				*vtEdge = m_sensorSubpath.edgeOrNull(t - 1);
+			PathVertex *vs = m_pool.allocVertex();
+			PathEdge connectionEdge;
+			Spectrum value = Spectrum(0.0f);
+
+			/* If possible, convert 'vt' into an emitter sample */
+			if (vt->cast(m_scene, PathVertex::EEmitterSample) && !vt->isDegenerate() && !m_excludeDirectIllum){
+				vs->makeEndpoint(m_scene, time, EImportance);
+				int depth = s + t - 1;
+				int remaining = m_maxDepth - depth;
+				value = radianceWeights[t] *
+					vs->eval(m_scene, NULL, vt, EImportance) *
+					vt->eval(m_scene, vtPred, vs, ERadiance);
+
+				int interactions = remaining;
+				connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vt, vtEdge, interactions);
+				depth += interactions;
+				value *= connectionEdge.evalCached(vs, vt, PathEdge::ETransmittance |
+					(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
+
+				MisState sensorState = sensorStates[t - 1];
+				MisState emitterState;
+				Float miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
+					NULL, NULL, NULL, vs,
+					vt, vtPred, vtPred2, NULL,
+					gatherRadius, m_lightPathNum, useVC, useVM);
+				value *= miWeight;
+				list.accum(0, value);
+#if UPM_DEBUG == 1
+				wr->putDebugSampleVC(initialSamplePos, value);
+#endif
+			}
+
+			m_pool.release(vs);
+			m_sensorSubpath.release(m_pool);
+		}
 	}
 }
 
@@ -2753,212 +2763,6 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 		PathVertex tempEndpoint, tempSample;
 		PathEdge tempEdge, connectionEdge;
 		Point2 samplePos(0.0f);
-
-		if (useVC){
-			for (int s = (int)m_emitterSubpath.vertexCount() - 1; s >= 0; --s) {
-				/* Determine the range of sensor vertices to be traversed,
-				while respecting the specified maximum path length */
-				int minT = std::max(2 - s, m_lightImage ? 0 : 2),
-					maxT = (int)m_sensorSubpath.vertexCount() - 1;
-				if (m_maxDepth != -1)
-					maxT = std::min(maxT, m_maxDepth + 1 - s);
-
-				for (int t = maxT; t >= minT; --t) {
-					PathVertex
-						*vsPred3 = m_emitterSubpath.vertexOrNull(s - 3),
-						*vtPred3 = m_sensorSubpath.vertexOrNull(t - 3),
-						*vsPred2 = m_emitterSubpath.vertexOrNull(s - 2),
-						*vtPred2 = m_sensorSubpath.vertexOrNull(t - 2),
-						*vsPred = m_emitterSubpath.vertexOrNull(s - 1),
-						*vtPred = m_sensorSubpath.vertexOrNull(t - 1),
-						*vs = m_emitterSubpath.vertex(s),
-						*vt = m_sensorSubpath.vertex(t);
-					PathEdge
-						*vsEdge = m_emitterSubpath.edgeOrNull(s - 1),
-						*vtEdge = m_sensorSubpath.edgeOrNull(t - 1);
-
-					RestoreMeasureHelper rmh0(vs), rmh1(vt);
-
-					/* Will be set to true if direct sampling was used */
-					bool sampleDirect = false;
-
-					/* Number of edges of the combined subpaths */
-					int depth = s + t - 1;
-
-					/* Allowed remaining number of ENull vertices that can
-					be bridged via pathConnect (negative=arbitrarily many) */
-					int remaining = m_maxDepth - depth;
-
-					/* Will receive the path weight of the (s, t)-connection */
-					Spectrum value;
-
-					/* Account for the terms of the measurement contribution
-					function that are coupled to the connection endpoints */
-					if (vs->isEmitterSupernode()) {
-						/* If possible, convert 'vt' into an emitter sample */
-						if (!vt->cast(m_scene, PathVertex::EEmitterSample) || vt->isDegenerate())
-							continue;
-
-						value = radianceWeights[t] *
-							vs->eval(m_scene, vsPred, vt, EImportance) *
-							vt->eval(m_scene, vtPred, vs, ERadiance);
-					}
-					else if (vt->isSensorSupernode()) {
-						/* If possible, convert 'vs' into an sensor sample */
-						if (!vs->cast(m_scene, PathVertex::ESensorSample) || vs->isDegenerate())
-							continue;
-
-						/* Make note of the changed pixel sample position */
-						if (!vs->getSamplePosition(vsPred, samplePos))
-							continue;
-
-						value = importanceWeights[s] *
-							vs->eval(m_scene, vsPred, vt, EImportance) *
-							vt->eval(m_scene, vtPred, vs, ERadiance);
-					}
-					else if (m_sampleDirect && ((t == 1 && s > 1) || (s == 1 && t > 1))) {
-						/* s==1/t==1 path: use a direct sampling strategy if requested */
-						if (s == 1) {
-							if (vt->isDegenerate())
-								continue;
-
-							/* Generate a position on an emitter using direct sampling */
-							value = radianceWeights[t] * vt->sampleDirect(m_scene, m_directSampler,
-								&tempEndpoint, &tempEdge, &tempSample, EImportance);
-
-							if (value.isZero())
-								continue;
-							vs = &tempSample; vsPred = &tempEndpoint; vsEdge = &tempEdge;
-							value *= vt->eval(m_scene, vtPred, vs, ERadiance);
-							vt->measure = EArea;
-						}
-						else {
-							if (vs->isDegenerate())
-								continue;
-							/* Generate a position on the sensor using direct sampling */
-							value = importanceWeights[s] * vs->sampleDirect(m_scene, m_directSampler,
-								&tempEndpoint, &tempEdge, &tempSample, ERadiance);
-							if (value.isZero())
-								continue;
-							vt = &tempSample; vtPred = &tempEndpoint; vtEdge = &tempEdge;
-							value *= vs->eval(m_scene, vsPred, vt, EImportance);
-							vs->measure = EArea;
-						}
-
-						sampleDirect = true;
-					}
-					else {
-						/* Can't connect degenerate endpoints */
-						if (vs->isDegenerate() || vt->isDegenerate())
-							continue;
-
-						value = importanceWeights[s] * radianceWeights[t] *
-							vs->eval(m_scene, vsPred, vt, EImportance) *
-							vt->eval(m_scene, vtPred, vs, ERadiance);
-
-						/* Temporarily force vertex measure to EArea. Needed to
-						handle BSDFs with diffuse + specular components */
-						vs->measure = vt->measure = EArea;
-					}
-
-					/* Attempt to connect the two endpoints, which could result in
-					the creation of additional vertices (index-matched boundaries etc.) */
-					int interactions = remaining;
-					if (value.isZero() || !connectionEdge.pathConnectAndCollapse(
-						m_scene, vsEdge, vs, vt, vtEdge, interactions))
-						continue;
-
-					depth += interactions;
-
-					if (m_excludeDirectIllum && depth <= 2)
-						continue;
-
-					/* Account for the terms of the measurement contribution
-					function that are coupled to the connection edge */
-					if (!sampleDirect)
-						value *= connectionEdge.evalCached(vs, vt, PathEdge::EGeneralizedGeometricTerm);
-					else
-						value *= connectionEdge.evalCached(vs, vt, PathEdge::ETransmittance |
-						(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
-
-					if (sampleDirect) {
-						/* A direct sampling strategy was used, which generated
-						two new vertices at one of the path ends. Temporarily
-						modify the path to reflect this change */
-						if (t == 1)
-							m_sensorSubpath.swapEndpoints(vtPred, vtEdge, vt);
-						else
-							m_emitterSubpath.swapEndpoints(vsPred, vsEdge, vs);
-					}
-
-					/* Compute the multiple importance sampling weight */
-					// 					value *= Path::miWeight(m_scene, m_emitterSubpath, &connectionEdge,
-					// 						m_sensorSubpath, s, t, m_sampleDirect, m_lightImage);
-					Float weight0 = Path::miWeight(m_scene, m_emitterSubpath, &connectionEdge,
-						m_sensorSubpath, s, t, m_sampleDirect, m_lightImage);
-					
-					Float miWeight = 0.f;
-					MisState sensorState = sensorStates[t - 1];
-					MisState emitterState = emitterStates[s - 1];
-					if (!sampleDirect){
-						miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
-							vsPred3, vsPred2, vsPred, vs,
-							vt, vtPred, vtPred2, vtPred3,
-							gatherRadius, m_lightPathNum, useVC, useVM);
-					}else {
-						if (t == 1){
-							PathVertex
-								*vtPredTemp = m_sensorSubpath.vertexOrNull(t - 1),
-								*vtTemp = m_sensorSubpath.vertex(t);
-							miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
-								vsPred3, vsPred2, vsPred, vs,
-								vtTemp, vtPredTemp, NULL, NULL,
-								gatherRadius, m_lightPathNum, useVC, useVM);
-						}
-						else{
-							PathVertex
-								*vsPredTemp = m_emitterSubpath.vertexOrNull(s - 1),
-								*vsTemp = m_emitterSubpath.vertex(s);							
-							miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
-								NULL, NULL, vsPredTemp, vsTemp,
-								vt, vtPred, vtPred2, vtPred3,
-								gatherRadius, m_lightPathNum, useVC, useVM);
-						}
-					}
-					
-					value *= miWeight;
-
-					if (sampleDirect) {
-						/* Now undo the previous change */
-						if (t == 1)
-							m_sensorSubpath.swapEndpoints(vtPred, vtEdge, vt);
-						else
-							m_emitterSubpath.swapEndpoints(vsPred, vsEdge, vs);
-					}
-
-					Spectrum contrib = value;
-					if (contrib[0] < 0.f || _isnan(contrib[0]) || !std::isfinite(contrib[0]) ||
-						contrib[1] < 0.f || _isnan(contrib[1]) || !std::isfinite(contrib[1]) ||
-						contrib[2] < 0.f || _isnan(contrib[2]) || !std::isfinite(contrib[2])){
-						Log(EWarn, "Invalid sample value[EPSSMLT-VC]: %f %f %f",
-							contrib[0], contrib[1], contrib[2]);
-						continue;
-					}
-
-					/* Determine the pixel sample position when necessary */
-					if (vt->isSensorSample() && !vt->getSamplePosition(vs, samplePos))
-						continue;
-
-					if (t < 2) {
-						list.append(samplePos, value);
-					}
-					else {
-						BDAssert(m_sensorSubpath.vertexCount() > 2);
-						list.accum(0, value);
-					}
-				}
-			}
-		}
 
 		std::vector<uint32_t> searchResults;
 		std::vector<uint32_t> searchResultsAll;
@@ -3491,6 +3295,212 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 			m_pool.release(succEdge);
 		}
 #endif
+
+		if (useVC){
+			for (int s = (int)m_emitterSubpath.vertexCount() - 1; s >= 0; --s) {
+				/* Determine the range of sensor vertices to be traversed,
+				while respecting the specified maximum path length */
+				int minT = std::max(2 - s, m_lightImage ? 0 : 2),
+					maxT = (int)m_sensorSubpath.vertexCount() - 1;
+				if (m_maxDepth != -1)
+					maxT = std::min(maxT, m_maxDepth + 1 - s);
+
+				for (int t = maxT; t >= minT; --t) {
+					PathVertex
+						*vsPred3 = m_emitterSubpath.vertexOrNull(s - 3),
+						*vtPred3 = m_sensorSubpath.vertexOrNull(t - 3),
+						*vsPred2 = m_emitterSubpath.vertexOrNull(s - 2),
+						*vtPred2 = m_sensorSubpath.vertexOrNull(t - 2),
+						*vsPred = m_emitterSubpath.vertexOrNull(s - 1),
+						*vtPred = m_sensorSubpath.vertexOrNull(t - 1),
+						*vs = m_emitterSubpath.vertex(s),
+						*vt = m_sensorSubpath.vertex(t);
+					PathEdge
+						*vsEdge = m_emitterSubpath.edgeOrNull(s - 1),
+						*vtEdge = m_sensorSubpath.edgeOrNull(t - 1);
+
+					RestoreMeasureHelper rmh0(vs), rmh1(vt);
+
+					/* Will be set to true if direct sampling was used */
+					bool sampleDirect = false;
+
+					/* Number of edges of the combined subpaths */
+					int depth = s + t - 1;
+
+					/* Allowed remaining number of ENull vertices that can
+					be bridged via pathConnect (negative=arbitrarily many) */
+					int remaining = m_maxDepth - depth;
+
+					/* Will receive the path weight of the (s, t)-connection */
+					Spectrum value;
+
+					/* Account for the terms of the measurement contribution
+					function that are coupled to the connection endpoints */
+					if (vs->isEmitterSupernode()) {
+						/* If possible, convert 'vt' into an emitter sample */
+						if (!vt->cast(m_scene, PathVertex::EEmitterSample) || vt->isDegenerate())
+							continue;
+
+						value = radianceWeights[t] *
+							vs->eval(m_scene, vsPred, vt, EImportance) *
+							vt->eval(m_scene, vtPred, vs, ERadiance);
+					}
+					else if (vt->isSensorSupernode()) {
+						/* If possible, convert 'vs' into an sensor sample */
+						if (!vs->cast(m_scene, PathVertex::ESensorSample) || vs->isDegenerate())
+							continue;
+
+						/* Make note of the changed pixel sample position */
+						if (!vs->getSamplePosition(vsPred, samplePos))
+							continue;
+
+						value = importanceWeights[s] *
+							vs->eval(m_scene, vsPred, vt, EImportance) *
+							vt->eval(m_scene, vtPred, vs, ERadiance);
+					}
+					else if (m_sampleDirect && ((t == 1 && s > 1) || (s == 1 && t > 1))) {
+						/* s==1/t==1 path: use a direct sampling strategy if requested */
+						if (s == 1) {
+							if (vt->isDegenerate())
+								continue;
+
+							/* Generate a position on an emitter using direct sampling */
+							value = radianceWeights[t] * vt->sampleDirect(m_scene, m_directSampler,
+								&tempEndpoint, &tempEdge, &tempSample, EImportance);
+
+							if (value.isZero())
+								continue;
+							vs = &tempSample; vsPred = &tempEndpoint; vsEdge = &tempEdge;
+							value *= vt->eval(m_scene, vtPred, vs, ERadiance);
+							vt->measure = EArea;
+						}
+						else {
+							if (vs->isDegenerate())
+								continue;
+							/* Generate a position on the sensor using direct sampling */
+							value = importanceWeights[s] * vs->sampleDirect(m_scene, m_directSampler,
+								&tempEndpoint, &tempEdge, &tempSample, ERadiance);
+							if (value.isZero())
+								continue;
+							vt = &tempSample; vtPred = &tempEndpoint; vtEdge = &tempEdge;
+							value *= vs->eval(m_scene, vsPred, vt, EImportance);
+							vs->measure = EArea;
+						}
+
+						sampleDirect = true;
+					}
+					else {
+						/* Can't connect degenerate endpoints */
+						if (vs->isDegenerate() || vt->isDegenerate())
+							continue;
+
+						value = importanceWeights[s] * radianceWeights[t] *
+							vs->eval(m_scene, vsPred, vt, EImportance) *
+							vt->eval(m_scene, vtPred, vs, ERadiance);
+
+						/* Temporarily force vertex measure to EArea. Needed to
+						handle BSDFs with diffuse + specular components */
+						vs->measure = vt->measure = EArea;
+					}
+
+					/* Attempt to connect the two endpoints, which could result in
+					the creation of additional vertices (index-matched boundaries etc.) */
+					int interactions = remaining;
+					if (value.isZero() || !connectionEdge.pathConnectAndCollapse(
+						m_scene, vsEdge, vs, vt, vtEdge, interactions))
+						continue;
+
+					depth += interactions;
+
+					if (m_excludeDirectIllum && depth <= 2)
+						continue;
+
+					/* Account for the terms of the measurement contribution
+					function that are coupled to the connection edge */
+					if (!sampleDirect)
+						value *= connectionEdge.evalCached(vs, vt, PathEdge::EGeneralizedGeometricTerm);
+					else
+						value *= connectionEdge.evalCached(vs, vt, PathEdge::ETransmittance |
+						(s == 1 ? PathEdge::ECosineRad : PathEdge::ECosineImp));
+
+					if (sampleDirect) {
+						/* A direct sampling strategy was used, which generated
+						two new vertices at one of the path ends. Temporarily
+						modify the path to reflect this change */
+						if (t == 1)
+							m_sensorSubpath.swapEndpoints(vtPred, vtEdge, vt);
+						else
+							m_emitterSubpath.swapEndpoints(vsPred, vsEdge, vs);
+					}
+
+					/* Compute the multiple importance sampling weight */
+					// 					value *= Path::miWeight(m_scene, m_emitterSubpath, &connectionEdge,
+					// 						m_sensorSubpath, s, t, m_sampleDirect, m_lightImage);
+					Float weight0 = Path::miWeight(m_scene, m_emitterSubpath, &connectionEdge,
+						m_sensorSubpath, s, t, m_sampleDirect, m_lightImage);
+
+					Float miWeight = 0.f;
+					MisState sensorState = sensorStates[t - 1];
+					MisState emitterState = emitterStates[s - 1];
+					if (!sampleDirect){
+						miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
+							vsPred3, vsPred2, vsPred, vs,
+							vt, vtPred, vtPred2, vtPred3,
+							gatherRadius, m_lightPathNum, useVC, useVM);
+					}else {
+						if (t == 1){
+							PathVertex
+								*vtPredTemp = m_sensorSubpath.vertexOrNull(t - 1),
+								*vtTemp = m_sensorSubpath.vertex(t);
+							miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
+								vsPred3, vsPred2, vsPred, vs,
+								vtTemp, vtPredTemp, NULL, NULL,
+								gatherRadius, m_lightPathNum, useVC, useVM);
+						}
+						else{
+							PathVertex
+								*vsPredTemp = m_emitterSubpath.vertexOrNull(s - 1),
+								*vsTemp = m_emitterSubpath.vertex(s);							
+							miWeight = miWeightVC(m_scene, s, t, emitterState, sensorState,
+								NULL, NULL, vsPredTemp, vsTemp,
+								vt, vtPred, vtPred2, vtPred3,
+								gatherRadius, m_lightPathNum, useVC, useVM);
+						}
+					}
+
+					value *= miWeight;
+
+					if (sampleDirect) {
+						/* Now undo the previous change */
+						if (t == 1)
+							m_sensorSubpath.swapEndpoints(vtPred, vtEdge, vt);
+						else
+							m_emitterSubpath.swapEndpoints(vsPred, vsEdge, vs);
+					}
+
+					Spectrum contrib = value;
+					if (contrib[0] < 0.f || _isnan(contrib[0]) || !std::isfinite(contrib[0]) ||
+						contrib[1] < 0.f || _isnan(contrib[1]) || !std::isfinite(contrib[1]) ||
+						contrib[2] < 0.f || _isnan(contrib[2]) || !std::isfinite(contrib[2])){
+						Log(EWarn, "Invalid sample value[EPSSMLT-VC]: %f %f %f",
+							contrib[0], contrib[1], contrib[2]);
+						continue;
+					}
+
+					/* Determine the pixel sample position when necessary */
+					if (vt->isSensorSample() && !vt->getSamplePosition(vs, samplePos))
+						continue;
+
+					if (t < 2) {
+						list.append(samplePos, value);
+					}
+					else {
+						BDAssert(m_sensorSubpath.vertexCount() > 2);
+						list.accum(0, value);
+					}
+				}
+			}
+		}
 
 		/* Release any used edges and vertices back to the memory pool */
 		m_sensorSubpath.release(m_pool);

@@ -96,7 +96,15 @@ public:
 			batres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
 			batres->clear();
 			intervalTimer->start();
-		}		
+		}
+
+		// [UC] for relative contribution graphing
+		Float rcInterval = 60.f;
+		Float numProgressiveBatch = 0;
+		ref<Timer> intervalTimer2 = new Timer(false);
+		if (m_config.enableProgressiveDump){
+			intervalTimer2->start();
+		}
 
 		HilbertCurve2D<int> hilbertCurve;
 		TVector2<int> filmSize(m_film->getCropSize());
@@ -150,6 +158,22 @@ public:
 					numBatch++;
 				}
 			}
+
+			// [UC] for relative contribution graphing
+			if (m_config.enableProgressiveDump && intervalTimer2->getSeconds() >= rcInterval){				
+				fs::path path = m_scene->getDestinationFile();
+				wr->progressiveDump(filmSize.x, filmSize.y, m_config.maxDepth, path.parent_path(), path.stem(), numProgressiveBatch * 8 + workID, actualSampleCount, true);
+				intervalTimer2->reset();
+				numProgressiveBatch++;
+			}
+		}
+
+		// [UC] for relative contribution graphing
+		if (m_config.enableProgressiveDump){
+			fs::path path = m_scene->getDestinationFile();
+			wr->progressiveDump(filmSize.x, filmSize.y, m_config.maxDepth, path.parent_path(), path.stem(), numProgressiveBatch * 8 + workID, actualSampleCount, true);
+			intervalTimer2->reset();
+			numProgressiveBatch++;
 		}
 
 		Log(EInfo, "Run %d iterations", actualSampleCount);

@@ -584,6 +584,9 @@
 		<param name="enableSeparateDump" readableName="Enable separate dump" type="boolean" default="false">
 			For unbiasness check
 		</param>
+		<param name="enableProgressiveDump" readableName="Enable progressive dump" type="boolean" default="false">
+			For relative contribution graph
+		</param>
 	</plugin>
 	
 	<plugin type="integrator" name="upm" readableName="Unbiased Photon Mapping" show="true"
@@ -681,6 +684,9 @@
 		</param>
 		<param name="enableSeparateDump" readableName="Enable separate dump" type="boolean" default="false">
 			For unbiasness check
+		</param>
+		<param name="enableProgressiveDump" readableName="Enable progressive dump" type="boolean" default="false">
+			For relative contribution graph
 		</param>
 	</plugin>
 

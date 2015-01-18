@@ -157,6 +157,7 @@ public:
 		m_config.useVC = props.getBoolean("useVC", true);
 
 		m_config.enableSeparateDump = props.getBoolean("enableSeparateDump", false);
+		m_config.enableProgressiveDump = props.getBoolean("enableProgressiveDump", false);
 	}
 
 	/// Unserialize from a binary data stream
