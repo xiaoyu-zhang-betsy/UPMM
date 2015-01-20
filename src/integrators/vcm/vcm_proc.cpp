@@ -802,9 +802,10 @@ public:
 		hilbertCurve.initialize(filmSize);
 		uint64_t iteration = workID;
 		size_t actualSampleCount = 0;
-
-		// [UC] for unbiased check
 		ImageBlock *batres = NULL;
+
+#if UPM_DEBUG == 1
+		// [UC] for unbiased check		
 		Float sepInterval = 60.f;
 		size_t numSepSamples = 0;
 		size_t numBatch = 0;
@@ -822,6 +823,7 @@ public:
 		if (m_config.enableProgressiveDump){
 			intervalTimer2->start();
 		}
+#endif
 
 		float radius = m_config.initialRadius;
 		ref<Timer> timer = new Timer();
@@ -850,6 +852,7 @@ public:
 			}
 			actualSampleCount++;
 
+#if UPM_DEBUG == 1
 			// [UC] for unbiased check
 			if (m_config.enableSeparateDump){
 				numSepSamples++;
@@ -874,8 +877,10 @@ public:
 				intervalTimer2->reset();
 				numProgressiveBatch++;
 			}
+#endif
 		}
 
+#if UPM_DEBUG == 1
 		// [UC] for relative contribution graphing
 		if (m_config.enableProgressiveDump){
 			fs::path path = m_scene->getDestinationFile();
@@ -883,6 +888,7 @@ public:
 			intervalTimer2->reset();
 			numProgressiveBatch++;
 		}
+#endif
 
 		Log(EInfo, "Run %d iterations", actualSampleCount);
 		result->accumSampleCount(actualSampleCount);

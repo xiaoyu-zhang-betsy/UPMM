@@ -1132,7 +1132,6 @@ Float PathSampler::generateSeedsConnection(size_t sampleCount, size_t seedCount,
 inline Float MisHeuristic(Float pdf) {
 	return pdf * pdf;
 }
-
 ETransportMode connectionDirection(const PathVertex* vsPred, const PathVertex* vtPred){
 	// true for camera direction and false for light direction
 	bool cameraDirConnection = true;
@@ -2182,164 +2181,155 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					if (s == 2 && t == 2 && useVC) continue;
 #endif
 
-					if (m_sensorSampler->next1D() < rejectionProb) continue;
+					if (m_sensorSampler->next1D() < rejectionProb) continue;					
 
-					for (int cflag = 1; cflag < 2; cflag++){
-						size_t vertexIndex = node.data.vertexIndex;
-						LightVertex vi = m_lightVertices[vertexIndex];
-						LightVertex viPred = m_lightVertices[vertexIndex - 1];
-						MisState emitterState = vi.emitterState;
-						MisState emitterStatePred = viPred.emitterState;
+					size_t vertexIndex = node.data.vertexIndex;
+					LightVertex vi = m_lightVertices[vertexIndex];
+					LightVertex viPred = m_lightVertices[vertexIndex - 1];
+					MisState emitterState = vi.emitterState;
+					MisState emitterStatePred = viPred.emitterState;
 
-						vs = vs_; vsPred = vsPred_; vsPred2 = vsPred2_; vsPred3 = vsPred3_;
-						m_lightVerticesExt[vertexIndex].expand(vs);
-						m_lightVerticesExt[vertexIndex - 1].expand(vsPred);
-						if (s > 2){
-							m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
-							m_lightVerticesExt[vertexIndex - 3].expand(vsPred3);
-						}
-						else if (s == 2){
-							m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
-							vsPred3 = NULL;
-						}
-						else{
-							vsPred2 = NULL;
-							vsPred3 = NULL;
-						}
+					vs = vs_; vsPred = vsPred_; vsPred2 = vsPred2_; vsPred3 = vsPred3_;
+					m_lightVerticesExt[vertexIndex].expand(vs);
+					m_lightVerticesExt[vertexIndex - 1].expand(vsPred);
+					if (s > 2){
+						m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
+						m_lightVerticesExt[vertexIndex - 3].expand(vsPred3);
+					}
+					else if (s == 2){
+						m_lightVerticesExt[vertexIndex - 2].expand(vsPred2);
+						vsPred3 = NULL;
+					}
+					else{
+						vsPred2 = NULL;
+						vsPred3 = NULL;
+					}
 
-						// decide the direction to do connection
-						//bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
-						bool cameraDirConnection;
-						if (cflag == 0)
-							cameraDirConnection = true;
-						else
-							cameraDirConnection = false;
+					// decide the direction to do connection
+					bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
 							
-						samplePos = initialSamplePos;
-						if (vtPred->isSensorSample()){
-							if (!vtPred->getSamplePosition(cameraDirConnection ? vs : vt, samplePos))
-								continue;
-						}
+					samplePos = initialSamplePos;
+					if (vtPred->isSensorSample()){
+						if (!vtPred->getSamplePosition(cameraDirConnection ? vs : vt, samplePos))
+							continue;
+					}
 
-						// evaluate contribution
-						Spectrum contrib;
-						if (cameraDirConnection){
-							contrib = radianceWeights[t - 1] * vi.importanceWeight * invLightPaths;
-							contrib *= vs->eval(m_scene, vsPred, vtPred, EImportance) *	vtPred->eval(m_scene, vtPred2, vs, ERadiance);
-							int interactions = m_maxDepth - s - t + 1;
-							if (contrib.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vtPred, NULL, interactions))
-								continue;
-							contrib *= connectionEdge.evalCached(vs, vtPred, PathEdge::EGeneralizedGeometricTerm);
-						}
-						else{
-							contrib = radianceWeights[t] * viPred.importanceWeight * invLightPaths;
-							contrib *= vt->eval(m_scene, vtPred, vsPred, ERadiance) *	vsPred->eval(m_scene, vsPred2, vt, EImportance);
-							int interactions = m_maxDepth - s - t + 1;
-							if (contrib.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vt, vsPred, NULL, interactions))
-								continue;
-							contrib *= connectionEdge.evalCached(vt, vsPred, PathEdge::EGeneralizedGeometricTerm);
-						}
+					// evaluate contribution
+					Spectrum contrib;
+					if (cameraDirConnection){
+						contrib = radianceWeights[t - 1] * vi.importanceWeight * invLightPaths;
+						contrib *= vs->eval(m_scene, vsPred, vtPred, EImportance) *	vtPred->eval(m_scene, vtPred2, vs, ERadiance);
+						int interactions = m_maxDepth - s - t + 1;
+						if (contrib.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vs, vtPred, NULL, interactions))
+							continue;
+						contrib *= connectionEdge.evalCached(vs, vtPred, PathEdge::EGeneralizedGeometricTerm);
+					}
+					else{
+						contrib = radianceWeights[t] * viPred.importanceWeight * invLightPaths;
+						contrib *= vt->eval(m_scene, vtPred, vsPred, ERadiance) *	vsPred->eval(m_scene, vsPred2, vt, EImportance);
+						int interactions = m_maxDepth - s - t + 1;
+						if (contrib.isZero() || !connectionEdge.pathConnectAndCollapse(m_scene, NULL, vt, vsPred, NULL, interactions))
+							continue;
+						contrib *= connectionEdge.evalCached(vt, vsPred, PathEdge::EGeneralizedGeometricTerm);
+					}
 
-						contrib /= (1.f - rejectionProb);
+					contrib /= (1.f - rejectionProb);
 
-						//contrib *= 0.5f;
+					Float invp = 0.f;
+					if (shareShoot){
+						invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
+						contrib *= invp;
+					}
+					else{
+						std::vector<Float> componentProbs;
+						std::vector<Vector4> componentBounds;
+						Float brdfIntegral;
+						if (cameraDirConnection)
+							brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentProbs, componentBounds);
+						else
+							brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentProbs, componentBounds);
 
-						Float invp = 0.f;
-						if (shareShoot){
-							invp = (acceptCnt[k] > 0) ? (Float)(shootCnt[k]) / (Float)(acceptCnt[k]) * invBrdfIntegral : 0;
-							contrib *= invp;
-						}
-						else{
-							std::vector<Float> componentProbs;
-							std::vector<Vector4> componentBounds;
-							Float brdfIntegral;
-							if (cameraDirConnection)
-								brdfIntegral = vtPred->gatherAreaPdf(vs->getPosition(), gatherRadius, vtPred2, componentProbs, componentBounds);
-							else
-								brdfIntegral = vsPred->gatherAreaPdf(vt->getPosition(), gatherRadius, vsPred2, componentProbs, componentBounds);
+						if (brdfIntegral == 0.f) continue;
+						invBrdfIntegral = 1.f / brdfIntegral;
+						size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
+						Float distSquared = gatherRadius * gatherRadius;
+						while (totalShoot < clampThreshold){
+							totalShoot++;
 
-							if (brdfIntegral == 0.f) continue;
-							invBrdfIntegral = 1.f / brdfIntegral;
-							size_t totalShoot = 0, acceptedShoot = 0, targetShoot = 1;
-							Float distSquared = gatherRadius * gatherRadius;
-							while (totalShoot < clampThreshold){
-								totalShoot++;
+							// restricted sampling evaluation shoots
+							Float pointDistSquared;
+							if (cameraDirConnection){
+								if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentProbs, componentBounds))
+									continue;
+								pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
+							}
+							else{
+								if (!vsPred->sampleShoot(m_scene, m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentProbs, componentBounds))
+									continue;
+								pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
+							}
 
-								// restricted sampling evaluation shoots
-								Float pointDistSquared;
-								if (cameraDirConnection){
-									if (!vtPred->sampleShoot(m_scene, m_sensorSampler, vtPred2, predEdge, succEdge, succVertex, ERadiance, vs->getPosition(), gatherRadius, componentProbs, componentBounds))
-										continue;
-									pointDistSquared = (succVertex->getPosition() - vs->getPosition()).lengthSquared();
-								}
-								else{
-									if (!vsPred->sampleShoot(m_scene, m_emitterSampler, vsPred2, predEdge, succEdge, succVertex, EImportance, vt->getPosition(), gatherRadius, componentProbs, componentBounds))
-										continue;
-									pointDistSquared = (succVertex->getPosition() - vt->getPosition()).lengthSquared();
-								}
-
-								if (pointDistSquared < distSquared){
-									acceptedShoot++;
-									if (acceptedShoot == targetShoot){
-										break;
-									}
+							if (pointDistSquared < distSquared){
+								acceptedShoot++;
+								if (acceptedShoot == targetShoot){
+									break;
 								}
 							}
-							avgInvpShoots.incrementBase();
-							avgInvpShoots += totalShoot;
-							maxInvpShoots.recordMaximum(totalShoot);
-							numInvpShoots += totalShoot;
+						}
+						avgInvpShoots.incrementBase();
+						avgInvpShoots += totalShoot;
+						maxInvpShoots.recordMaximum(totalShoot);
+						numInvpShoots += totalShoot;
 
-							numClampShoots.incrementBase();
-							if (totalShoot >= clampThreshold)
-								++numClampShoots;
+						numClampShoots.incrementBase();
+						if (totalShoot >= clampThreshold)
+							++numClampShoots;
 
 #if UPM_DEBUG == 1
-							wr->putTentativeSample(totalShoot);
+						wr->putTentativeSample(totalShoot);
 #endif
 
-							invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
-							contrib *= invp;
-						}
+						invp = (acceptedShoot > 0) ? (Float)(totalShoot) / (Float)(acceptedShoot)* invBrdfIntegral : 0;
+						contrib *= invp;
+					}
 
-						// accumulate to image
-						if (contrib.isZero()) continue;
+					// accumulate to image
+					if (contrib.isZero()) continue;
 
-						// MIS weighting						
-						Float miWeight = miWeightVM(m_scene, s, t,
-							emitterState, sensorState, emitterStatePred, sensorStatePred,
-							vsPred3, vsPred2, vsPred, vs,
-							vt, vtPred, vtPred2, vtPred3,
-							cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
+					// MIS weighting						
+					Float miWeight = miWeightVM(m_scene, s, t,
+						emitterState, sensorState, emitterStatePred, sensorStatePred,
+						vsPred3, vsPred2, vsPred, vs,
+						vt, vtPred, vtPred2, vtPred3,
+						cameraDirConnection, gatherRadius, m_lightPathNum, useVC, useVM);
 
 #if UPM_DEBUG == 1
-						if (cameraDirConnection){
-							wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
-							wr->putDebugSampleM(s, t - 1, samplePos, contrib);
-						}
-						else{
-							wr->putDebugSample(s - 1, t, samplePos, contrib * miWeight);
-							wr->putDebugSampleM(s - 1, t, samplePos, contrib);
-						}
-						wr->putDebugSampleVM(samplePos, contrib * miWeight);
+					if (cameraDirConnection){
+						wr->putDebugSample(s, t - 1, samplePos, contrib * miWeight);
+						wr->putDebugSampleM(s, t - 1, samplePos, contrib);
+					}
+					else{
+						wr->putDebugSample(s - 1, t, samplePos, contrib * miWeight);
+						wr->putDebugSampleM(s - 1, t, samplePos, contrib);
+					}
+					wr->putDebugSampleVM(samplePos, contrib * miWeight);
 #endif
 
-						contrib *= miWeight;
+					contrib *= miWeight;
 
 #ifdef UPM_DEBUG_HARD
-						if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
-							Log(EWarn, "Invalid sample value[UPM]: %f %f %f, invp = %f, miWeight = %f", 
-								contrib[0], contrib[1], contrib[2], invp, miWeight);
-							continue;
-						}
+					if (contrib[0] < 0.f || _isnan(contrib[0]) || contrib[0] > 100000000.f){
+						Log(EWarn, "Invalid sample value[UPM]: %f %f %f, invp = %f, miWeight = %f", 
+							contrib[0], contrib[1], contrib[2], invp, miWeight);
+						continue;
+					}
 #endif
 
-						if (t == 2) {
-							list.append(samplePos, contrib);
-						}
-						else {
-							list.accum(0, contrib);
-						}
+					if (t == 2) {
+						list.append(samplePos, contrib);
+					}
+					else {
+						list.accum(0, contrib);
 					}
 				}
 			}

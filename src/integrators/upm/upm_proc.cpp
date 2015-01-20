@@ -85,13 +85,14 @@ public:
 		const int numWork = wu->getTotalWorkNum();
 		SplatList *splats = new SplatList();
 		splats->clear();
+		ImageBlock *batres = NULL;
 
+#if UPM_DEBUG == 1
 		// [UC] for unbiased check
 		Float sepInterval = 60.f;
 		size_t numSepSamples = 0;		
 		size_t numBatch = 0;
-		ref<Timer> intervalTimer = new Timer(false);
-		ImageBlock *batres = NULL;
+		ref<Timer> intervalTimer = new Timer(false);		
 		if (m_config.enableSeparateDump){
 			batres = new ImageBlock(Bitmap::ESpectrum, m_film->getCropSize(), m_film->getReconstructionFilter());
 			batres->clear();
@@ -105,6 +106,7 @@ public:
 		if (m_config.enableProgressiveDump){
 			intervalTimer2->start();
 		}
+#endif
 
 		HilbertCurve2D<int> hilbertCurve;
 		TVector2<int> filmSize(m_film->getCropSize());
@@ -142,6 +144,7 @@ public:
  				}				
 			}			
 
+#if UPM_DEBUG == 1
 			// [UC] for unbiased check
 			if (m_config.enableSeparateDump){
 				numSepSamples++;
@@ -166,8 +169,10 @@ public:
 				intervalTimer2->reset();
 				numProgressiveBatch++;
 			}
+#endif
 		}
 
+#if UPM_DEBUG == 1
 		// [UC] for relative contribution graphing
 		if (m_config.enableProgressiveDump){
 			fs::path path = m_scene->getDestinationFile();
@@ -175,6 +180,7 @@ public:
 			intervalTimer2->reset();
 			numProgressiveBatch++;
 		}
+#endif
 
 		Log(EInfo, "Run %d iterations", actualSampleCount);
 		wr->accumSampleCount(actualSampleCount);
