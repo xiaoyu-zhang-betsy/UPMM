@@ -792,6 +792,108 @@
 		</param>
 	</plugin>
 	
+	<plugin type="integrator" name="mmlt" readableName="Multiplexed MLT" show="true"
+			className="MMLT" extends="Integrator">
+			<descr>
+				<p>Primary Sample Space Metropolis Light Transport (PSSMLT) is a rendering
+				technique developed by Kelemen et al. which is
+				based on Markov Chain Monte Carlo (MCMC) integration.</p>
+
+				<p>In contrast to simple methods like path tracing that render
+				images by performing a naive and memoryless random search for light paths,
+				PSSMLT actively searches for <em>relevant</em> light paths (as is the case
+				for other MCMC methods). Once such a path is found, the algorithm tries to
+				explore neighboring paths to amortize the cost of the search. This can
+				significantly improve the convergence rate of difficult input.
+				Scenes that were already relatively easy to render usually don't benefit
+				much from PSSMLT, since the MCMC data management causes additional
+				computational overheads.</p>
+
+				<p>The PSSMLT implementation in Mitsuba can operate on top of either a simple
+				unidirectional volumetric path tracer or a fully-fledged bidirectional path
+				tracer with  multiple importance sampling, and this choice is controlled by the
+				<tt>bidirectional</tt> flag. The unidirectional path tracer is generally
+				much faster, but it produces lower-quality samples. Depending on the input, either may be preferable.</p>
+
+				<p><b>Caveats</b>:
+				There are a few general caveats about MLT-type algorithms that are good
+				to know. The first one is that they only render "relative" output images,
+				meaning that there is a missing scale factor that must be applied to
+				obtain proper scene radiance values. The implementation in Mitsuba relies
+				on an additional Monte Carlo estimator to recover this scale factor. By
+				default, it uses 100K samples (controlled by the <tt>luminanceSamples</tt>
+				parameter), which should be adequate for most applications.</p>
+
+				<p>The second caveat is that the amount of computational expense
+				associated with a pixel in the output image is roughly proportional to
+				its intensity. This means that when a bright object (e.g. the sun) is
+				visible in a rendering, most resources are committed to rendering the
+				sun disk at the cost of increased variance everywhere else. Since this is
+				usually not desired, the <tt>twoStage</tt> parameter can be used to
+				enable <em>Two-stage MLT</em> in this case. </p>
+
+				<p>In this mode of operation, the renderer first creates a low-resolution
+				version of the output image to determine the approximate distribution of
+				luminance values. The second stage then performs the actual rendering, while
+				using the previously collected information to ensure that
+				the amount of time spent rendering each pixel is uniform.</p>
+
+				<p>The third caveat is that, while PSMLT can work with scenes that are extremely
+				difficult for other methods to handle, it is not particularly efficient
+				when rendering simple things such as direct illumination (which is more easily
+				handled by a brute-force type algorithm). By default, the
+				implementation in Mitsuba therefore delegates this to such a method
+				(with the desired quality being controlled by the <tt>directSamples</tt> parameter).
+				In very rare cases when direct illumination paths are very difficult to find,
+				it is preferable to disable this separation so that PSSMLT is responsible
+				for everything. This can be accomplished by setting
+				<tt>directSamples=-1</tt>.</p>
+		</descr>
+	    <param name="bidirectional" readableName="Bidirectional" type="boolean" default="true">
+		   If set to <tt>true</tt>, the MLT algorithm runs on top of a
+		   bidirectional path tracer with multiple importance sampling.
+		   Otherwise, the implementation reverts to a unidirectional path tracer.
+		</param>
+		<param name="maxDepth" readableName="Maximum depth" type="integer" default="-1">
+			Specifies the longest path depth in the generated output image (where <tt>-1</tt>
+			corresponds to ∞). A value of 1 will only render directly visible light sources.
+			2 will lead to single-bounce (direct-only) illumination, and so on.
+		</param>
+		<param name="directSamples" readableName="Direct samples" type="integer" default="16">
+	       By default, this plugin renders the direct illumination component
+	       separately using an optimized direct illumination sampling strategy
+	       that uses low-discrepancy number sequences for superior performance
+		   (in other words, it is <em>not</em> rendered by PSSMLT). This
+	       parameter specifies the number of samples allocated to that method. To
+	       force PSSMLT to be responsible for the direct illumination
+		   component as well, set this parameter to <tt>-1</tt>.
+	   </param>
+	   <param name="twoStage" readableName="Two-stage MLT" type="boolean" default="false">
+		   Use two-stage MLT? Please see the documentation for details.
+		</param>
+		<param name="luminanceSamples" readableName="Luminance samples" type="integer" default="100000" importance="1">
+			MLT-type algorithms create output images that are only
+			<em>relative</em> The algorithm can e.g. determine that a certain pixel
+			is approximately twice as bright as another one, but the absolute
+			scale is unknown. To recover it, this plugin computes
+			the average luminance arriving at the sensor by generating a
+			number of samples.
+		</param>
+		<param name="pLarge" readableName="Large step probability" type="float" default="0.3" importance="1">
+			Rate at which the implementation tries to replace the current path
+			with a completely new one. Usually, there is little need to change
+			this.
+		</param>
+		<param name="rrDepth" readableName="Russian Roulette starting depth" type="integer" default="5" importance="1">
+			Specifies the minimum path depth, after which the implementation will start to use the
+			"russian roulette" path termination criterion (set to <tt>-1</tt> to disable).
+		</param>
+		<param name="timeout" readableName="Target render time" type="integer" default="0" importance="1">
+			A non-zero target render time (in seconds) will override SPP setup, the rendering process will 
+			keep going until target render time arrived. 
+		</param>
+	</plugin>
+	
 	<plugin type="integrator" name="epssmlt" readableName="Extended Primary Sample Space MLT" show="true"
 			className="EPSSMLT" extends="Integrator">
 			<descr>

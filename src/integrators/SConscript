@@ -52,6 +52,10 @@ plugins += bidirEnv.SharedLibrary('upm',
 plugins += bidirEnv.SharedLibrary('epssmlt',
 	['epssmlt/epssmlt.cpp', 'epssmlt/epssmlt_sampler.cpp',
     'epssmlt/epssmlt_proc.cpp']);
+    
+#plugins += bidirEnv.SharedLibrary('mmlt',
+#	['mmlt/mmlt.cpp', 'mmlt/mmlt_sampler.cpp',
+#    'mmlt/mmlt_proc.cpp']);
 
 # we need OpenGl
 visEnv = integrEnv.Clone()

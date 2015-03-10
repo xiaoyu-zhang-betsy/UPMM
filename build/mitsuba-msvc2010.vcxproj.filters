@@ -195,6 +195,9 @@
     <Filter Include="Source Files\integrators\guide">
       <UniqueIdentifier>{119582a7-b6f5-4fd1-a332-2bc37db7f935}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\integrators\mmlt">
+      <UniqueIdentifier>{5f107583-927d-4948-8c77-47b2db39de1a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup Label="Source Files">
     <ClCompile Include="..\src\converter\mtsimport.cpp">
@@ -1159,6 +1162,15 @@
     </ClCompile>
     <ClCompile Include="..\src\integrators\guide\guided_upm_proc.cpp">
       <Filter>Source Files\integrators\guide</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\mmlt\mmlt.cpp">
+      <Filter>Source Files\integrators\mmlt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\mmlt\mmlt_proc.cpp">
+      <Filter>Source Files\integrators\mmlt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\integrators\mmlt\mmlt_sampler.cpp">
+      <Filter>Source Files\integrators\mmlt</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup Label="Header Files">
@@ -2157,6 +2169,15 @@
     </ClInclude>
     <ClInclude Include="..\src\integrators\guide\guided_upm_proc.h">
       <Filter>Source Files\integrators\guide</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\mmlt\mmlt.h">
+      <Filter>Source Files\integrators\mmlt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\mmlt\mmlt_proc.h">
+      <Filter>Source Files\integrators\mmlt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\integrators\mmlt\mmlt_sampler.h">
+      <Filter>Source Files\integrators\mmlt</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

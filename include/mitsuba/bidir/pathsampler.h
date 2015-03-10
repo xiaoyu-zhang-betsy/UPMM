@@ -752,6 +752,13 @@ public:
 		m_lightPathSampler = sampler;
 	}
 
+	/// for MMLT
+	Float generateSeedsSpec(size_t sampleCount, size_t seedCount,
+		bool fineGrained, const Bitmap *importanceMap,
+		std::vector<PathSeed> &seeds, const int pathLength);
+	void PathSampler::sampleSplatsSpec(const Point2i &offset, SplatList &list, 
+		const int SpecifiedNumLightVertices, const int SpecifiedNumEyeVertices);
+
 	MTS_DECLARE_CLASS()
 protected:
 	/// Virtual destructor
