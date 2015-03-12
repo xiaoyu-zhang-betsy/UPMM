@@ -133,7 +133,7 @@ public:
 				Point2i offset = Point2i(hilbertCurve[i]);
 				m_sampler->generate(offset);
 				m_pathSampler->sampleSplatsUPM(wr, radius, offset, i, *splats, 
-					m_config.useVC, m_config.useVM, m_config.rejectionProb, m_config.clampThreshold);
+					m_config.useVC, m_config.useVM, m_config.rejectionProb, m_config.clampThreshold, m_config.useVCMPdf);
 
 				for (size_t k = 0; k < splats->size(); ++k) {
  					Spectrum value = splats->getValue(k);

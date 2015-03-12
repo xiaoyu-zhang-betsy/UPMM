@@ -55,6 +55,9 @@ struct UPMConfiguration {
 	bool enableSeparateDump;
 	bool enableProgressiveDump;
 
+	// for rebuttal experiment
+	bool useVCMPdf;
+
 	inline UPMConfiguration() { }
 
 	inline UPMConfiguration(Stream *stream) {
@@ -77,6 +80,7 @@ struct UPMConfiguration {
 		clampThreshold = stream->readSize();
 		enableSeparateDump = stream->readBool();
 		enableProgressiveDump = stream->readBool();
+		useVCMPdf = stream->readBool();
 	}
 
 	inline void serialize(Stream *stream) const {
@@ -99,6 +103,7 @@ struct UPMConfiguration {
 		stream->writeSize(clampThreshold);
 		stream->writeBool(enableSeparateDump);
 		stream->writeBool(enableProgressiveDump);
+		stream->writeBool(useVCMPdf);
 	}
 
 	void dump() const {
@@ -122,7 +127,7 @@ struct UPMConfiguration {
 		SLog(EDebug, "   1/p clamp threshold   : " SIZE_T_FMT, clampThreshold);
 		SLog(EDebug, "   Enable separate dump   : %s", enableSeparateDump ? "yes" : "no");
 		SLog(EDebug, "   Enable progressive dump   : %s", enableProgressiveDump ? "yes" : "no");
-
+		SLog(EDebug, "   Use VCM connection PDF   : %s", useVCMPdf ? "yes" : "no");
 	}
 };
 

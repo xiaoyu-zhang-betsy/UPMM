@@ -163,6 +163,9 @@ public:
 
 		m_config.enableSeparateDump = props.getBoolean("enableSeparateDump", false);
 		m_config.enableProgressiveDump = props.getBoolean("enableProgressiveDump", false);
+
+		// for rebuttal experiment
+		m_config.useVCMPdf = props.getBoolean("useVCMPdf", false);
 	}
 
 	/// Unserialize from a binary data stream

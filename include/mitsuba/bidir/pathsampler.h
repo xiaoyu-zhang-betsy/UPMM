@@ -740,7 +740,8 @@ public:
 	/// for UPM
 	void gatherLightPathsUPM(const bool useVC, const bool useVM, const float gatherRadius, const int nsample, UPMWorkResult *wr, ImageBlock *batres = NULL, Float rejectionProb = 0.f);
 	void sampleSplatsUPM(UPMWorkResult *wr, const float gatherRadius, const Point2i &offset, const size_t cameraPathIndex, SplatList &list, 
-		bool useVC = false, bool useVM = true, Float rejectionProb = 0.f, size_t clampThreshold = 100);
+		bool useVC = false, bool useVM = true, 
+		Float rejectionProb = 0.f, size_t clampThreshold = 100, bool useVCMPdf = false);
 
 	/// for Extended PSSMLT
 	void gatherCameraPathsUPM(const bool useVC, const bool useVM, const float gatherRadius);

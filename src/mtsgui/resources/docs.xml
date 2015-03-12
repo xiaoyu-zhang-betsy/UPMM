@@ -688,6 +688,9 @@
 		<param name="enableProgressiveDump" readableName="Enable progressive dump" type="boolean" default="false">
 			For relative contribution graph
 		</param>
+		<param name="useVCMPdf" readableName="Use VCM connection PDF" type="boolean" default="false">
+			For rebuttal experiment
+		</param>
 	</plugin>
 
 	<plugin type="integrator" name="pssmlt" readableName="Primary Sample Space MLT" show="true"

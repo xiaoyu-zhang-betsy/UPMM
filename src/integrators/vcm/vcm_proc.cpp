@@ -165,6 +165,7 @@ struct VertexMergingQuery {
 
 		result += val * weightExt * vmNormalization;
 	}
+
 	int t, maxDepth;
 	Float misVcWeightFactor, vmNormalization;
 	MisStateV sensorState;
