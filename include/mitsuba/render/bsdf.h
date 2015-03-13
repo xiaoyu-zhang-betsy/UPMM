@@ -510,7 +510,7 @@ public:
 		return Vector(0.f);
 	}
 	virtual Float getBandwidth() const{
-		return 0.f;
+		return 99999.f;
 	}
 
 	// for guided UPM

@@ -1211,7 +1211,7 @@ ETransportMode connectionDirection(const PathVertex* vsPred, const PathVertex* v
 	bool cameraDirConnection = true;
 	Float sBandwidth = 0.f, tBandwidth = 0.f;
 	if (vtPred->isSensorSample()){
-		tBandwidth = 10000.f;
+		tBandwidth = 99999.f;
 	}
 	else if (vtPred->isSurfaceInteraction()){
 		const Intersection &its = vtPred->getIntersection();
@@ -1235,6 +1235,9 @@ ETransportMode connectionDirection(const PathVertex* vsPred, const PathVertex* v
 	else
 		return ETransportModes;
 
+	if (sBandwidth == 99999.f && tBandwidth == 99999.f)
+		return ETransportModes; // return a invalid connection direction to prevent handle gathering between two speculars
+
  	if (sBandwidth <= tBandwidth)
  		cameraDirConnection = false;
 
@@ -1243,9 +1246,10 @@ ETransportMode connectionDirection(const PathVertex* vsPred, const PathVertex* v
 
 const bool EnableCovAwareMis = true;
 const bool MaxClampedConnectionPdf = false;
-Float misEffectiveEta(int i, Float pi, Float pir , const PathVertex* vPred, const PathVertex* vNext, 
+Float misEffectiveEta(int i, Float pi, Float pir, const PathVertex* vPred, const PathVertex* v, const PathVertex* vNext,
 	Float gatherRadius, size_t numLightPath, ETransportMode mode, int j = 999){
 
+	if (!v->isConnectable()) return 0.f;
 	if (i < 1 || j < 1) return 0.f;
 #ifdef EXCLUDE_DIRECT_LIGHTING
 	if (i + j <= 2) return 0.f; // exclude (2,2) photon mapping
@@ -1255,10 +1259,13 @@ Float misEffectiveEta(int i, Float pi, Float pir , const PathVertex* vPred, cons
 	if (i == 1 && mode == EImportance)
 		return 0.f;
 #endif
+	
+	ETransportMode connectionMode = (mode == EImportance) ? connectionDirection(vPred, vNext) : connectionDirection(vNext, vPred);
+	if (connectionMode == ETransportModes)
+		return 0.f; // avoid gathering between two specular
+	Float ps = (connectionMode != mode) ? pir : pi;	
 
 	Float eta = 0.f;
-	ETransportMode connectionMode = (mode == EImportance) ? connectionDirection(vPred, vNext) : connectionDirection(vNext, vPred);
-	Float ps = (connectionMode != mode) ? pir : pi;	
 	if (EnableCovAwareMis){		
 		//Float covfactor = (pc == 0.f) ? 0.f : std::min(1.f, 1.f / (pc * M_PI * gatherRadius * gatherRadius));
 		Float covfactor = 1.f;
@@ -1301,7 +1308,7 @@ Float misEVC(int i, MisState statePred, Float piPred, Float pir2, const PathVert
 
 	return eVC;
 }
-Float misEPM(int i, MisState statePred, Float piPred, Float pir2, const PathVertex* vPred, const PathVertex* vPred3,
+Float misEPM(int i, MisState statePred, Float piPred, Float pir2, const PathVertex* vPred, const PathVertex* vPred2, const PathVertex* vPred3,
 	Float gatherRadius, size_t numLightPath, ETransportMode mode){
 
 	Float ePM = 0.f;
@@ -1317,7 +1324,7 @@ Float misEPM(int i, MisState statePred, Float piPred, Float pir2, const PathVert
 		ePM *= MisHeuristic(pir2 * invPiPred);
 
 		Float piPred2 = vPred3->pdf[mode];
-		Float etar2 = misEffectiveEta(i - 2, piPred2, pir2, vPred3, vPred, gatherRadius, numLightPath, mode);
+		Float etar2 = misEffectiveEta(i - 2, piPred2, pir2, vPred3, vPred2, vPred, gatherRadius, numLightPath, mode);
 		ePM += MisHeuristic(pir2 * invPiPred * etar2);
 	}
 
@@ -1345,11 +1352,11 @@ Float misWeightVC_pm(int i, int j, MisState statei,
 
 	Float wPM = 0.f;	
 	
-	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, v, gatherRadius, numLightPath, mode, j + 2);
+	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, vPred, v, gatherRadius, numLightPath, mode, j + 2);
 	Float invpi = (pi == 0.f) ? 0.f : 1.f / pi;
 	wPM = MisHeuristic(pir * invpi) * (MisHeuristic(pir1) * statei[EPM] + MisHeuristic(pir1 * etar1));
 
-	Float etar = misEffectiveEta(i, pi, pir, vPred, vNext, gatherRadius, numLightPath, mode, j + 1);
+	Float etar = misEffectiveEta(i, pi, pir, vPred, v, vNext, gatherRadius, numLightPath, mode, j + 1);
 	wPM += MisHeuristic(pir * etar);
 
 	return wPM;
@@ -1361,8 +1368,8 @@ Float misWeightPM(int i, int j, MisState statei,
 	Float gatherRadius, size_t numLightPath, ETransportMode mode,
 	bool useVC, bool useVM){
 
-	Float etar = misEffectiveEta(i, pi, pir, vPred, vNext, gatherRadius, numLightPath, mode, j);
-	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, v, gatherRadius, numLightPath, mode, j + 1);
+	Float etar = misEffectiveEta(i, pi, pir, vPred, v, vNext, gatherRadius, numLightPath, mode, j);
+	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, vPred, v, gatherRadius, numLightPath, mode, j + 1);
 	Float invpi = (pi == 0.f) ? 0.f : 1.f / pi;
 	Float invetar = (etar == 0.f) ? 0.f : 1.f / etar;
 	Float ratioDirect = (i == 1) ? statei[EDIR] : 1.f;
@@ -1379,9 +1386,9 @@ Float misWeightPM_pred(int i, int j, MisState state, MisState statePred,
 	Float gatherRadius, size_t numLightPath, ETransportMode mode,
 	bool useVC, bool useVM){
 
-	Float etar = misEffectiveEta(i, pi, pir, vPred, vNext, gatherRadius, numLightPath, mode, j);
-	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, v, gatherRadius, numLightPath, mode, j + 1);
-	Float etar2 = misEffectiveEta(i - 2, piPred2, pir2, vPred3, vPred, gatherRadius, numLightPath, mode, j + 2);
+	Float etar = misEffectiveEta(i, pi, pir, vPred, v, vNext, gatherRadius, numLightPath, mode, j);
+	Float etar1 = misEffectiveEta(i - 1, piPred, pir1, vPred2, vPred, v, gatherRadius, numLightPath, mode, j + 1);
+	Float etar2 = misEffectiveEta(i - 2, piPred2, pir2, vPred3, vPred2, vPred, gatherRadius, numLightPath, mode, j + 2);
 	Float invpi = (pi == 0.f) ? 0.f : 1.f / pi;
 	Float invpiPred = (piPred == 0.f) ? 0.f : 1.f / piPred;
 	Float invetar = (etar == 0.f) ? 0.f : 1.f / etar;
@@ -1436,7 +1443,7 @@ void updateMisHelper(int i, const Path &path, MisState &state, const Scene* scen
 		PathVertex *vPred3 = path.vertex(i - 2);
 		Float piPred = vPred2->pdf[mode];
 		Float pir2 = vPred->pdf[1 - mode];
-		state[EPM] = misEPM(i, state, piPred, pir2, vPred, vPred3, gatherRadius, numLightPath, mode);
+		state[EPM] = misEPM(i, state, piPred, pir2, vPred, vPred2, vPred3, gatherRadius, numLightPath, mode);
 	}
 }
 void initializeMisHelper(const Path &path, MisState *states, const Scene* scene,
@@ -2279,7 +2286,10 @@ void PathSampler::sampleSplatsUPM(UPMWorkResult *wr,
 					}
 
 					// decide the direction to do connection
-					bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
+					ETransportMode condir = connectionDirection(vsPred, vtPred);
+					if (condir == ETransportModes)
+						continue; // skip gathering between two speculars
+					bool cameraDirConnection = (condir == ERadiance);
 							
 					samplePos = initialSamplePos;
 					if (vtPred->isSensorSample()){
@@ -2914,7 +2924,11 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 						vsPred = vsPred_;
 						m_lightVerticesExt[vertexIndex - 1].expand(vsPred);
 
-						bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
+						//bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
+						ETransportMode condir = connectionDirection(vsPred, vtPred);
+						if (condir == ETransportModes)
+							continue; // skip gathering between two speculars
+						bool cameraDirConnection = (condir == ERadiance);
 
 						//if (!cameraDirConnection) continue;
 
@@ -3006,7 +3020,11 @@ void PathSampler::sampleSplatsExtend(const bool useVC, const bool useVM, const f
 						}
 
 						// decide the direction to do connection
-						bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
+						//bool cameraDirConnection = (connectionDirection(vsPred, vtPred) == ERadiance);
+						ETransportMode condir = connectionDirection(vsPred, vtPred);
+						if (condir == ETransportModes)
+							continue; // skip gathering between two speculars
+						bool cameraDirConnection = (condir == ERadiance);
 
 						samplePos = initialSamplePos;
 						if (vtPred->isSensorSample()){
